@@ -1,37 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Esta función comprueba si el usuario autenticado tiene un "custom claim" de administrador.
-    // Debes configurar esto en un backend seguro (como Cloud Functions) para tu usuario admin.
-    function isAdmin() {
-      return request.auth.token.admin == true;
-    }
-
-    // Colección 'config' para datos globales de la app
-    match /config/{docId} {
-      // La tasa y el saldo solo pueden ser modificados por un admin.
-      // Cualquiera puede leer la tasa.
-      allow read: if docId == 'rate';
-      allow write: if isAdmin();
-    }
-
-    // Historial de Saldo: Solo el admin puede leer y escribir.
-    match /balance_history/{historyId} {
-      allow read, write: if isAdmin();
-    }
-
-    // Pedidos
-    match /orders/{orderId} {
-      // CREAR: Un usuario autenticado puede crear un pedido para sí mismo.
-      allow create: if request.auth.uid == request.resource.data.userId;
-
-      // LEER: Un usuario puede leer sus propios pedidos, un admin puede leer todos.
-      allow read: if request.auth.uid == resource.data.userId || isAdmin();
-
-      // ACTUALIZAR: Solo un admin puede actualizar un pedido (ej: marcar como "Pagado").
-      allow update: if isAdmin();
-      // Los usuarios no pueden borrar sus pedidos.
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

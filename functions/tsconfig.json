@@ -1,19 +1,29 @@
-{
-  "compilerOptions": {
-    "module": "commonjs",
-    "noImplicitReturns": true,
-    "noUnusedLocals": true,
-    "outDir": "lib",
-    "sourceMap": true,
-    "strict": true,
-    "target": "es2021",
-    "esModuleInterop": true
-  },
-  "compileOnSave": true,
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+﻿{
+    "include":  [
+                    "src/**/*.ts"
+                ],
+    "exclude":  [
+                    "node_modules",
+                    "lib",
+                    "scr"
+                ],
+    "compilerOptions":  {
+                            "allowSyntheticDefaultImports":  true,
+                            "outDir":  "lib",
+                            "lib":  [
+                                        "ES2022"
+                                    ],
+                            "types":  [
+
+                                      ],
+                            "typeRoots":  [
+                                              "./node_modules/@types"
+                                          ],
+                            "strict":  true,
+                            "target":  "ES2022",
+                            "esModuleInterop":  true,
+                            "skipLibCheck":  true,
+                            "module":  "commonjs",
+                            "rootDir":  "src"
+                        }
 }
