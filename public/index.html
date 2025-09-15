@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -23,7 +23,7 @@
         <!-- Encabezado y Tasa de Cambio -->
         <div class="text-center mb-8">
             <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Gestión de Remesas</h1>
-            <p class="text-gray-600 mb-4">Chile <span class="text-yellow-500 font-bold">⇌</span> Venezuela</p>
+            <p class="text-gray-600 mb-4">Chile <span class="text-yellow-500 font-bold">&harr;</span> Venezuela</p>
             <div id="exchange-rate-display" class="bg-blue-100 text-blue-800 py-3 px-6 rounded-xl font-semibold shadow-md">
                 Cargando tasa de cambio...
             </div>
@@ -45,7 +45,7 @@
             <!-- Interfaz de Usuario: Formulario para crear un pedido -->
             <div id="user-interface" class="border p-6 rounded-2xl shadow-inner bg-gray-50">
                 <h2 class="text-2xl font-semibold text-gray-700 mb-4">Ingresar Nuevo Pedido</h2>
-                <!-- Botones de Pestañas -->
+                <!-- Botones de pestañas -->
                 <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
                     <button id="tab-transferencia" class="flex-1 py-3 px-4 text-center font-semibold rounded-tl-lg bg-white text-blue-600">Transferencia</button>
                     <button id="tab-pago-movil" class="flex-1 py-3 px-4 text-center font-semibold text-gray-700 hover:bg-gray-300 transition-colors">Pago Móvil</button>
@@ -89,6 +89,21 @@
                             <div class="text-right">
                                 <p class="text-lg font-bold text-gray-800">Monto a recibir en Bolívares: <span id="ves-amount-transferencia" class="text-green-600">0.00 VES</span></p>
                             </div>
+                            <div class="text-right text-sm mb-2">
+                                <a href="#" id="show-example-transferencia" class="text-blue-600 hover:underline">Ver ejemplo de formato para pegar</a>
+                            </div>
+                            <div id="example-transferencia" class="hidden bg-gray-200 p-3 rounded-lg text-sm text-gray-700 mb-4">
+                                <p class="font-bold mb-2">Formato de datos:</p>
+                                <pre class="whitespace-pre-wrap font-mono">Nombre: Ana María Rojas
+Cédula: 12345678
+Banco: Banesco
+Tipo de Cuenta: Corriente
+Número de Cuenta: 01340001230001234567
+Monto en CLP: 5000</pre>
+                                <p class="mt-2 text-xs italic text-gray-600">
+                                    Nota: Solo necesitas copiar los valores (los datos a la derecha de los dos puntos), cada uno en una nueva línea y en el mismo orden.
+                                </p>
+                            </div>
                             <div class="flex justify-end space-x-4">
                                 <button type="button" id="paste-btn-transferencia" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-500 transition duration-300 shadow-md">
                                     Pegar Datos
@@ -118,16 +133,30 @@
                                     <input type="tel" id="phone-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                                 <div>
-                                    <label for="clp-amount-pm" class="block text-gray-700 font-medium">Monto en CLP</label>
-                                    <input type="number" id="clp-amount-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
-                                </div>
-                                <div>
                                     <label for="bank-pm" class="block text-gray-700 font-medium">Banco Receptor</label>
                                     <input type="text" id="bank-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                </div>
+                                <div>
+                                    <label for="clp-amount-pm" class="block text-gray-700 font-medium">Monto en CLP</label>
+                                    <input type="number" id="clp-amount-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                             </div>
                             <div class="text-right">
                                 <p class="text-lg font-bold text-gray-800">Monto a recibir en Bolívares: <span id="ves-amount-pm" class="text-green-600">0.00 VES</span></p>
+                            </div>
+                            <div class="text-right text-sm mb-2">
+                                <a href="#" id="show-example-pago-movil" class="text-blue-600 hover:underline">Ver ejemplo de formato para pegar</a>
+                            </div>
+                            <div id="example-pago-movil" class="hidden bg-gray-200 p-3 rounded-lg text-sm text-gray-700 mb-4">
+                                <p class="font-bold mb-2">Formato de datos:</p>
+                                <pre class="whitespace-pre-wrap font-mono">Nombre: Carlos Pérez
+Cédula: 19876543
+Número de Teléfono: 04141234567
+Banco Receptor: Mercantil
+Monto en CLP: 2500</pre>
+                                <p class="mt-2 text-xs italic text-gray-600">
+                                    Nota: Solo necesitas copiar los valores (los datos a la derecha de los dos puntos), cada uno en una nueva línea y en el mismo orden.
+                                </p>
                             </div>
                             <div class="flex justify-end space-x-4">
                                 <button type="button" id="paste-btn-pago-movil" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-500 transition duration-300 shadow-md">
@@ -150,8 +179,8 @@
                                     <input type="text" id="name-rs" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                                 <div>
-                                    <label for="cedula-rs" class="block text-gray-700 font-medium">Cédula</label>
-                                    <input type="text" id="cedula-rs" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                     <label for="cedula-rs" class="block text-gray-700 font-medium">Cédula</label>
+                                     <input type="text" id="cedula-rs" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                                 <div>
                                     <label for="phone-rs" class="block text-gray-700 font-medium">Número de Teléfono a Recargar</label>
@@ -164,6 +193,19 @@
                             </div>
                             <div class="text-right">
                                 <p class="text-lg font-bold text-gray-800">Monto a recibir en Bolívares: <span id="ves-amount-rs" class="text-green-600">0.00 VES</span></p>
+                            </div>
+                            <div class="text-right text-sm mb-2">
+                                <a href="#" id="show-example-recarga-saldo" class="text-blue-600 hover:underline">Ver ejemplo de formato para pegar</a>
+                            </div>
+                            <div id="example-recarga-saldo" class="hidden bg-gray-200 p-3 rounded-lg text-sm text-gray-700 mb-4">
+                                <p class="font-bold mb-2">Formato de datos:</p>
+                                <pre class="whitespace-pre-wrap font-mono">Nombre: Luisa Fernández
+Cédula: 9876543
+Número de Teléfono a Recargar: 04129876543
+Monto en CLP: 1000</pre>
+                                <p class="mt-2 text-xs italic text-gray-600">
+                                    Nota: Solo necesitas copiar los valores (los datos a la derecha de los dos puntos), cada uno en una nueva línea y en el mismo orden.
+                                </p>
                             </div>
                             <div class="flex justify-end space-x-4">
                                 <button type="button" id="paste-btn-recarga-saldo" class="bg-gray-400 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-500 transition duration-300 shadow-md">
@@ -321,28 +363,28 @@
                         <!-- Filtros de Fecha -->
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                             <div>
-                                <label for="historical-date-start" class="block text-gray-700 font-medium">Fecha de Inicio</label>
-                                <input type="date" id="historical-date-start" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <label for="Histórical-date-start" class="block text-gray-700 font-medium">Fecha de Inicio</label>
+                                <input type="date" id="Histórical-date-start" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                             </div>
                             <div>
-                                <label for="historical-date-end" class="block text-gray-700 font-medium">Fecha de Fin</label>
-                                <input type="date" id="historical-date-end" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <label for="Histórical-date-end" class="block text-gray-700 font-medium">Fecha de Fin</label>
+                                <input type="date" id="Histórical-date-end" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
                         <div class="flex flex-wrap gap-2 mb-4">
-                            <button id="historical-date-today" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Hoy</button>
-                            <button id="historical-date-yesterday" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Ayer</button>
+                            <button id="Histórical-date-today" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Hoy</button>
+                            <button id="Histórical-date-yesterday" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Ayer</button>
                             <button id="historical-date-7days" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Últimos 7 días</button>
                         </div>
 
                         <!-- Filtros de Estado -->
                         <div class="mb-4">
                             <label class="block text-gray-700 font-medium mb-2">Filtrar por Estado</label>
-                            <div id="historical-status-filters" class="flex flex-wrap gap-2">
-                                <button data-status="Todos" class="historical-status-btn active px-4 py-2 text-sm font-semibold rounded-lg">Todos</button>
-                                <button data-status="Pendiente de pago" class="historical-status-btn px-4 py-2 text-sm font-semibold rounded-lg">Pendiente</button>
-                                <button data-status="Pagado" class="historical-status-btn px-4 py-2 text-sm font-semibold rounded-lg">Pagado</button>
-                                <button data-status="Cancelado" class="historical-status-btn px-4 py-2 text-sm font-semibold rounded-lg">Cancelado</button>
+                            <div id="Histórical-status-filters" class="flex flex-wrap gap-2">
+                                <button data-status="Todos" class="Histórical-status-btn active px-4 py-2 text-sm font-semibold rounded-lg">Todos</button>
+                                <button data-status="Pendiente de pago" class="Histórical-status-btn px-4 py-2 text-sm font-semibold rounded-lg">Pendiente</button>
+                                <button data-status="Pagado" class="Histórical-status-btn px-4 py-2 text-sm font-semibold rounded-lg">Pagado</button>
+                                <button data-status="Cancelado" class="Histórical-status-btn px-4 py-2 text-sm font-semibold rounded-lg">Cancelado</button>
                             </div>
                         </div>
 
@@ -351,18 +393,31 @@
                                 Exportar a Excel
                             </button>
                         </div>
-                        <p id="historical-search-summary" class="text-sm text-gray-600 mb-4"></p>
-                        <div id="historical-orders-list" class="space-y-4 max-h-96 overflow-y-auto">
+                        <p id="Histórical-search-summary" class="text-sm text-gray-600 mb-4"></p>
+                        <div id="Histórical-orders-list" class="space-y-4 max-h-96 overflow-y-auto">
                             <!-- El historial de pedidos se renderizará aquí -->
                         </div>
-                        <p id="no-historical-orders-message" class="text-gray-500 text-center mt-4 hidden">No hay pedidos para la fecha seleccionada.</p>
+                        <p id="no-Histórical-orders-message" class="text-gray-500 text-center mt-4 hidden">No hay pedidos para la fecha seleccionada.</p>
+                    </div>
+
+                    <!-- Lista de Clientes -->
+                    <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-semibold text-gray-700">Lista de Clientes</h2>
+                            <div class="flex items-center gap-2">
+                                <input id="clients-search" type="text" class="p-2 border border-gray-300 rounded-lg text-sm" placeholder="Buscar por nombre..." />
+                                <button id="copy-clients-btn" class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600">Copiar lista</button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-2">Ordenado A–Z • Total: <span id="clients-count">0</span></p>
+                        <div id="clients-list" class="space-y-1 max-h-96 overflow-y-auto"></div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Modal para subir captura de pantalla (Admin) -->
+<!-- Modal para subir captura de pantalla (Admin) -->
     <div id="admin-upload-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-center">
             <h3 class="text-xl font-bold mb-4 text-gray-800">Subir Comprobante de Pago</h3>
@@ -423,6 +478,6 @@
     <script src="/__/firebase/11.6.1/firebase-storage-compat.js"></script>
     <script src="/__/firebase/init.js"></script>
 
-    <script type="module" src="/js/main.js"></script>
+    <script type="module" src="/js/main.js?v=dev3"></script>
 </body>
 </html>
