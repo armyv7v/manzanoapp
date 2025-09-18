@@ -1,8 +1,36 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    
+    // Regla para la colección 'orders'
+    match /orders/{orderId} {
+      // Cualquier usuario autenticado puede crear un pedido.
+      allow create: if request.auth != null;
+      
+      // Solo los administradores pueden leer, actualizar y borrar pedidos.
+      allow read, update, delete: if request.auth.token.admin == true;
+    }
+    
+    // Regla para la colección 'config' (tasa de cambio)
+    match /config/{docId} {
+      // Cualquiera puede leer la tasa de cambio.
+      allow read: if true;
+      
+      // Solo los administradores pueden escribir en la configuración.
+      allow write: if request.auth.token.admin == true;
+    }
+    
+    // Regla para la colección 'accounts' (saldos por cuenta)
+    match /accounts/{accountId} {
+      // Solo los administradores pueden leer y escribir en las cuentas.
+      allow read, write: if request.auth.token.admin == true;
+    }
+    
+    // Regla para la colección 'balance_history' (historial de movimientos)
+    match /balance_history/{historyId} {
+      // Solo los administradores pueden crear y leer el historial de saldo.
+      allow create, read: if request.auth.token.admin == true;
     }
   }
 }

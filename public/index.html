@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>App de Remesas Venezuela-Chile</title>
-    <!-- Tailwind CSS (generado desde un archivo local) -->
-    <link href="/css/styles.css" rel="stylesheet">
+    <!-- Tailwind CSS con cache-busting -->
+    <link href="/css/styles.css?v=final-v39" rel="stylesheet">
     <!-- SheetJS (xlsx) para exportar a Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <!-- Inter Font -->
@@ -19,10 +19,10 @@
         <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
     </div>
 
-    <div class="mx-auto w-full max-w-900 rounded-2xl bg-white p-8 shadow-xl">
+    <div class="mx-auto w-full max-w-6xl rounded-2xl bg-white p-8 shadow-xl">
         <!-- Encabezado y Tasa de Cambio -->
         <div class="text-center mb-8">
-            <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Gestión de Remesas</h1>
+            <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Cambios Manzano 🍏</h1>
             <p class="text-gray-600 mb-4">Chile <span class="text-yellow-500 font-bold">&harr;</span> Venezuela</p>
             <div id="exchange-rate-display" class="bg-blue-100 text-blue-800 py-3 px-6 rounded-xl font-semibold shadow-md">
                 Cargando tasa de cambio...
@@ -68,7 +68,9 @@
                                 </div>
                                 <div>
                                     <label for="bank-transferencia" class="block text-gray-700 font-medium">Banco</label>
-                                    <input type="text" id="bank-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                    <select id="bank-transferencia" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                        <!-- Options will be populated by JS -->
+                                    </select>
                                 </div>
                                 <div>
                                     <label for="account-type-transferencia" class="block text-gray-700 font-medium">Tipo de Cuenta</label>
@@ -83,7 +85,7 @@
                                 </div>
                                 <div>
                                     <label for="clp-amount-transferencia" class="block text-gray-700 font-medium">Monto en CLP</label>
-                                    <input type="number" id="clp-amount-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                    <input type="number" step="0.01" id="clp-amount-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -134,11 +136,13 @@ Monto en CLP: 5000</pre>
                                 </div>
                                 <div>
                                     <label for="bank-pm" class="block text-gray-700 font-medium">Banco Receptor</label>
-                                    <input type="text" id="bank-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                    <select id="bank-pm" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                        <!-- Options will be populated by JS -->
+                                    </select>
                                 </div>
                                 <div>
                                     <label for="clp-amount-pm" class="block text-gray-700 font-medium">Monto en CLP</label>
-                                    <input type="number" id="clp-amount-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                    <input type="number" step="0.01" id="clp-amount-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -188,7 +192,7 @@ Monto en CLP: 2500</pre>
                                 </div>
                                 <div>
                                     <label for="clp-amount-rs" class="block text-gray-700 font-medium">Monto en CLP</label>
-                                    <input type="number" id="clp-amount-rs" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
+                                    <input type="number" step="0.01" id="clp-amount-rs" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                             </div>
                             <div class="text-right">
@@ -222,18 +226,22 @@ Monto en CLP: 1000</pre>
 
             </div>
 
-            <!-- Modal para subir captura de pantalla (Usuario) -->
-            <div id="upload-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden">
-                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-center">
-                    <h3 class="text-xl font-bold mb-4 text-gray-800">Pedido Recibido!</h3>
-                    <p class="mb-4 text-gray-600">
-                        Para confirmar tu pedido, sube una captura de pantalla del pago.
-                        <br><span class="text-sm font-semibold text-red-500">Nota: Esta es una simulación.</span>
-                    </p>
-                    <button id="confirm-upload-btn" class="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg">
-                        Confirmar Captura
-                    </button>
-                    <p id="upload-message" class="mt-4 text-sm font-medium text-gray-700"></p>
+            <!-- Modal de Confirmación de Pedido -->
+            <div id="order-confirm-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden">
+                <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-left">
+                    <h3 class="text-2xl font-bold mb-4 text-gray-800">Confirmar Datos del Pedido</h3>
+                    <p class="mb-6 text-gray-600">Por favor, revisa que todos los datos sean correctos antes de enviar.</p>
+                    <div id="order-confirm-details" class="space-y-2 text-gray-700 border-t border-b py-4 mb-6">
+                        <!-- Los detalles del pedido se inyectarán aquí -->
+                    </div>
+                    <div class="flex justify-center space-x-4">
+                        <button id="order-final-confirm-btn" class="bg-green-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-green-700 transition duration-300 shadow-lg">
+                            Confirmar y Enviar
+                        </button>
+                        <button id="order-final-cancel-btn" class="bg-red-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg">
+                            Cancelar
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -295,35 +303,65 @@ Monto en CLP: 1000</pre>
                         <p id="balance-message" class="mt-4 text-sm font-medium text-gray-700"></p>
                     </div>
 
-                     <!-- Historial de Movimientos de Saldo -->
+                    <!-- Desglose de Saldo por Cuenta -->
                     <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
-                        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Historial de Movimientos de Saldo</h2>
-                        <div id="balance-history-list" class="space-y-2 max-h-60 overflow-y-auto">
-                            <!-- El historial se renderizará aquí -->
+                        <h3 class="text-xl font-semibold text-gray-700 mb-4">Saldos por Cuenta</h3>
+                        <div class="text-center mb-4">
+                            <button id="open-transfer-funds-modal-btn" class="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition duration-300">Transferir entre Cuentas</button>
                         </div>
-                        <p id="no-balance-history-message" class="text-gray-500 text-center mt-4 hidden">No hay movimientos de saldo registrados.</p>
+                        <p class="text-xs text-gray-500 mb-4 italic">Saldos disponibles en tiempo real en cada cuenta.</p>
+                        <div id="accounts-balance-list" class="space-y-3">
+                            <!-- Breakdown will be rendered here -->
+                            <p class="text-gray-500">Calculando desglose...</p>
+                        </div>
                     </div>
 
-                    <!-- Búsqueda y Exportación de Historial de Saldo -->
-                    <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
-                        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Exportar Historial de Saldo</h2>
-                        <div class="flex flex-col sm:flex-row gap-4 mb-4">
-                            <div class="flex-grow">
+                     <!-- Historial de Movimientos de Saldo -->
+                     <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
+                        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                            <h2 class="text-2xl font-semibold text-gray-700">Historial de Movimientos de Saldo</h2>
+                            <button id="export-balance-excel-btn" class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled>
+                                Exportar a Excel
+                            </button>
+                        </div>
+                        
+                        <!-- Filtros de Fecha -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
                                 <label for="balance-history-start" class="block text-gray-700 font-medium">Fecha de Inicio</label>
                                 <input type="date" id="balance-history-start" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                             </div>
-                            <div class="flex-grow">
+                            <div>
                                 <label for="balance-history-end" class="block text-gray-700 font-medium">Fecha de Fin</label>
                                 <input type="date" id="balance-history-end" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
                             </div>
                         </div>
-                        <div class="flex justify-between items-center mb-4 space-x-2">
-                            <button id="export-balance-day-btn" class="bg-gray-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-600 transition duration-300">Hoy</button>
-                            <button id="export-balance-week-btn" class="bg-gray-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-gray-600 transition duration-300">Esta Semana</button>
-                            <button id="export-balance-excel-btn" class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md">
-                                Exportar a Excel
-                            </button>
+                        <div class="flex flex-wrap gap-2 mb-4">
+                            <button id="balance-history-today" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Hoy</button>
+                            <button id="balance-history-yesterday" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Ayer</button>
+                            <button id="balance-history-7days" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300">Últimos 7 días</button>
+                            <button id="balance-history-search-btn" class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600">Buscar</button>
                         </div>
+
+                        <!-- Header for Balance History -->
+                        <div class="max-h-96 overflow-y-auto border rounded-lg">
+                            <table class="w-full text-sm">
+                                <thead id="balance-history-header" class="hidden">
+                                    <tr class="text-xs font-bold text-gray-500 uppercase bg-gray-50">
+                                        <th class="p-2 text-left">Fecha y Hora</th>
+                                        <th class="p-2 text-left">Descripción</th>
+                                        <th class="p-2 text-left">Banco</th>
+                                        <th class="p-2 text-right">Cargo</th>
+                                        <th class="p-2 text-right">Abono</th>
+                                        <th class="p-2 text-right">Saldo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="balance-history-list">
+                                    <!-- El historial se renderizará aquí -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <p id="no-balance-history-message" class="text-gray-500 text-center mt-4 hidden">Selecciona un rango de fechas para ver los movimientos.</p>
                     </div>
 
                     <!-- Lista de Pedidos -->
@@ -343,13 +381,19 @@ Monto en CLP: 1000</pre>
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <!-- Columna Izquierda: Pendientes y Cancelados -->
                             <div>
-                                <h3 class="text-xl font-semibold text-gray-600 mb-3 border-b pb-2">Pendientes y Cancelados</h3>
+                                <h3 class="text-xl font-semibold text-yellow-800 bg-yellow-100 p-3 rounded-lg mb-3 flex justify-between items-center">
+                                    <span>Pendientes y Cancelados</span>
+                                    <span id="pending-summary" class="text-sm font-normal"></span>
+                                </h3>
                                 <div id="orders-list-pending" class="space-y-4 max-h-96 overflow-y-auto"></div>
                                 <p id="no-orders-pending-message" class="text-gray-500 text-center mt-4 hidden">No hay pedidos en esta categoría.</p>
                             </div>
                             <!-- Columna Derecha: Pagados -->
                             <div>
-                                <h3 class="text-xl font-semibold text-gray-600 mb-3 border-b pb-2">Pagados</h3>
+                                <h3 class="text-xl font-semibold text-green-800 bg-green-100 p-3 rounded-lg mb-3 flex justify-between items-center">
+                                    <span>Pagados</span>
+                                    <span id="paid-summary" class="text-sm font-normal"></span>
+                                </h3>
                                 <div id="orders-list-paid" class="space-y-4 max-h-96 overflow-y-auto"></div>
                                 <p id="no-orders-paid-message" class="text-gray-500 text-center mt-4 hidden">No hay pedidos pagados.</p>
                             </div>
@@ -402,18 +446,200 @@ Monto en CLP: 1000</pre>
 
                     <!-- Lista de Clientes -->
                     <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
-                        <div class="flex justify-between items-center mb-4">
+                        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
                             <h2 class="text-2xl font-semibold text-gray-700">Lista de Clientes</h2>
                             <div class="flex items-center gap-2">
-                                <input id="clients-search" type="text" class="p-2 border border-gray-300 rounded-lg text-sm" placeholder="Buscar por nombre..." />
-                                <button id="copy-clients-btn" class="bg-blue-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-600">Copiar lista</button>
+                                <input id="clients-search" type="text" class="p-2 border border-gray-300 rounded-lg text-sm" placeholder="Buscar por nombre o cédula..." />
+                                <button id="add-client-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700">Agregar Cliente</button>
                             </div>
                         </div>
-                        <p class="text-sm text-gray-500 mb-2">Ordenado A–Z • Total: <span id="clients-count">0</span></p>
-                        <div id="clients-list" class="space-y-1 max-h-96 overflow-y-auto"></div>
+                        <!-- Controles de Paginación y Orden -->
+                        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-medium text-gray-600">Ordenar por:</span>
+                                <button id="client-sort-name" class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 hover:bg-gray-300">Nombre (A-Z)</button>
+                                <button id="client-sort-cedula" class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 hover:bg-gray-300">Cédula</button>
+                            </div>
+                            <div id="client-pagination-controls" class="items-center gap-2 hidden">
+                                <button id="client-pagination-prev" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">&lt; Anterior</button>
+                                <span id="client-pagination-info" class="text-sm font-medium text-gray-700"></span>
+                                <button id="client-pagination-next" class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed">Siguiente &gt;</button>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-2">Total de clientes encontrados: <span id="clients-count">0</span></p>
+                        <div id="clients-list" class="space-y-2 min-h-[320px]"></div>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal para Seleccionar Origen del Pago (Admin) -->
+    <div id="select-payment-source-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-left">
+            <h3 class="text-2xl font-bold mb-2 text-gray-800">Seleccionar Origen del Pago</h3>
+            <p class="mb-4 text-gray-600">Elige la cuenta desde la cual se realizará el pago para el pedido.</p>
+            <div id="payment-source-order-details" class="mb-4 p-3 bg-gray-100 rounded-lg text-sm"></div>
+            
+            <div id="payment-source-list" class="space-y-2 max-h-60 overflow-y-auto mb-4 pr-2">
+                <!-- Account options will be rendered here -->
+            </div>
+    
+            <div id="payment-fee-details" class="text-sm text-orange-600 font-medium p-3 bg-orange-50 rounded-lg mb-6 hidden"></div>
+    
+            <div class="flex justify-end items-center mt-6">
+                <div class="flex space-x-4">
+                    <button id="payment-source-next-btn" class="bg-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg disabled:bg-gray-400" disabled>
+                        Siguiente
+                    </button>
+                    <button id="payment-source-cancel-btn" class="bg-red-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Agregar Cliente -->
+    <div id="add-client-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-800">Agregar Cliente o Método de Pago</h3>
+                <button id="add-client-close-btn" class="text-gray-400 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <p class="mb-6 text-gray-600">Ingresa los datos del cliente. Esto no generará un pedido.</p>
+            
+            <!-- Tabs for payment method type -->
+            <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
+                <button data-form="transferencia" class="add-client-tab flex-1 py-3 px-4 text-center font-semibold rounded-tl-lg bg-white text-blue-600">Transferencia</button>
+                <button data-form="pago-movil" class="add-client-tab flex-1 py-3 px-4 text-center font-semibold text-gray-700 hover:bg-gray-300">Pago Móvil</button>
+                <button data-form="recarga" class="add-client-tab flex-1 py-3 px-4 text-center font-semibold rounded-tr-lg text-gray-700 hover:bg-gray-300">Recarga</button>
+            </div>
+
+            <!-- Form content -->
+            <div id="add-client-form-content">
+                <!-- Transferencia Form -->
+                <form id="add-client-form-transferencia" class="space-y-4">
+                    <input type="hidden" name="type" value="transferencia">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="add-client-name-transferencia" class="block text-gray-700 font-medium">Nombre Completo</label>
+                            <input type="text" id="add-client-name-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="add-client-cedula-transferencia" class="block text-gray-700 font-medium">Cédula</label>
+                            <input type="text" id="add-client-cedula-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="add-client-bank-transferencia" class="block text-gray-700 font-medium">Banco</label>
+                            <select id="add-client-bank-transferencia" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                                <!-- Options will be populated by JS -->
+                            </select>
+                        </div>
+                        <div>
+                            <label for="add-client-account-type-transferencia" class="block text-gray-700 font-medium">Tipo de Cuenta</label>
+                            <select id="add-client-account-type-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                                <option value="ahorro">Ahorro</option>
+                                <option value="corriente">Corriente</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="add-client-account-number-transferencia" class="block text-gray-700 font-medium">Número de Cuenta</label>
+                            <input type="text" id="add-client-account-number-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" id="paste-btn-add-client-transferencia" class="bg-gray-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-600">Pegar Datos</button>
+                        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Guardar</button>
+                    </div>
+                </form>
+
+                <!-- Pago Movil Form (hidden by default) -->
+                <form id="add-client-form-pago-movil" class="space-y-4 hidden">
+                    <input type="hidden" name="type" value="pago-movil">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="add-client-name-pm" class="block text-gray-700 font-medium">Nombre Completo</label>
+                            <input type="text" id="add-client-name-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="add-client-cedula-pm" class="block text-gray-700 font-medium">Cédula</label>
+                            <input type="text" id="add-client-cedula-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="add-client-phone-pm" class="block text-gray-700 font-medium">Número de Teléfono</label>
+                            <input type="tel" id="add-client-phone-pm" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="add-client-bank-pm" class="block text-gray-700 font-medium">Banco Receptor</label>
+                            <select id="add-client-bank-pm" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                                <!-- Options will be populated by JS -->
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" id="paste-btn-add-client-pm" class="bg-gray-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-600">Pegar Datos</button>
+                        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Guardar</button>
+                    </div>
+                </form>
+
+                <!-- Recarga Form (hidden by default) -->
+                <form id="add-client-form-recarga" class="space-y-4 hidden">
+                    <input type="hidden" name="type" value="recarga-saldo">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="add-client-name-recarga" class="block text-gray-700 font-medium">Nombre Completo</label>
+                            <input type="text" id="add-client-name-recarga" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div>
+                            <label for="add-client-cedula-recarga" class="block text-gray-700 font-medium">Cédula</label>
+                            <input type="text" id="add-client-cedula-recarga" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label for="add-client-phone-recarga" class="block text-gray-700 font-medium">Número de Teléfono a Recargar</label>
+                            <input type="tel" id="add-client-phone-recarga" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-4">
+                        <button type="button" id="paste-btn-add-client-recarga" class="bg-gray-500 text-white px-6 py-2 rounded-lg font-semibold hover:bg-gray-600">Pegar Datos</button>
+                        <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Guardar</button>
+                    </div>
+                </form>
+            </div>
+            <p id="add-client-message" class="mt-4 text-center font-medium"></p>
+        </div>
+    </div>
+
+    <!-- Modal para Transferir Fondos entre Cuentas -->
+    <div id="transfer-funds-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-800">Transferir Fondos entre Cuentas</h3>
+                <button id="transfer-funds-close-btn" class="text-gray-400 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+            <form id="transfer-funds-form" class="space-y-4">
+                <div>
+                    <label for="transfer-from-account" class="block text-gray-700 font-medium">Desde la cuenta</label>
+                    <select id="transfer-from-account" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="transfer-to-account" class="block text-gray-700 font-medium">Hacia la cuenta</label>
+                    <select id="transfer-to-account" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="transfer-amount" class="block text-gray-700 font-medium">Monto a Transferir (VES)</label>
+                    <input type="number" id="transfer-amount" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" step="0.01" required placeholder="Ej: 50000">
+                </div>
+                <div id="transfer-fee-details" class="text-sm text-orange-600 font-medium p-3 bg-orange-50 rounded-lg hidden"></div>
+                <div class="flex justify-end space-x-4">
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700">Confirmar Transferencia</button>
+                </div>
+            </form>
+            <p id="transfer-funds-message" class="mt-4 text-center font-medium"></p>
         </div>
     </div>
 
@@ -445,29 +671,62 @@ Monto en CLP: 1000</pre>
         </div>
     </div>
 
-    <!-- Modal para seleccionar banco al cargar saldo -->
-    <div id="load-balance-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
+    <!-- Modal para Cargar/Restar Saldo -->
+    <div id="balance-operation-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
-            <h3 class="text-xl font-bold mb-4 text-gray-800">Cargar Saldo</h3>
-            <p class="mb-4 text-gray-600">
-                Selecciona el banco desde donde se cargará el saldo en VES.
-            </p>
-            <select id="load-bank-select" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mb-4">
-                <option value="Banesco">Banesco</option>
-                <option value="Banco de Venezuela">Banco de Venezuela</option>
-                <option value="Mercantil">Mercantil</option>
-                <option value="Provincial">Provincial</option>
-            </select>
-            <div class="flex justify-center space-x-4">
-                <button id="load-bank-confirm-btn" class="bg-green-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-green-700 transition duration-300 shadow-lg">
-                    Confirmar
+            <h3 id="balance-op-title" class="text-xl font-bold mb-4 text-gray-800">Operación de Saldo</h3>
+            <div class="space-y-4">
+                <div id="balance-op-bank-section">
+                    <label for="balance-op-bank-select" class="block text-sm font-medium text-gray-700">Banco</label>
+                    <select id="balance-op-bank-select" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <!-- Options will be populated by JS -->
+                    </select>
+                </div>
+                <div>
+                    <label for="balance-op-holder-select" class="block text-sm font-medium text-gray-700">Titular</label>
+                    <select id="balance-op-holder-select" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                        <option value="Emma Quintero">Emma Quintero</option>
+                        <option value="Ivette Olteanu">Ivette Olteanu</option>
+                        <option value="Lorena Torres">Lorena Torres</option>
+                        <option value="Mano Tillo">Mano Tillo</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="balance-op-note-input" class="block text-sm font-medium text-gray-700">Nota (Opcional)</label>
+                    <input type="text" id="balance-op-note-input" maxlength="30" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Max 30 caracteres">
+                </div>
+            </div>
+            <div class="flex justify-center space-x-4 mt-6">
+                <button id="balance-op-confirm-btn" class="bg-green-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-green-700 transition duration-300 shadow-lg">
+                    Siguiente
                 </button>
-                <button id="load-bank-cancel-btn" class="bg-red-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg">
+                <button id="balance-op-cancel-btn" class="bg-red-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg">
                     Cancelar
                 </button>
             </div>
         </div>
     </div>
+
+    <!-- Modal de Confirmación de Operación de Saldo -->
+    <div id="balance-confirm-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-left">
+            <h3 id="balance-confirm-title" class="text-xl font-bold mb-4 text-gray-800">Confirmar Operación</h3>
+            <div id="balance-confirm-details" class="space-y-2 text-gray-700 border-t border-b py-4 mb-6">
+                <!-- Los detalles se inyectarán aquí -->
+            </div>
+            <div class="flex justify-center space-x-4">
+                <button id="balance-final-confirm-btn" class="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg">
+                    Confirmar
+                </button>
+                <button id="balance-final-cancel-btn" class="bg-gray-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-gray-600 transition duration-300 shadow-lg">
+                    Atrás
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sonido de Notificación -->
+    <audio id="notification-sound" src="/sounds/notification.mp3" preload="auto"></audio>
 
     <!-- Firebase SDKs - La configuración se inyectará automáticamente por Firebase Hosting -->
     <script src="/__/firebase/11.6.1/firebase-app-compat.js"></script>
@@ -478,6 +737,6 @@ Monto en CLP: 1000</pre>
     <script src="/__/firebase/11.6.1/firebase-storage-compat.js"></script>
     <script src="/__/firebase/init.js"></script>
 
-    <script type="module" src="/js/main.js?v=dev3"></script>
+    <script type="module" src="/js/main.js?v=final-v39"></script>
 </body>
 </html>

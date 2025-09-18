@@ -1,10 +1,17 @@
 {
   "indexes": [
     {
-      "collectionGroup": "orders",
+      "collectionGroup": "balance_history",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "type",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timestamp",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

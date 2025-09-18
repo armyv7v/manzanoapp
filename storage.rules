@@ -1,8 +1,12 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read, write: if true;
+    // Match any file inside the 'proofs' folder.
+    match /proofs/{allPaths=**} {
+      // Allow anyone to read (view/download) these files. This makes them public.
+      allow read: if true;
+      // Only allow authenticated admins to upload, update, or delete files.
+      allow write: if request.auth.token.admin == true;
     }
   }
 }

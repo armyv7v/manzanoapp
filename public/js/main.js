@@ -1,4 +1,4 @@
-﻿﻿// Demo/hosting detection
+﻿﻿﻿﻿﻿﻿// Demo/hosting detection
 (function(){
   try {
     const __proj = (firebase.app && firebase.app().options && firebase.app().options.projectId) || '';
@@ -15,9 +15,16 @@ const storage = firebase.storage();
 let currentUser = null;
 let currentExchangeRate = 0;
 let isAdmin = false;
-let ordersListener = null; // To hold the unsubscribe function for the orders listener
+let ordersListener = null; // To hold the unsubscribe function for the orders listener.
+let accountsListener = null; // To hold the listener for the accounts collection.
+let paymentData = {}; // To store all data related to a payment process
+let isInitialOrdersLoad = true; // To prevent notification sound on first load
 
-let orderIdToProcess = null; // To store the ID of the order being processed by the admin
+// --- Constants ---
+const venezuelanBanks = [
+    "100% Banco", "Activo", "Agrícola de Venezuela", "Bancamiga", "Bancaribe", "Bancrecer", "Banesco", "Bangente", "Banplus", "BFC (Banco Fondo Común)", "Bicentenario", "BNC (Banco Nacional de Crédito)", "Caroní", "DelSur", "Exterior", "Internacional de Desarrollo", "Mercantil", "Mi Banco", "N58 Banco Digital", "Plaza", "Provincial", "Sofitasa", "Tesoro", "Venezolano de Crédito", "Venezuela", "BANFANB"
+].sort();
+
 // --- UI Helper Functions ---
 
 /**
@@ -70,9 +77,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const formTransferencia = document.getElementById('remittance-form-transferencia');
   const formPagoMovil = document.getElementById('remittance-form-pago-movil');
   const formRecargaSaldo = document.getElementById('remittance-form-recarga-saldo');
-  const uploadModal = document.getElementById('upload-modal');
-  const confirmUploadBtn = document.getElementById('confirm-upload-btn');
-  let lastOrderId = null; // To store the ID of the order just created
+  const orderConfirmModal = document.getElementById('order-confirm-modal');
+  const orderConfirmDetails = document.getElementById('order-confirm-details');
+  const orderFinalConfirmBtn = document.getElementById('order-final-confirm-btn');
+  const orderFinalCancelBtn = document.getElementById('order-final-cancel-btn');
 
   // Admin Upload Modal Elements
   const adminUploadModal = document.getElementById('admin-upload-modal');
@@ -80,12 +88,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminUploadBtn = document.getElementById('admin-upload-btn');
   const adminCancelUploadBtn = document.getElementById('admin-cancel-upload-btn');
 
+  // Payment Source Modal Elements
+  const selectPaymentSourceModal = document.getElementById('select-payment-source-modal');
+  const paymentSourceOrderDetails = document.getElementById('payment-source-order-details');
+  const paymentSourceList = document.getElementById('payment-source-list');
+  const paymentFeeDetails = document.getElementById('payment-fee-details');
+  const paymentSourceNextBtn = document.getElementById('payment-source-next-btn');
+  const paymentSourceCancelBtn = document.getElementById('payment-source-cancel-btn');
+
   // Order display elements
   const ordersListPending = document.getElementById('orders-list-pending');
   const ordersListPaid = document.getElementById('orders-list-paid');
   const noOrdersPendingMessage = document.getElementById('no-orders-pending-message');
   const noOrdersPaidMessage = document.getElementById('no-orders-paid-message');
   const orderFilter = document.getElementById('order-filter');
+  const pendingSummaryDisplay = document.getElementById('pending-summary');
+  const paidSummaryDisplay = document.getElementById('paid-summary');
 
   // CLP/VES Calculation elements
   const clpInputs = [
@@ -108,11 +126,30 @@ document.addEventListener('DOMContentLoaded', () => {
   const balanceHistoryList = document.getElementById('balance-history-list');
   const noBalanceHistoryMessage = document.getElementById('no-balance-history-message');
 
+  // Balance History Elements (New)
+  const balanceHistoryStartInput = document.getElementById('balance-history-start');
+  const balanceHistoryEndInput = document.getElementById('balance-history-end');
+  const balanceHistoryTodayBtn = document.getElementById('balance-history-today');
+  const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
+  const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
+  const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
+  const exportBalanceExcelBtn = document.getElementById('export-balance-excel-btn');
+  const balanceHistoryHeader = document.getElementById('balance-history-header');
+
   // Balance Modal Elements
-  const loadBalanceModal = document.getElementById('load-balance-modal');
-  const loadBankSelect = document.getElementById('load-bank-select');
-  const loadBankConfirmBtn = document.getElementById('load-bank-confirm-btn');
-  const loadBankCancelBtn = document.getElementById('load-bank-cancel-btn');
+  const balanceOperationModal = document.getElementById('balance-operation-modal');
+  const balanceOpTitle = document.getElementById('balance-op-title');
+  const balanceOpBankSection = document.getElementById('balance-op-bank-section');
+  const balanceOpBankSelect = document.getElementById('balance-op-bank-select');
+  const balanceOpHolderSelect = document.getElementById('balance-op-holder-select');
+  const balanceOpNoteInput = document.getElementById('balance-op-note-input');
+  const balanceOpConfirmBtn = document.getElementById('balance-op-confirm-btn');
+  const balanceOpCancelBtn = document.getElementById('balance-op-cancel-btn');
+  const balanceConfirmModal = document.getElementById('balance-confirm-modal');
+  const balanceConfirmTitle = document.getElementById('balance-confirm-title');
+  const balanceConfirmDetails = document.getElementById('balance-confirm-details');
+  const balanceFinalConfirmBtn = document.getElementById('balance-final-confirm-btn');
+  const balanceFinalCancelBtn = document.getElementById('balance-final-cancel-btn');
 
   // Paste buttons
   const pasteBtnTransferencia = document.getElementById('paste-btn-transferencia');
@@ -142,9 +179,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Client List Elements
   const clientsSearchInput = document.getElementById('clients-search');
-  const copyClientsBtn = document.getElementById('copy-clients-btn');
   const clientsCountDisplay = document.getElementById('clients-count');
   const clientsList = document.getElementById('clients-list');
+  const clientSortNameBtn = document.getElementById('client-sort-name');
+  const clientSortCedulaBtn = document.getElementById('client-sort-cedula');
+  const clientPaginationControls = document.getElementById('client-pagination-controls');
+  const clientPaginationPrevBtn = document.getElementById('client-pagination-prev');
+  const clientPaginationNextBtn = document.getElementById('client-pagination-next');
+  const clientPaginationInfo = document.getElementById('client-pagination-info');
+  const addClientBtn = document.getElementById('add-client-btn');
+
+  // Add Client Modal Elements
+  const addClientModal = document.getElementById('add-client-modal');
+  const addClientCloseBtn = document.getElementById('add-client-close-btn');
+  const addClientMessage = document.getElementById('add-client-message');
+  const addClientTabs = document.querySelectorAll('.add-client-tab');
+  const addClientFormTransferencia = document.getElementById('add-client-form-transferencia');
+  const addClientFormPagoMovil = document.getElementById('add-client-form-pago-movil');
+  const addClientFormRecarga = document.getElementById('add-client-form-recarga');
+  const pasteBtnAddClientTransferencia = document.getElementById('paste-btn-add-client-transferencia');
+  const pasteBtnAddClientPm = document.getElementById('paste-btn-add-client-pm');
+  const pasteBtnAddClientRecarga = document.getElementById('paste-btn-add-client-recarga');
+  const addClientCedulaInputs = [
+      document.getElementById('add-client-cedula-transferencia'),
+      document.getElementById('add-client-cedula-pm'),
+      document.getElementById('add-client-cedula-recarga')
+  ];
+
+  // Transfer Funds Modal Elements
+  const openTransferFundsModalBtn = document.getElementById('open-transfer-funds-modal-btn');
+  const transferFundsModal = document.getElementById('transfer-funds-modal');
+  const transferFundsCloseBtn = document.getElementById('transfer-funds-close-btn');
+  const transferFundsForm = document.getElementById('transfer-funds-form');
 
   // Cedula inputs for autocomplete
   const cedulaInputs = [
@@ -166,9 +232,28 @@ document.addEventListener('DOMContentLoaded', () => {
   ];
 
   // State for balance modal
-  let amountToLoad = 0;
+  let orderDataToConfirm = {};
+  let balanceOperationData = {};
+  let accountsData = []; // To store real-time account balances
+  let balanceHistoryData = []; // To store data for Excel export
   let historicalOrdersData = []; // To store data for Excel export
   let fullClientList = []; // Holds the raw client data
+
+  // Client list pagination and sorting state
+  let clientListPage = 1;
+  const CLIENTS_PER_PAGE = 5;
+  let clientListSortBy = 'name'; // 'name' or 'cedula'
+  let filteredClientList = [];
+
+  /** Populates all bank select dropdowns with a standard list of Venezuelan banks. */
+  const populateBankSelects = () => {
+      const bankSelects = document.querySelectorAll('.bank-select');
+      const optionsHtml = venezuelanBanks.map(bank => `<option value="${bank}">${bank}</option>`).join('');
+      
+      bankSelects.forEach(select => {
+          select.innerHTML = `<option value="">Seleccione un banco...</option>${optionsHtml}`;
+      });
+  };
 
   // --- UI Control Logic (The Definitive Solution) ---
 
@@ -255,7 +340,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const createdAt = order.createdAt ? order.createdAt.toDate().toLocaleTimeString('es-VE', { hour: '2-digit', minute: '2-digit' }) : 'N/A';
 
       const clpAmount = (order.clpAmount || 0).toLocaleString('es-CL', { style: 'currency', currency: 'CLP' });
-      const vesAmount = (order.vesAmount || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 });
+      const vesAmount = (order.vesAmount || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
       let details = '';
       switch (order.type) {
@@ -279,7 +364,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
       let statusBadge = '';
       let actionButtons = '';
-      let debtorCheckbox = '';
+      let typeTag = '';
+      let debtorButton = '';
+
+      switch (order.type) {
+          case 'transferencia':
+              typeTag = `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-blue-600 bg-blue-200">Transferencia</span>`;
+              break;
+          case 'pago-movil':
+              typeTag = `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-purple-600 bg-purple-200">Pago Móvil</span>`;
+              break;
+          case 'recarga-saldo':
+              typeTag = `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-teal-600 bg-teal-200">Recarga</span>`;
+              break;
+      }
 
       switch (order.status) {
           case 'Pendiente de pago':
@@ -295,23 +393,23 @@ document.addEventListener('DOMContentLoaded', () => {
                   const shareText = encodeURIComponent(`Comprobante de pago para ${order.clientName}`);
                   const shareUrl = encodeURIComponent(order.proofUrl);
                   actionButtons = `
-                    <div class="flex items-center space-x-2">
-                        <a href="https://wa.me/?text=${shareText}%20${shareUrl}" target="_blank" rel="noopener noreferrer" class="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200" title="Compartir en WhatsApp">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.068-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232z"/></svg>
-                        </a>
-                        <a href="https://t.me/share/url?url=${shareUrl}&text=${shareText}" target="_blank" rel="noopener noreferrer" class="p-2 rounded-full bg-sky-100 text-sky-600 hover:bg-sky-200" title="Compartir en Telegram">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0zM8.287 5.906c-.778.324-2.334.994-4.666 2.01-.378.15-.577.298-.595.442-.03.243.275.339.69.47l.175.055c.408.133.958.288 1.243.294.26.006.549-.1.868-.32C9.173 7.99 10.438 7.02 10.63 6.82c.195-.2.323-.346.135-.525-.188-.18-.51-.05-.75.056l-2.433.972c-.245.097-.45.18-.6.255-.149.075-.303.14-.4.18s-.18.08-.27.05-.18-.05-.25-.11-.18-.12-.21-.15c-.03-.03-.05-.06-.06-.08l-.003-.004c-.02-.04-.03-.09-.03-.14v-.002c.002-.05.01-.09.02-.13.01-.03.03-.06.05-.09.04-.06.1-.12.18-.18.09-.07.2-.13.34-.19.14-.06.3-.11.48-.17.18-.06.38-.12.58-.18.2-.06.4-.12.6-.18.2-.06.4-.12.58-.17.18-.06.35-.11.5-.16.15-.05.29-.09.4-.12.12-.03.23-.06.33-.09.1-.03.2-.05.28-.07.08-.02.15-.04.21-.05.06-.01.12-.02.17-.03.05-.01.1-.01.14-.02.04-.01.08-.01.12-.01.02 0 .03 0 .04 0 .01 0 .02 0 .03 0 .01 0 .02 0 .02 0 .01 0 .01 0 .01 0z"/></svg>
-                        </a>
-                        <a href="mailto:?subject=${shareText}&body=Hola,%0D%0A%0D%0AAdjunto el comprobante de pago:%0D%0A${shareUrl}" class="p-2 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300" title="Compartir por Email">
-                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4Zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1H2Zm13 2.383-4.708 2.825L15 11.105V5.383Zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741ZM1 11.105l4.708-2.897L1 5.383v5.722Z"/></svg>
-                        </a>
-                    </div>`;
+                    <a href="https://wa.me/?text=${shareText}%20${shareUrl}" target="_blank" rel="noopener noreferrer" class="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-600 transition-transform transform hover:scale-105">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 16 16"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93A7.898 7.898 0 0 0 13.6 2.326zM7.994 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.56 6.56 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.068-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.08.38-.058 1.171-.48 1.338-.943.164-.464.164-.86.114-.943-.049-.084-.182-.133-.38-.232z"/></svg>
+                        <span>Compartir</span>
+                    </a>
+                  `;
               }
-              debtorCheckbox = `
-                  <div class="mt-3 pt-3 border-t border-gray-200 flex items-center">
-                      <input type="checkbox" id="deudor-${orderId}" data-id="${orderId}" class="deudor-checkbox h-4 w-4 text-orange-500 focus:ring-orange-400 border-gray-300 rounded" ${order.isDebtor ? 'checked' : ''}>
-                      <label for="deudor-${orderId}" class="ml-2 block text-sm text-orange-600 font-semibold">Deudor</label>
-                  </div>
+
+              const isDebtor = !!order.isDebtor;
+              const debtorButtonText = isDebtor ? 'Quitar Deudor' : 'Marcar Deudor';
+              const debtorButtonClasses = isDebtor 
+                  ? 'bg-orange-500 text-white' // Active state
+                  : 'bg-orange-100 text-orange-700'; // Inactive state
+
+              debtorButton = `
+                  <button data-id="${orderId}" data-is-debtor="${isDebtor}" class="debtor-toggle-btn ${debtorButtonClasses} px-3 py-1 rounded-lg text-sm font-semibold hover:opacity-80 transition-opacity">
+                      ${debtorButtonText}
+                  </button>
               `;
               break;
           case 'Cancelado':
@@ -326,7 +424,10 @@ document.addEventListener('DOMContentLoaded', () => {
                       <p class="font-bold text-gray-800">${order.clientName}</p>
                       <p class="text-sm text-gray-500">CI: ${order.cedula}</p>
                   </div>
-                  ${statusBadge}
+                  <div class="flex flex-col items-end gap-2 text-right">
+                    ${statusBadge}
+                    ${typeTag}
+                  </div>
               </div>
               <div class="my-2 p-2 bg-gray-50 rounded space-y-1">
                   ${details}
@@ -338,10 +439,16 @@ document.addEventListener('DOMContentLoaded', () => {
                   </div>
                   <div class="text-xs text-gray-500">${createdAt}</div>
               </div>
-              <div class="flex justify-end space-x-2 mt-3">
-                  ${actionButtons}
-              </div>
-              ${debtorCheckbox}
+              ${order.status === 'Pagado' ? `
+                <div class="mt-3 pt-3 border-t border-gray-200 flex justify-between items-center">
+                    ${debtorButton}
+                    ${actionButtons}
+                </div>
+              ` : `
+                <div class="flex justify-end space-x-2 mt-3">
+                    ${actionButtons}
+                </div>
+              `}
           </div>
       `;
   };
@@ -368,32 +475,69 @@ document.addEventListener('DOMContentLoaded', () => {
           .where('createdAt', '>=', today)
           .orderBy('createdAt', 'desc');
 
-      ordersListener = ordersQuery.onSnapshot(snapshot => {
+      ordersListener = ordersQuery.onSnapshot(snapshot => {          
+          // --- Sound Notification Logic ---
+          snapshot.docChanges().forEach(change => {
+              if (change.type === 'added' && !isInitialOrdersLoad) {
+                  const order = change.doc.data();
+                  if (order.status === 'Pendiente de pago') {
+                      console.log('Nuevo pedido pendiente, reproduciendo sonido.');
+                      const notificationSound = document.getElementById('notification-sound');
+                      if (notificationSound) {
+                          notificationSound.play().catch(error => {
+                              console.warn("No se pudo reproducir el sonido de notificación. El usuario debe interactuar con la página primero.", error);
+                          });
+                      }
+                  }
+              }
+          });
+          isInitialOrdersLoad = false; // Set flag after first run
+
           console.log(`[Listener] Se recibió un snapshot con ${snapshot.size} documentos.`);
           ordersListPending.innerHTML = '';
           ordersListPaid.innerHTML = '';
-          let pendingCount = 0;
+          
+          let pendingOrdersCount = 0;
+          let pendingVesTotal = 0;
           let paidCount = 0;
+          let paidVesTotal = 0;
 
           if (snapshot.empty) {
               noOrdersPendingMessage.classList.remove('hidden');
               noOrdersPaidMessage.classList.remove('hidden');
+              // Clear summaries when there are no orders
+              pendingSummaryDisplay.textContent = '0 Pedidos / 0,00 VES';
+              paidSummaryDisplay.textContent = '0 Pedidos / 0,00 VES';
               return;
           }
 
           snapshot.forEach(doc => {
               const order = doc.data();
+              // Do not render dummy client registration orders in the list
+              if (order.status === 'Cliente Registrado') {
+                  return;
+              }
+
               const orderHtml = renderOrder(doc);
               if (order.status === 'Pagado') {
                   ordersListPaid.innerHTML += orderHtml;
                   paidCount++;
+                  paidVesTotal += order.vesAmount || 0;
               } else { // 'Pendiente de pago' or 'Cancelado'
                   ordersListPending.innerHTML += orderHtml;
-                  pendingCount++;
+                  // Only count orders with "Pendiente de pago" status for the summary
+                  if (order.status === 'Pendiente de pago') {
+                      pendingOrdersCount++;
+                      pendingVesTotal += order.vesAmount || 0;
+                  }
               }
           });
 
-          noOrdersPendingMessage.classList.toggle('hidden', pendingCount > 0);
+          // Update summary displays with formatted totals
+          pendingSummaryDisplay.textContent = `${pendingOrdersCount} Pedidos / ${pendingVesTotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+          paidSummaryDisplay.textContent = `${paidCount} Pedidos / ${paidVesTotal.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+
+          noOrdersPendingMessage.classList.toggle('hidden', ordersListPending.children.length > 0);
           noOrdersPaidMessage.classList.toggle('hidden', paidCount > 0);
           applyOrderFilter();
       }, error => {
@@ -418,7 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const updateUIForUser = (user) => {
       currentUser = user;
       if (user) {
-          user.getIdTokenResult().then(idTokenResult => {
+          // Force refresh of the token to get the latest custom claims (like 'admin')
+          user.getIdTokenResult(true).then(idTokenResult => {
               isAdmin = !!idTokenResult.claims.admin;
               userIdDisplay.textContent = `Conectado como: ${user.email}`;
               if (isAdmin) {
@@ -426,12 +571,29 @@ document.addEventListener('DOMContentLoaded', () => {
                   if (!ordersListener) {
                       attachOrdersListener(); // Attach listener if admin
                       fetchAndRenderClients(); // Fetch clients when admin logs in
+                      // Attach listener and provide a callback to run after the first data load
+                      attachAccountsListener(() => {
+                          // Load today's balance history by default, only after accounts are loaded
+                          const today = new Date();
+                          const start = new Date(today);
+                          start.setHours(0, 0, 0, 0);
+                          const end = new Date(today);
+                          end.setHours(23, 59, 59, 999);
+                          balanceHistoryStartInput.valueAsDate = today;
+                          balanceHistoryEndInput.valueAsDate = today;
+                          fetchAndRenderBalanceHistory(start, end);
+                      });
                   }
               } else {
                   console.log(`Usuario ${user.email} logueado, pero no es admin.`);
                   if (ordersListener) {
                       ordersListener(); // Detach listener if not admin
                       ordersListener = null;
+                  }
+                  isInitialOrdersLoad = true; // Reset flag
+                  if (accountsListener) {
+                      accountsListener();
+                      accountsListener = null;
                   }
                   switchMainView('user');
               }
@@ -444,8 +606,20 @@ document.addEventListener('DOMContentLoaded', () => {
               ordersListener(); // Detach listener on logout
               ordersListener = null;
           }
+          isInitialOrdersLoad = true; // Reset flag on logout
+          if (accountsListener) {
+              accountsListener();
+              accountsListener = null;
+          }
           fullClientList = [];
-          renderClientList([]);
+          updateClientView();
+          // Clear balance history on logout
+          balanceHistoryList.innerHTML = '';
+          noBalanceHistoryMessage.textContent = 'Selecciona un rango de fechas para ver los movimientos.';
+          noBalanceHistoryMessage.classList.remove('hidden');
+          if (balanceHistoryHeader) balanceHistoryHeader.classList.add('hidden');
+          balanceHistoryData = [];
+          exportBalanceExcelBtn.disabled = true;
           switchMainView('user');
       }
   };
@@ -454,67 +628,152 @@ document.addEventListener('DOMContentLoaded', () => {
 
   auth.onAuthStateChanged(updateUIForUser);
 
-  // Listen for real-time updates to the exchange rate
-  const rateRef = db.collection('config').doc('rate');
-  rateRef.onSnapshot((doc) => {
-      if (doc.exists) {
-          currentExchangeRate = doc.data().value;
-          rateDisplay.textContent = `Tasa de cambio: 1 CLP = ${currentExchangeRate.toFixed(4)} VES`;
-      } else {
-          rateDisplay.textContent = 'Tasa no disponible';
-          console.log("No se encontró el documento de la tasa de cambio!");
-      }
-  }, (error) => {
-      console.error("Error al obtener la tasa de cambio:", error);
-      rateDisplay.textContent = 'Error al cargar tasa';
-  });
+  /**
+   * Renders a single balance history item into an HTML element.
+   * @param {object} history - The history data object.
+   * @returns {HTMLDivElement} The HTML element for the history item.
+   */
+  const renderBalanceHistoryItem = (history) => {
+      const date = history.timestamp ? history.timestamp.toDate().toLocaleString('es-VE', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'N/A';
+      const formattedAmount = history.amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const formattedBalance = history.runningBalance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-  // Listen for real-time updates to the balance
-  const balanceRef = db.collection('config').doc('balance');
-  balanceRef.onSnapshot((doc) => {
-      if (doc.exists) {
-          const balance = doc.data().current || 0;
-          // Formatear como moneda venezolana
-          vesBalanceDisplay.textContent = balance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
-      } else {
-          vesBalanceDisplay.textContent = '0,00 VES';
-          console.log("No se encontró el documento de saldo.");
-      }
-  }, (error) => {
-      console.error("Error al obtener el saldo:", error);
-      vesBalanceDisplay.textContent = 'Error';
-  });
+      let description = history.note || '';
+      let debit = '';
+      let credit = '';
 
-  // Listen for real-time updates to balance history
-  const balanceHistoryRef = db.collection('balance_history');
-  balanceHistoryRef.orderBy('timestamp', 'desc').limit(50).onSnapshot((snapshot) => {
-      if (snapshot.empty) {
-          noBalanceHistoryMessage.classList.remove('hidden');
-          balanceHistoryList.innerHTML = '';
-          return;
+      if (history.type === 'add') {
+          credit = formattedAmount;
+          if (!description) description = `Carga de Saldo: ${history.holder}`;
+      } else if (history.type === 'fee') {
+          debit = formattedAmount;
+          if (!description) description = `Comisión Bancaria`;
+      } else { // subtract
+          debit = formattedAmount;
+          if (!description) description = `Pago de Pedido`;
       }
-      noBalanceHistoryMessage.classList.add('hidden');
-      balanceHistoryList.innerHTML = '';
-      snapshot.forEach(doc => {
-          const history = doc.data();
-          const date = history.timestamp ? history.timestamp.toDate().toLocaleString('es-VE') : 'Fecha no disponible';
-          const amount = history.amount.toLocaleString('es-VE', { minimumFractionDigits: 2 });
-          const isAdd = history.type === 'add';
-          const colorClass = isAdd ? 'text-green-600' : 'text-red-600';
-          const sign = isAdd ? '+' : '-';
-          const bankInfo = isAdd ? `(${history.bank})` : '';
 
-          const historyElement = document.createElement('div');
-          historyElement.className = `p-2 rounded-lg ${isAdd ? 'bg-green-50' : 'bg-red-50'}`;
-          historyElement.innerHTML = `
-              <div class="flex justify-between items-center">
-                  <p class="font-semibold ${colorClass}">${sign} ${amount} VES <span class="text-gray-600 font-normal text-sm">${bankInfo}</span></p>
-                  <p class="text-xs text-gray-500">${date}</p>
-              </div>
+      const bank = history.bank || '';
+
+      const historyElement = document.createElement('tr');
+      historyElement.className = `border-b border-gray-200 hover:bg-gray-50`;
+      historyElement.innerHTML = `
+          <td class="p-2 text-gray-600 whitespace-nowrap">${date}</td>
+          <td class="p-2 text-gray-800 truncate" title="${description}">${description}</td>
+          <td class="p-2 text-gray-600 truncate" title="${bank}">${bank}</td>
+          <td class="p-2 font-mono text-right text-red-600">${debit}</td>
+          <td class="p-2 font-mono text-right text-green-600">${credit}</td>
+          <td class="p-2 font-mono font-semibold text-right text-blue-700">${formattedBalance}</td>
           `;
-          balanceHistoryList.appendChild(historyElement);
+      return historyElement;
+  };
+
+  /** Renders the list of accounts with their balances. */
+  const renderAccountsBalanceList = () => {
+    const accountsListEl = document.getElementById('accounts-balance-list');
+    if (!accountsListEl) return;
+
+    if (accountsData.length === 0) {
+        accountsListEl.innerHTML = '<p class="text-gray-500">No hay cuentas con saldo registradas.</p>';
+        return;
+    }
+
+    accountsListEl.innerHTML = '';
+    // Sort by holder name
+    const sortedAccounts = [...accountsData].sort((a, b) => a.holder.localeCompare(b.holder));
+
+    sortedAccounts.forEach(account => {
+        const el = document.createElement('div');
+        el.className = 'flex justify-between items-center p-2 bg-blue-50 rounded-lg';
+        el.innerHTML = `
+            <p class="font-medium text-gray-700">${account.holder} - ${account.bank}</p>
+            <p class="font-semibold text-blue-700">${account.balance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>
+        `;
+        accountsListEl.appendChild(el);
+    });
+  };
+
+  /** Renders or refreshes the list of accounts in the payment source modal. */
+  const renderPaymentSourceList = () => {
+      if (!paymentData.orderData) return; // Don't render if no payment is active
+
+      const { orderData } = paymentData;
+      const previouslySelectedId = paymentSourceList.querySelector('input:checked')?.value;
+
+      paymentSourceList.innerHTML = '';
+      accountsData.forEach(account => {
+          const fee = calculateFee(orderData, account);
+          const totalDebit = orderData.vesAmount + fee;
+          const hasEnoughBalance = account.balance >= totalDebit;
+          const radioId = `account-${account.id}`;
+          const accountEl = document.createElement('div');
+          accountEl.innerHTML = `
+              <label for="${radioId}" class="flex items-center p-3 rounded-lg border transition-all ${hasEnoughBalance ? 'cursor-pointer hover:bg-gray-100' : 'opacity-50 bg-gray-200'}">
+                  <input type="radio" name="payment-source" id="${radioId}" value="${account.id}" class="mr-3" ${!hasEnoughBalance ? 'disabled' : ''} ${account.id === previouslySelectedId ? 'checked' : ''}>
+                  <div class="flex-grow">
+                      <p class="font-semibold">${account.holder} - ${account.bank}</p>
+                      <p class="text-sm text-gray-600">Disponible: ${account.balance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>
+                  </div>
+              </label>
+          `;
+          paymentSourceList.appendChild(accountEl);
       });
-  });
+
+      // After re-rendering, if an item was selected, re-trigger the 'change' event to update the UI
+      if (previouslySelectedId) {
+          const previouslySelectedRadio = document.getElementById(`account-${previouslySelectedId}`);
+          if (previouslySelectedRadio && !previouslySelectedRadio.disabled) {
+              previouslySelectedRadio.dispatchEvent(new Event('change', { bubbles: true }));
+          } else {
+              // The previously selected account is no longer valid, so reset the UI
+              paymentFeeDetails.classList.add('hidden');
+              paymentSourceNextBtn.disabled = true;
+          }
+      } else {
+        paymentFeeDetails.classList.add('hidden');
+        paymentSourceNextBtn.disabled = true;
+      }
+  };
+
+  /** Attaches a real-time listener for the accounts collection. */
+  const attachAccountsListener = (onFirstLoadCallback) => {
+    console.log('[Listener] Adjuntando listener de cuentas...');
+    if (accountsListener) {
+        accountsListener(); // Detach previous listener
+    }
+
+    let isFirstLoad = true;
+
+    accountsListener = db.collection('accounts').onSnapshot(snapshot => {
+        let totalBalance = 0;
+        accountsData = [];
+        snapshot.forEach(doc => {
+            const account = { id: doc.id, ...doc.data() };
+            accountsData.push(account);
+            totalBalance += account.balance || 0;
+        });
+
+        // Update global balance display
+        vesBalanceDisplay.textContent = totalBalance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
+        
+        // Render the list of individual account balances
+        renderAccountsBalanceList();
+
+        // NEW: Refresh the payment source modal if it's active
+        renderPaymentSourceList();
+
+        // If it's the first time this listener runs, execute the callback
+        if (isFirstLoad && typeof onFirstLoadCallback === 'function') {
+            onFirstLoadCallback();
+            isFirstLoad = false;
+        }
+
+    }, error => {
+        console.error("Error en listener de cuentas:", error);
+        vesBalanceDisplay.textContent = 'Error';
+        document.getElementById('accounts-balance-list').innerHTML = '<p class="text-red-500">Error al cargar saldos.</p>';
+    });
+  };
 
   // --- Paste from Clipboard Logic ---
 
@@ -538,15 +797,23 @@ document.addEventListener('DOMContentLoaded', () => {
         let value = values[i];
         
         const inputElement = document.getElementById(fieldId);
-        if (fieldId) {
-          if (inputElement) {
+        if (inputElement) {
+            if (inputElement.classList.contains('bank-select')) {
+                // It's a bank dropdown. Find the best match.
+                const lowerCaseValue = value.toLowerCase().trim();
+                let bestMatch = venezuelanBanks.find(bank => bank.toLowerCase() === lowerCaseValue);
+                if (!bestMatch) {
+                    bestMatch = venezuelanBanks.find(bank => bank.toLowerCase().includes(lowerCaseValue));
+                }
+                inputElement.value = bestMatch || ""; // Set to the found match or empty if no match
+            } else {
             // Special handling for 'cédula' to remove non-numeric characters
             if (fieldId.includes('cedula')) {
               value = value.replace(/[^0-9]/g, '');
             }
             inputElement.value = value;
-            fieldsPasted++;
           }
+          fieldsPasted++;
         }
       }
 
@@ -597,6 +864,25 @@ document.addEventListener('DOMContentLoaded', () => {
     'clp-amount-rs'
    ];
 
+  // Ordered field IDs for each form for pasting in the Add Client modal
+  const addClientTransferenciaFields = [
+      'add-client-name-transferencia',
+      'add-client-cedula-transferencia',
+      'add-client-bank-transferencia',
+      'add-client-account-type-transferencia',
+      'add-client-account-number-transferencia'
+  ];
+  const addClientPagoMovilFields = [
+      'add-client-name-pm',
+      'add-client-cedula-pm',
+      'add-client-phone-pm',
+      'add-client-bank-pm'
+  ];
+  const addClientRecargaFields = [
+      'add-client-name-recarga',
+      'add-client-cedula-recarga',
+      'add-client-phone-recarga'
+  ];
   /**
    * Handles the submission of a new order form.
    * @param {Event} e The form submission event.
@@ -604,65 +890,64 @@ document.addEventListener('DOMContentLoaded', () => {
    */
   const handleOrderSubmit = async (e, type) => {
       e.preventDefault();
-      loadingSpinner.classList.remove('hidden');
-      loadingSpinner.classList.add('flex');
-
       const form = e.target;
       const messageElId = form.querySelector('p[id^="user-message-"]').id;
 
-      try {
-          let orderData = {
-              type: type,
-              status: 'Pendiente de pago',
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-              clientName: form.querySelector('input[id^="name-"]').value,
-              cedula: form.querySelector('input[id^="cedula-"]').value.replace(/[^0-9]/g, ''),
-              clpAmount: parseFloat(form.querySelector('input[id^="clp-amount-"]').value),
-          };
-          
-          if (isNaN(orderData.clpAmount) || orderData.clpAmount <= 0) {
-              showMessage(messageElId, 'El monto en CLP debe ser un número válido y mayor a cero.', false);
-              loadingSpinner.classList.add('hidden');
-              loadingSpinner.classList.remove('flex');
-              return;
-          }
-
-          orderData.vesAmount = orderData.clpAmount * currentExchangeRate;
-
-          // Add type-specific fields
-          if (type === 'transferencia') {
-              orderData.bank = form.querySelector('#bank-transferencia').value;
-              orderData.accountType = form.querySelector('#account-type-transferencia').value;
-              orderData.accountNumber = form.querySelector('#account-number-transferencia').value;
-          } else if (type === 'pago-movil') {
-              orderData.phone = form.querySelector('#phone-pm').value;
-              orderData.bank = form.querySelector('#bank-pm').value;
-          } else if (type === 'recarga-saldo') {
-              orderData.phone = form.querySelector('#phone-rs').value;
-          }
-
-          const docRef = await db.collection('orders').add(orderData);
-          lastOrderId = docRef.id;
-          form.reset();
-          vesDisplays.forEach(span => span.textContent = '0,00 VES');
-          
-          // If admin is creating the order, refresh the client list
-          if (isAdmin) {
-              fetchAndRenderClients();
-          }
-
-          showMessage(messageElId, 'Pedido creado. Sube el comprobante.', true);
-          
-          uploadModal.classList.remove('hidden');
-          uploadModal.classList.add('flex');
-
-      } catch (error) {
-          console.error("Error al crear el pedido:", error);
-          showMessage(messageElId, `Error al crear el pedido: ${error.message}`, false);
-      } finally {
-          loadingSpinner.classList.add('hidden');
-          loadingSpinner.classList.remove('flex');
+      let orderData = {
+          type: type,
+          status: 'Pendiente de pago',
+          // createdAt will be added on final confirmation
+          clientName: form.querySelector('input[id^="name-"]').value,
+          cedula: form.querySelector('input[id^="cedula-"]').value.replace(/[^0-9]/g, ''),
+          clpAmount: parseFloat(form.querySelector('input[id^="clp-amount-"]').value),
+      };
+      
+      if (isNaN(orderData.clpAmount) || orderData.clpAmount <= 0) {
+          showMessage(messageElId, 'El monto en CLP debe ser un número válido y mayor a cero.', false);
+          return;
       }
+
+      orderData.vesAmount = orderData.clpAmount * currentExchangeRate;
+
+      let detailsHtml = `
+        <p><span class="font-semibold">Nombre:</span> ${orderData.clientName}</p>
+        <p><span class="font-semibold">Cédula:</span> ${orderData.cedula}</p>
+      `;
+
+      // Add type-specific fields
+      if (type === 'transferencia') {
+          orderData.bank = form.querySelector('#bank-transferencia').value;
+          orderData.accountType = form.querySelector('#account-type-transferencia').value;
+          orderData.accountNumber = form.querySelector('#account-number-transferencia').value;
+          detailsHtml += `
+            <p><span class="font-semibold">Banco:</span> ${orderData.bank}</p>
+            <p><span class="font-semibold">Tipo Cuenta:</span> ${orderData.accountType}</p>
+            <p><span class="font-semibold">Nro. Cuenta:</span> ${orderData.accountNumber}</p>
+          `;
+      } else if (type === 'pago-movil') {
+          orderData.phone = form.querySelector('#phone-pm').value;
+          orderData.bank = form.querySelector('#bank-pm').value;
+          detailsHtml += `
+            <p><span class="font-semibold">Teléfono:</span> ${orderData.phone}</p>
+            <p><span class="font-semibold">Banco:</span> ${orderData.bank}</p>
+          `;
+      } else if (type === 'recarga-saldo') {
+          orderData.phone = form.querySelector('#phone-rs').value;
+          detailsHtml += `<p><span class="font-semibold">Teléfono:</span> ${orderData.phone}</p>`;
+      }
+
+      detailsHtml += `
+        <div class="border-t mt-4 pt-4">
+            <p><span class="font-semibold">Monto CLP:</span> ${orderData.clpAmount.toLocaleString('es-CL', {style: 'currency', currency: 'CLP'})}</p>
+            <p><span class="font-semibold">Monto a Recibir (VES):</span> ${orderData.vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+        </div>
+      `;
+
+      // Store data and show modal
+      orderDataToConfirm = { data: orderData, form: form };
+      orderConfirmDetails.innerHTML = detailsHtml;
+      orderConfirmModal.classList.remove('hidden');
+      orderConfirmModal.classList.add('flex');
   };
 
   // --- Event Listeners ---
@@ -689,6 +974,7 @@ document.addEventListener('DOMContentLoaded', () => {
           // FIX: En modo demo, el listener de pedidos debe adjuntarse manualmente aquí
           if (!ordersListener) {
               attachOrdersListener();
+              attachAccountsListener();
           }
           return;
       }
@@ -712,10 +998,20 @@ document.addEventListener('DOMContentLoaded', () => {
               ordersListener();
               ordersListener = null;
               console.log('[Listener] Listener de pedidos desconectado para modo demo.');
+              isInitialOrdersLoad = true; // Reset flag
+
+              if (balanceHistoryListener) {
+                  balanceHistoryListener();
+                  balanceHistoryListener = null;
+              }
+              if (accountsListener) {
+                  accountsListener();
+                  accountsListener = null;
+              }
 
               // Clear client list on demo logout
               fullClientList = [];
-              renderClientList([]);
+              updateClientView();
               clientsSearchInput.value = '';
           }
           return;
@@ -750,72 +1046,131 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Admin: Balance Management
-  addBalanceBtn.addEventListener('click', () => {
+  const openBalanceOperationModal = (type) => {
       const amount = parseFloat(balanceAmountInput.value);
+      const message = type === 'add' ? 'Ingresa un monto válido para cargar.' : 'Ingresa un monto válido para restar.';
       if (isNaN(amount) || amount <= 0) {
-          showMessage('balance-message', 'Ingresa un monto válido para cargar.', false);
+          showMessage('balance-message', message, false);
           return;
       }
-      amountToLoad = amount;
-      loadBalanceModal.classList.remove('hidden');
-      loadBalanceModal.classList.add('flex');
+
+      balanceOperationData = { amount, type };
+      
+      // Configure and show the first modal
+      balanceOpTitle.textContent = type === 'add' ? 'Cargar Saldo' : 'Restar Saldo';
+      balanceOpNoteInput.value = ''; // Clear previous note
+      // The bank and holder selection is always needed to identify the account
+      balanceOpBankSection.style.display = 'block';
+      
+      balanceOperationModal.classList.remove('hidden');
+      balanceOperationModal.classList.add('flex');
+  };
+
+  addBalanceBtn.addEventListener('click', () => openBalanceOperationModal('add'));
+  subtractBalanceBtn.addEventListener('click', () => openBalanceOperationModal('subtract'));
+
+  // Listener for the first modal's "Next" button
+  balanceOpConfirmBtn.addEventListener('click', () => {
+      // Collect data from the first modal
+      balanceOperationData.holder = balanceOpHolderSelect.value;
+      balanceOperationData.note = balanceOpNoteInput.value.trim();
+      balanceOperationData.bank = balanceOpBankSelect.value; // Always get the bank
+
+      // Build confirmation details
+      const { type, amount, bank, holder, note } = balanceOperationData;
+      const formattedAmount = amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      const operationText = type === 'add' ? 'Cargar' : 'Restar';
+
+      let detailsHtml = `
+          <p><span class="font-semibold">Operación:</span> ${operationText}</p>
+          <p><span class="font-semibold">Monto:</span> ${formattedAmount} VES</p>
+          <p><span class="font-semibold">Titular:</span> ${holder}</p>
+      `;
+      if (bank) {
+          detailsHtml += `<p><span class="font-semibold">Banco:</span> ${bank}</p>`;
+      }
+      if (note) {
+          detailsHtml += `<p><span class="font-semibold">Nota:</span> ${note}</p>`;
+      }
+
+      balanceConfirmDetails.innerHTML = detailsHtml;
+      balanceConfirmTitle.textContent = `Confirmar ${operationText} de Saldo`;
+
+      // Show confirmation modal
+      balanceOperationModal.classList.add('hidden');
+      balanceOperationModal.classList.remove('flex');
+      balanceConfirmModal.classList.remove('hidden');
+      balanceConfirmModal.classList.add('flex');
   });
 
-  loadBankCancelBtn.addEventListener('click', () => {
-      loadBalanceModal.classList.add('hidden');
-      loadBalanceModal.classList.remove('flex');
-      amountToLoad = 0;
-  });
+  // Listener for the final confirmation button
+  balanceFinalConfirmBtn.addEventListener('click', async () => {
+      const { type, amount, bank, holder, note } = balanceOperationData;
 
-  loadBankConfirmBtn.addEventListener('click', () => {
-      const bank = loadBankSelect.value;
+      if (!bank || !holder) {
+          showMessage('balance-message', 'Error: El titular y el banco son obligatorios.', false);
+          balanceConfirmModal.classList.add('hidden');
+          balanceConfirmModal.classList.remove('flex');
+          balanceOperationData = {};
+          return;
+      }
 
+      // Generate a deterministic ID for the account document
+      const accountId = `${holder.toUpperCase().replace(/ /g, '_')}_${bank.toUpperCase().replace(/ /g, '_')}`;
+      const accountRef = db.collection('accounts').doc(accountId);
       const balanceHistoryRef = db.collection('balance_history').doc();
-      const balanceRef = db.collection('config').doc('balance');
       const batch = db.batch();
 
-      batch.set(balanceHistoryRef, {
-          amount: amountToLoad,
-          type: 'add',
-          bank: bank,
+      const historyData = {
+          amount: amount,
+          type: type,
+          holder: holder,
+          bank: bank, // Always include bank and holder to identify the account
+          note: note,
           timestamp: firebase.firestore.FieldValue.serverTimestamp()
-      });
+      };
 
-      batch.set(balanceRef, { current: firebase.firestore.FieldValue.increment(amountToLoad) }, { merge: true });
+      const increment = type === 'add' ? amount : -amount;
+      batch.set(balanceHistoryRef, historyData);
+      
+      // Increment the specific account's balance
+      batch.set(accountRef, { 
+          holder: holder,
+          bank: bank,
+          balance: firebase.firestore.FieldValue.increment(increment) 
+      }, { merge: true });
 
-      batch.commit().then(() => {
-          showMessage('balance-message', `Se cargaron ${amountToLoad.toLocaleString('es-VE')} VES exitosamente.`, true);
+      try {
+          await batch.commit();
+          const successMessage = type === 'add' 
+              ? `Se cargaron ${amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES exitosamente.`
+              : `Se restaron ${amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES exitosamente.`;
+          showMessage('balance-message', successMessage, true);
           balanceAmountInput.value = '';
-          loadBalanceModal.classList.add('hidden');
-          loadBalanceModal.classList.remove('flex');
-          amountToLoad = 0;
-      }).catch(error => {
-          console.error("Error al cargar saldo: ", error);
+      } catch (error) {
+          console.error("Error al procesar operación de saldo: ", error);
           showMessage('balance-message', `Error: ${error.message}`, false);
-      });
+      } finally {
+          // Hide all modals and reset state
+          balanceConfirmModal.classList.add('hidden');
+          balanceConfirmModal.classList.remove('flex');
+          balanceOperationData = {};
+      }
   });
 
-  subtractBalanceBtn.addEventListener('click', () => {
-      const amount = parseFloat(balanceAmountInput.value);
-      if (isNaN(amount) || amount <= 0) {
-          showMessage('balance-message', 'Ingresa un monto válido para restar.', false);
-          return;
-      }
+  // Cancel buttons
+  balanceOpCancelBtn.addEventListener('click', () => {
+      balanceOperationModal.classList.add('hidden');
+      balanceOperationModal.classList.remove('flex');
+      balanceOperationData = {};
+  });
 
-      const balanceHistoryRef = db.collection('balance_history').doc();
-      const balanceRef = db.collection('config').doc('balance');
-      const batch = db.batch();
-
-      batch.set(balanceHistoryRef, { amount: amount, type: 'subtract', timestamp: firebase.firestore.FieldValue.serverTimestamp() });
-      batch.set(balanceRef, { current: firebase.firestore.FieldValue.increment(-amount) }, { merge: true });
-
-      batch.commit().then(() => {
-          showMessage('balance-message', `Se restaron ${amount.toLocaleString('es-VE')} VES exitosamente.`, true);
-          balanceAmountInput.value = '';
-      }).catch(error => {
-          console.error("Error al restar saldo: ", error);
-          showMessage('balance-message', `Error: ${error.message}`, false);
-      });
+  balanceFinalCancelBtn.addEventListener('click', () => {
+      // Go back to the previous modal
+      balanceConfirmModal.classList.add('hidden');
+      balanceConfirmModal.classList.remove('flex');
+      balanceOperationModal.classList.remove('hidden');
+      balanceOperationModal.classList.add('flex');
   });
 
   // --- Initial App Setup ---
@@ -823,6 +1178,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // while waiting for the auth state.
   switchMainView('user');
   switchTab(tabs[0]); // Set default tab
+  populateBankSelects(); // Populate all bank dropdowns
 
   // Attach paste event listeners
   pasteBtnTransferencia.addEventListener('click', () => handlePasteData(transferenciaFields, 'user-message-transferencia'));
@@ -863,14 +1219,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!orderId || !target.closest('button')) return;
 
       if (target.classList.contains('mark-paid-btn')) {
-          // NEW: Open modal to upload proof before paying
-          orderIdToProcess = orderId;
-          showMessage('admin-upload-message', '', true);
-          adminScreenshotInput.value = ''; // Clear previous file selection
-          adminUploadModal.classList.remove('hidden');
-          adminUploadModal.classList.add('flex');
+          // NEW: Open modal to select payment source
+          openPaymentSourceModal(orderId);
 
       } else if (target.classList.contains('cancel-order-btn')) {
+          // Logic for canceling an order
           loadingSpinner.classList.remove('hidden');
           loadingSpinner.classList.add('flex');
           try {
@@ -886,69 +1239,191 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   });
 
-  // Add listener for debtor checkbox on the paid list
+  // Add listener for debtor toggle button on the paid list
   ordersListPaid.addEventListener('click', async (e) => {
-      const target = e.target;
-      if (!target.classList.contains('deudor-checkbox')) return;
+      const debtorToggleBtn = e.target.closest('.debtor-toggle-btn');
+      if (!debtorToggleBtn) return;
 
-      const orderId = target.dataset.id;
-      const isDebtor = target.checked;
+      const orderId = debtorToggleBtn.dataset.id;
+      const currentIsDebtor = debtorToggleBtn.dataset.isDebtor === 'true';
+      const newIsDebtor = !currentIsDebtor;
+
+      debtorToggleBtn.disabled = true; // Prevent double clicks
 
       try {
-          await db.collection('orders').doc(orderId).update({ isDebtor: isDebtor });
-          showMessage('rate-message', `Pedido actualizado.`, true);
+          await db.collection('orders').doc(orderId).update({ isDebtor: newIsDebtor });
+          showMessage('rate-message', 'Estado de deudor actualizado.', true);
+          // The onSnapshot listener will re-render the UI, so no need to manually update the button
       } catch (error) {
           console.error("Error updating debtor status:", error);
           showMessage('rate-message', `Error al actualizar: ${error.message}`, false);
-          target.checked = !isDebtor; // Revert checkbox on error
+          debtorToggleBtn.disabled = false; // Re-enable on error
       }
+  });
+
+  /**
+   * Calculates the fee for a given order and source account.
+   * @param {object} order - The order data.
+   * @param {object} sourceAccount - The source account data.
+   * @returns {number} The calculated fee.
+   */
+  const calculateFee = (order, sourceAccount) => {
+      const amount = order.vesAmount;
+      switch (order.type) {
+          case 'pago-movil':
+              if (amount > 47) return amount * 0.003; // 0.3%
+              if (amount > 46) return 0.13;
+              return 0;
+          case 'transferencia':
+              // Check for inter-bank transfer
+              if (sourceAccount.bank !== order.bank) {
+                  return amount * 0.003; // 0.3%
+              }
+              return 0;
+          case 'recarga-saldo':
+          default:
+              return 0;
+      }
+  };
+
+  /** Opens the modal to select the payment source account. */
+  const openPaymentSourceModal = async (orderId) => {
+      try {
+          loadingSpinner.classList.remove('hidden');
+          loadingSpinner.classList.add('flex');
+
+          const orderDoc = await db.collection('orders').doc(orderId).get();
+          if (!orderDoc.exists) throw new Error("El pedido no existe.");
+
+          const orderData = orderDoc.data();
+          paymentData = { orderId, orderData }; // Store initial data
+
+          // Display order details in the modal
+          paymentSourceOrderDetails.innerHTML = `<p><b>Cliente:</b> ${orderData.clientName}</p><p><b>Monto a Pagar:</b> ${orderData.vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>`;
+
+          // Render account options
+          renderPaymentSourceList();
+
+          // Reset modal state
+          paymentFeeDetails.classList.add('hidden');
+          paymentSourceNextBtn.disabled = true;
+
+          selectPaymentSourceModal.classList.remove('hidden');
+          selectPaymentSourceModal.classList.add('flex');
+
+      } catch (error) {
+          console.error("Error al abrir modal de pago:", error);
+          showCustomAlert(`Error: ${error.message}`);
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
+  };
+
+  // Listener for account selection in the payment modal
+  paymentSourceList.addEventListener('change', (e) => {
+      if (e.target.name === 'payment-source') {
+          const selectedAccountId = e.target.value;
+          const selectedAccount = accountsData.find(acc => acc.id === selectedAccountId);
+          
+          if (selectedAccount) {
+              const fee = calculateFee(paymentData.orderData, selectedAccount);
+              paymentData.selectedAccountId = selectedAccountId;
+              paymentData.fee = fee;
+
+              paymentFeeDetails.innerHTML = `Comisión calculada: <b>${fee.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</b>. Total a descontar: <b>${(paymentData.orderData.vesAmount + fee).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</b>.`;
+              paymentFeeDetails.classList.remove('hidden');
+              paymentSourceNextBtn.disabled = false;
+          }
+      }
+  });
+
+  // Listeners for the payment source modal buttons
+  paymentSourceNextBtn.addEventListener('click', () => {
+      selectPaymentSourceModal.classList.add('hidden');
+      selectPaymentSourceModal.classList.remove('flex');
+      
+      // Open the next modal (screenshot upload)
+      showMessage('admin-upload-message', '', true);
+      adminScreenshotInput.value = ''; // Clear previous file selection
+      adminUploadModal.classList.remove('hidden');
+      adminUploadModal.classList.add('flex');
+  });
+
+  paymentSourceCancelBtn.addEventListener('click', () => {
+      selectPaymentSourceModal.classList.add('hidden');
+      selectPaymentSourceModal.classList.remove('flex');
+      paymentData = {}; // Clear payment state
   });
 
   // Admin Modal: Cancel Upload
   adminCancelUploadBtn.addEventListener('click', () => {
       adminUploadModal.classList.add('hidden');
       adminUploadModal.classList.remove('flex');
-      orderIdToProcess = null;
+      paymentData = {}; // Clear payment state
   });
 
   // Admin Modal: Confirm Payment and Upload
   adminUploadBtn.addEventListener('click', async () => {
-      if (!orderIdToProcess) {
-          return showMessage('admin-upload-message', 'Error: No se ha seleccionado ningún pedido.', false);
+      if (!paymentData.orderId || !paymentData.selectedAccountId) {
+          return showMessage('admin-upload-message', 'Error: No se ha seleccionado ningún pedido o cuenta de origen.', false);
       }
 
       const file = adminScreenshotInput.files[0];
       if (!file) {
-          return showMessage('admin-upload-message', 'Por favor, selecciona un archivo de imagen.', false);
+          return showMessage('admin-upload-message', 'Por favor, selecciona el archivo del comprobante.', false);
       }
 
       loadingSpinner.classList.remove('hidden');
       loadingSpinner.classList.add('flex');
       showMessage('admin-upload-message', 'Subiendo comprobante...', true);
 
+      const { orderId, orderData, selectedAccountId, fee } = paymentData;
+
       try {
+          const selectedAccount = accountsData.find(acc => acc.id === selectedAccountId);
+          if (!selectedAccount) {
+              throw new Error("La cuenta de origen seleccionada ya no es válida. Por favor, cancela y vuelve a intentarlo.");
+          }
+
           // 1. Upload file to Storage
-          const filePath = `proofs/${orderIdToProcess}/${file.name}`;
+          const filePath = `proofs/${orderId}/${file.name}`;
           const fileRef = storage.ref(filePath);
           const uploadTask = await fileRef.put(file);
           const proofUrl = await uploadTask.ref.getDownloadURL();
 
-          // 2. Get order data to know how much to subtract from balance
-          const orderRef = db.collection('orders').doc(orderIdToProcess);
-          const balanceRef = db.collection('config').doc('balance');
+          // 2. Prepare batch write
+          const orderRef = db.collection('orders').doc(orderId);
+          const accountRef = db.collection('accounts').doc(selectedAccountId);
+          const paymentHistoryRef = db.collection('balance_history').doc();
+          const feeHistoryRef = db.collection('balance_history').doc();
+          const batch = db.batch();
 
-          const orderDoc = await orderRef.get();
-          if (!orderDoc.exists) throw new Error("El pedido ya no existe.");
-          
-          const vesToSubtract = orderDoc.data().vesAmount;
-          if (typeof vesToSubtract !== 'number' || vesToSubtract <= 0) {
-              throw new Error("El monto en VES del pedido no es válido para ser descontado.");
+          // Update order
+          batch.update(orderRef, { status: 'Pagado', proofUrl: proofUrl });
+          // Decrement account balance (using set with merge for robustness)
+          batch.set(accountRef, { balance: firebase.firestore.FieldValue.increment(-(orderData.vesAmount + fee)) }, { merge: true });
+          // Create history for payment
+          batch.set(paymentHistoryRef, { 
+              amount: orderData.vesAmount, 
+              type: 'subtract', 
+              note: `Pago pedido ${orderId.substring(0, 5)}`, 
+              timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+              holder: selectedAccount.holder,
+              bank: selectedAccount.bank
+          });
+          // Create history for fee if it exists
+          if (fee > 0) {
+              batch.set(feeHistoryRef, { 
+                  amount: fee, 
+                  type: 'fee', 
+                  note: `Comisión pedido ${orderId.substring(0, 5)}`, 
+                  timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                  holder: selectedAccount.holder,
+                  bank: selectedAccount.bank
+              });
           }
 
-          // 3. Use a batch to update Firestore atomically
-          const batch = db.batch();
-          batch.update(orderRef, { status: 'Pagado', proofUrl: proofUrl });
-          batch.update(balanceRef, { current: firebase.firestore.FieldValue.increment(-vesToSubtract) });
           await batch.commit();
 
           showMessage('rate-message', 'Pedido pagado y saldo descontado.', true);
@@ -962,6 +1437,21 @@ document.addEventListener('DOMContentLoaded', () => {
           loadingSpinner.classList.add('hidden');
           loadingSpinner.classList.remove('flex');
       }
+  });
+
+  // Listen for real-time updates to the exchange rate
+  const rateRef = db.collection('config').doc('rate');
+  rateRef.onSnapshot((doc) => {
+      if (doc.exists) {
+          currentExchangeRate = doc.data().value;
+          rateDisplay.textContent = `Tasa de cambio: 1 CLP = ${currentExchangeRate.toFixed(4)} VES`;
+      } else {
+          rateDisplay.textContent = 'Tasa no disponible';
+          console.log("No se encontró el documento de la tasa de cambio!");
+      }
+  }, (error) => {
+      console.error("Error al obtener la tasa de cambio:", error);
+      rateDisplay.textContent = 'Error al cargar tasa';
   });
 
   // --- Historical Search & Client List Logic ---
@@ -1043,8 +1533,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
           // Now, filter by status on the client side
           const filteredOrders = (statusFilter === 'Todos')
-              ? allOrders
-              : allOrders.filter(order => order.status === statusFilter);
+              ? allOrders.filter(o => o.status !== 'Cliente Registrado')
+              : allOrders.filter(order => order.status === statusFilter && order.status !== 'Cliente Registrado');
 
 
           if (filteredOrders.length === 0) {
@@ -1066,7 +1556,7 @@ document.addEventListener('DOMContentLoaded', () => {
                       totalVES += order.vesAmount || 0;
                   }
               });
-              historicalSearchSummary.textContent = `Se encontraron ${filteredOrders.length} pedidos. Total Pagado: ${totalCLP.toLocaleString('es-CL', {style: 'currency', currency: 'CLP'})} / ${totalVES.toLocaleString('es-VE')} VES.`;
+              historicalSearchSummary.textContent = `Se encontraron ${filteredOrders.length} pedidos. Total Pagado: ${totalCLP.toLocaleString('es-CL', {style: 'currency', currency: 'CLP'})} / ${totalVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES.`;
               exportExcelBtn.disabled = false;
           }
       } catch (error) {
@@ -1103,6 +1593,161 @@ document.addEventListener('DOMContentLoaded', () => {
 
   exportExcelBtn.addEventListener('click', exportHistoricalOrdersToExcel);
 
+  // --- Balance History Logic (New) ---
+
+  const fetchAndRenderBalanceHistory = async (start, end) => {
+      if (!start || !end) {
+          balanceHistoryList.innerHTML = '';
+          noBalanceHistoryMessage.textContent = 'Selecciona un rango de fechas para ver los movimientos.';
+          noBalanceHistoryMessage.classList.remove('hidden');
+          balanceHistoryHeader.classList.add('hidden');
+          exportBalanceExcelBtn.disabled = true;
+          balanceHistoryData = [];
+          return;
+      }
+
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+      balanceHistoryList.innerHTML = '';
+      noBalanceHistoryMessage.classList.add('hidden');
+      balanceHistoryHeader.classList.add('hidden');
+
+      try {
+          // 1. Get the total current balance from all accounts to calculate running balance
+          const totalCurrentBalance = accountsData.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+
+          const query = db.collection('balance_history')
+              .where('timestamp', '>=', start)
+              .where('timestamp', '<=', end)
+              .orderBy('timestamp', 'desc');
+          
+          const snapshot = await query.get();
+
+          if (snapshot.empty) {
+              noBalanceHistoryMessage.textContent = 'No se encontraron movimientos en el rango de fechas seleccionado.';
+              noBalanceHistoryMessage.classList.remove('hidden');
+              balanceHistoryData = [];
+              exportBalanceExcelBtn.disabled = true;
+          } else {
+              balanceHistoryHeader.classList.remove('hidden');
+              
+              let runningBalance = totalCurrentBalance;
+              const movementsWithBalance = [];
+
+              // 2. Iterate backwards (from newest to oldest) to calculate historical running balances
+              snapshot.docs.forEach(doc => {
+                  const movement = doc.data();
+                  
+                  // The balance for this row is the running balance *before* we revert this transaction
+                  movementsWithBalance.push({ ...movement, runningBalance });
+
+                  // Update the running balance for the *next* (older) item
+                  if (movement.type === 'add') {
+                      runningBalance -= movement.amount; // To get the balance before this credit, we subtract it
+                  } else { // 'subtract' or 'fee'
+                      runningBalance += movement.amount; // To get the balance before this debit, we add it back
+                  }
+              });
+
+              balanceHistoryData = movementsWithBalance; // Store for export
+              balanceHistoryData.forEach(item => {
+                  const historyElement = renderBalanceHistoryItem(item);
+                  balanceHistoryList.appendChild(historyElement);
+              });
+              exportBalanceExcelBtn.disabled = false;
+          }
+      } catch (error) {
+          console.error("Error fetching balance history:", error);
+          noBalanceHistoryMessage.textContent = 'Error al cargar el historial.';
+          noBalanceHistoryMessage.classList.remove('hidden');
+          balanceHistoryData = [];
+          exportBalanceExcelBtn.disabled = true;
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
+  };
+
+  balanceHistoryTodayBtn.addEventListener('click', () => {
+      const today = new Date();
+      balanceHistoryStartInput.valueAsDate = today;
+      balanceHistoryEndInput.valueAsDate = today;
+      balanceHistorySearchBtn.click(); // Automatically search
+  });
+
+  balanceHistoryYesterdayBtn.addEventListener('click', () => {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      balanceHistoryStartInput.valueAsDate = yesterday;
+      balanceHistoryEndInput.valueAsDate = yesterday;
+      balanceHistorySearchBtn.click(); // Automatically search
+  });
+
+  balanceHistory7DaysBtn.addEventListener('click', () => {
+      const end = new Date();
+      const start = new Date();
+      start.setDate(start.getDate() - 6);
+      balanceHistoryStartInput.valueAsDate = start;
+      balanceHistoryEndInput.valueAsDate = end;
+      balanceHistorySearchBtn.click(); // Automatically search
+  });
+
+  balanceHistorySearchBtn.addEventListener('click', () => {
+      const startDateVal = balanceHistoryStartInput.valueAsDate;
+      const endDateVal = balanceHistoryEndInput.valueAsDate;
+
+      if (!startDateVal || !endDateVal) {
+          showCustomAlert('Por favor, selecciona un rango de fechas para buscar.');
+          return;
+      }
+
+      const start = new Date(startDateVal);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(endDateVal);
+      end.setHours(23, 59, 59, 999);
+
+      fetchAndRenderBalanceHistory(start, end);
+  });
+
+  const exportBalanceHistoryToExcel = () => {
+      if (balanceHistoryData.length === 0) {
+          showCustomAlert('No hay datos para exportar. Realiza una búsqueda primero.');
+          return;
+      }
+
+      const dataToExport = balanceHistoryData.map(item => {
+          let description = item.note || '';
+          let debit = '';
+          let credit = '';
+
+          if (item.type === 'add') {
+              credit = item.amount;
+              if (!description) description = `Carga de Saldo: ${item.holder}`;
+          } else { // subtract or fee
+              debit = item.amount;
+              if (!description) description = item.type === 'fee' ? 'Comisión Bancaria' : 'Pago de Pedido';
+          }
+
+          return {
+              'Fecha': item.timestamp ? item.timestamp.toDate().toLocaleString('es-CL') : 'N/A',
+              'Descripción': description,
+              'Banco': item.bank || '',
+              'Cargo': debit,
+              'Abono': credit,
+              'Saldo': item.runningBalance
+          };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'HistorialSaldo');
+      const startDate = balanceHistoryStartInput.value;
+      const endDate = balanceHistoryEndInput.value;
+      XLSX.writeFile(workbook, `Historial_Saldo_${startDate}_a_${endDate}.xlsx`);
+  };
+
+  exportBalanceExcelBtn.addEventListener('click', exportBalanceHistoryToExcel);
+
   /** Fetches all orders to build a unique client list with their latest data. */
   const fetchAndRenderClients = async () => {
       try {
@@ -1117,8 +1762,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   clientsMap.set(order.cedula, { ...order, id: doc.id }); // Store the whole last order data
               }
           });
-          fullClientList = Array.from(clientsMap.values()).sort((a, b) => a.clientName.localeCompare(b.clientName));
-          renderClientList(fullClientList);
+          fullClientList = Array.from(clientsMap.values());
+          updateClientView();
       } catch (error) {
           console.error("Error fetching clients:", error);
           clientsList.innerHTML = `<p class="text-red-500">Error al cargar la lista de clientes.</p>`;
@@ -1128,54 +1773,110 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  /** Renders a list of clients into the DOM. */
-  const renderClientList = (clients) => {
+  /** Renders the current page of the client list. */
+  const renderClientListPage = () => {
       clientsList.innerHTML = '';
-      if (clients.length === 0) {
+      const showPagination = filteredClientList.length > CLIENTS_PER_PAGE;
+      clientPaginationControls.classList.toggle('hidden', !showPagination);
+      clientPaginationControls.classList.toggle('flex', showPagination);
+      if (filteredClientList.length === 0) {
           clientsList.innerHTML = `<p class="text-gray-500">No se encontraron clientes.</p>`;
-      } else {
-          clients.forEach(client => {
-              const clientEl = document.createElement('div');
-              clientEl.className = 'p-3 hover:bg-gray-100 rounded-lg flex justify-between items-center border border-gray-200';
-              clientEl.innerHTML = `
-                  <div>
-                      <p class="font-semibold text-gray-800">${client.clientName}</p>
-                      <p class="text-sm text-gray-600 font-mono">${client.cedula}</p>
-                  </div>
-                  <button data-cedula="${client.cedula}" data-name="${client.clientName}" class="copy-client-btn bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-200">Copiar</button>
-              `;
-              clientsList.appendChild(clientEl);
-          });
+          clientsCountDisplay.textContent = 0;
+          return;
       }
-      clientsCountDisplay.textContent = clients.length;
+
+      const totalPages = Math.ceil(filteredClientList.length / CLIENTS_PER_PAGE);
+      clientListPage = Math.max(1, Math.min(clientListPage, totalPages)); // Clamp page number
+
+      const start = (clientListPage - 1) * CLIENTS_PER_PAGE;
+      const end = start + CLIENTS_PER_PAGE;
+      const clientsToRender = filteredClientList.slice(start, end);
+
+      clientsToRender.forEach(client => {
+          const clientEl = document.createElement('div');
+          clientEl.className = 'p-3 hover:bg-gray-100 rounded-lg flex justify-between items-center border border-gray-200';
+          clientEl.innerHTML = `
+              <div>
+                  <p class="font-semibold text-gray-800">${client.clientName}</p>
+                  <p class="text-sm text-gray-600 font-mono">${client.cedula}</p>
+              </div>
+              <button data-cedula="${client.cedula}" data-name="${client.clientName}" class="copy-client-btn bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-200">Copiar</button>
+          `;
+          clientsList.appendChild(clientEl);
+      });
+
+      // Update pagination UI
+      clientPaginationInfo.textContent = `Página ${clientListPage} de ${totalPages}`;
+      clientPaginationPrevBtn.disabled = clientListPage === 1;
+      clientPaginationNextBtn.disabled = clientListPage === totalPages;
+      clientsCountDisplay.textContent = filteredClientList.length;
+
+      // Update sort button styles
+      clientSortNameBtn.classList.toggle('bg-blue-500', clientListSortBy === 'name');
+      clientSortNameBtn.classList.toggle('text-white', clientListSortBy === 'name');
+      clientSortNameBtn.classList.toggle('bg-gray-200', clientListSortBy !== 'name');
+
+      clientSortCedulaBtn.classList.toggle('bg-blue-500', clientListSortBy === 'cedula');
+      clientSortCedulaBtn.classList.toggle('text-white', clientListSortBy === 'cedula');
+      clientSortCedulaBtn.classList.toggle('bg-gray-200', clientListSortBy !== 'cedula');
   };
 
-  clientsSearchInput.addEventListener('input', (e) => {
-      const searchTerm = e.target.value.toLowerCase();
-      if (!searchTerm) {
-          renderClientList(fullClientList);
-          return;
+  /** Filters, sorts, and renders the client list. */
+  const updateClientView = () => {
+      const searchTerm = clientsSearchInput.value.toLowerCase();
+      
+      // 1. Filter
+      if (searchTerm) {
+          filteredClientList = fullClientList.filter(client => 
+              client.clientName.toLowerCase().includes(searchTerm) || 
+              client.cedula.includes(searchTerm)
+          );
+      } else {
+          filteredClientList = [...fullClientList];
       }
-      const filteredClients = fullClientList.filter(client => client.clientName.toLowerCase().includes(searchTerm) || client.cedula.includes(searchTerm));
-      renderClientList(filteredClients);
+
+      // 2. Sort
+      if (clientListSortBy === 'name') {
+          filteredClientList.sort((a, b) => a.clientName.localeCompare(b.clientName));
+      } else if (clientListSortBy === 'cedula') {
+          filteredClientList.sort((a, b) => a.cedula.localeCompare(b.cedula, undefined, { numeric: true }));
+      }
+
+      // 3. Render
+      renderClientListPage();
+  };
+
+  // New event listeners for client list
+  clientsSearchInput.addEventListener('input', () => {
+      clientListPage = 1;
+      updateClientView();
   });
 
-  copyClientsBtn.addEventListener('click', () => {
-      const visibleClients = Array.from(clientsList.children).map(el => {
-          const name = el.querySelector('p:first-child').textContent;
-          const cedula = el.querySelector('p:last-child').textContent;
-          return `${name}\t${cedula}`;
-      }).join('\n');
-      if (!visibleClients) {
-          showCustomAlert('No hay clientes en la lista para copiar.');
-          return;
+  clientSortNameBtn.addEventListener('click', () => {
+      clientListSortBy = 'name';
+      clientListPage = 1;
+      updateClientView();
+  });
+
+  clientSortCedulaBtn.addEventListener('click', () => {
+      clientListSortBy = 'cedula';
+      clientListPage = 1;
+      updateClientView();
+  });
+
+  clientPaginationPrevBtn.addEventListener('click', () => {
+      if (clientListPage > 1) {
+          clientListPage--;
+          renderClientListPage();
       }
-      navigator.clipboard.writeText(visibleClients).then(() => {
-          showCustomAlert('Lista de clientes copiada al portapapeles.');
-      }).catch(err => {
-          console.error('Error al copiar la lista de clientes:', err);
-          showCustomAlert('No se pudo copiar la lista.');
-      });
+  });
+
+  clientPaginationNextBtn.addEventListener('click', () => {
+      const totalPages = Math.ceil(filteredClientList.length / CLIENTS_PER_PAGE);
+      if (clientListPage < totalPages) {
+          clientListPage++;
+          renderClientListPage();
+      }
   });
 
   // Add event listeners for order form submissions
@@ -1183,20 +1884,46 @@ document.addEventListener('DOMContentLoaded', () => {
   formPagoMovil.addEventListener('submit', (e) => handleOrderSubmit(e, 'pago-movil'));
   formRecargaSaldo.addEventListener('submit', (e) => handleOrderSubmit(e, 'recarga-saldo'));
 
-  // Handle the simulated upload confirmation
-  confirmUploadBtn.addEventListener('click', () => {
-      uploadModal.classList.add('hidden');
-      uploadModal.classList.remove('flex');
-      lastOrderId = null; // Reset the stored order ID
-      
-      // Find the currently active message element to show the final confirmation
-      const activeTabPane = document.querySelector('.tab-pane:not(.hidden)');
-      if (activeTabPane) {
-          const messageElId = activeTabPane.querySelector('p[id^="user-message-"]').id;
-          showMessage(messageElId, '¡Comprobante "subido" con éxito!', true);
+  // Listeners for the new order confirmation modal
+  orderFinalConfirmBtn.addEventListener('click', async () => {
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+      orderConfirmModal.classList.add('hidden');
+      orderConfirmModal.classList.remove('flex');
+
+      const { data, form } = orderDataToConfirm;
+      const messageElId = form.querySelector('p[id^="user-message-"]').id;
+
+      try {
+          // Add timestamp just before sending
+          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+
+          await db.collection('orders').add(data);
+          
+          form.reset();
+          vesDisplays.forEach(span => span.textContent = '0,00 VES');
+          
+          if (isAdmin) {
+              fetchAndRenderClients();
+          }
+
+          showMessage(messageElId, '¡Pedido enviado con éxito!', true);
+          
+      } catch (error) {
+          console.error("Error al crear el pedido:", error);
+          showMessage(messageElId, `Error al crear el pedido: ${error.message}`, false);
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+          orderDataToConfirm = {}; // Clear state
       }
   });
 
+  orderFinalCancelBtn.addEventListener('click', () => {
+      orderConfirmModal.classList.add('hidden');
+      orderConfirmModal.classList.remove('flex');
+      orderDataToConfirm = {}; // Clear state
+  });
   // Autocomplete for Cedula
   cedulaInputs.forEach(input => {
       if (input) {
@@ -1239,18 +1966,311 @@ document.addEventListener('DOMContentLoaded', () => {
       const target = e.target.closest('.copy-client-btn');
       if (!target) return;
 
-      const name = target.dataset.name;
       const cedula = target.dataset.cedula;
+      const clientData = fullClientList.find(c => c.cedula === cedula);
+
+      if (!clientData) {
+          showCustomAlert('Error: No se encontraron los datos completos del cliente.');
+          return;
+      }
+
+      let dataToCopy = [];
+      let formTypeMessage = '';
+
+      // Build the text to copy based on the last order type
+      switch (clientData.type) {
+          case 'transferencia':
+              dataToCopy = [
+                  clientData.clientName || '',
+                  clientData.cedula || '',
+                  clientData.bank || '',
+                  clientData.accountType || '',
+                  clientData.accountNumber || '',
+                  '' // Leave CLP amount empty
+              ];
+              formTypeMessage = 'Transferencia';
+              break;
+          case 'pago-movil':
+              dataToCopy = [
+                  clientData.clientName || '',
+                  clientData.cedula || '',
+                  clientData.phone || '',
+                  clientData.bank || '',
+                  '' // Leave CLP amount empty
+              ];
+              formTypeMessage = 'Pago Móvil';
+              break;
+          case 'recarga-saldo':
+              dataToCopy = [
+                  clientData.clientName || '',
+                  clientData.cedula || '',
+                  clientData.phone || '',
+                  '' // Leave CLP amount empty
+              ];
+              formTypeMessage = 'Recarga de Saldo';
+              break;
+          default:
+              showCustomAlert('Tipo de pedido anterior desconocido. No se pueden copiar los datos.');
+              return;
+      }
       
-      // Format for pasting into a new order (name on first line, cedula on second)
-      const textToCopy = `${name}\n${cedula}`;
+      const textToCopy = dataToCopy.join('\n');
 
       navigator.clipboard.writeText(textToCopy).then(() => {
-          showCustomAlert(`Datos de "${name}" copiados al portapapeles.`);
+          showCustomAlert(`Datos de "${clientData.clientName}" copiados. Pégalos en el formulario de tipo "${formTypeMessage}".`);
       }).catch(err => {
           console.error('Error al copiar datos del cliente:', err);
           showCustomAlert('No se pudo copiar la información.');
       });
   });
 
+  // --- Add Client Modal Logic ---
+
+  addClientBtn.addEventListener('click', () => {
+      addClientModal.classList.remove('hidden');
+      addClientModal.classList.add('flex');
+      addClientMessage.textContent = '';
+      [addClientFormTransferencia, addClientFormPagoMovil, addClientFormRecarga].forEach(form => form.reset());
+  });
+
+  addClientCloseBtn.addEventListener('click', () => {
+      addClientModal.classList.add('hidden');
+      addClientModal.classList.remove('flex');
+  });
+
+  addClientTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+          const formType = tab.dataset.form;
+          
+          addClientTabs.forEach(t => {
+              const isSelected = t === tab;
+              t.classList.toggle('bg-white', isSelected);
+              t.classList.toggle('text-blue-600', isSelected);
+              t.classList.toggle('text-gray-700', !isSelected);
+          });
+
+          [addClientFormTransferencia, addClientFormPagoMovil, addClientFormRecarga].forEach(form => {
+              form.classList.toggle('hidden', !form.id.includes(formType));
+          });
+      });
+  });
+
+  const handleAddClientSubmit = async (e) => {
+      e.preventDefault();
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+      showMessage('add-client-message', 'Verificando datos...', true);
+
+      const form = e.target;
+      const type = form.querySelector('input[name="type"]').value;
+      
+      const clientData = {
+          type: type,
+          status: 'Cliente Registrado',
+          clpAmount: 0,
+          vesAmount: 0,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+
+      if (type === 'transferencia') {
+          clientData.clientName = form.querySelector('#add-client-name-transferencia').value;
+          clientData.cedula = form.querySelector('#add-client-cedula-transferencia').value.replace(/[^0-9]/g, '');
+          clientData.bank = form.querySelector('#add-client-bank-transferencia').value;
+          clientData.accountType = form.querySelector('#add-client-account-type-transferencia').value;
+          clientData.accountNumber = form.querySelector('#add-client-account-number-transferencia').value;
+      } else if (type === 'pago-movil') {
+          clientData.clientName = form.querySelector('#add-client-name-pm').value;
+          clientData.cedula = form.querySelector('#add-client-cedula-pm').value.replace(/[^0-9]/g, '');
+          clientData.phone = form.querySelector('#add-client-phone-pm').value;
+          clientData.bank = form.querySelector('#add-client-bank-pm').value;
+      } else { // recarga
+          clientData.clientName = form.querySelector('#add-client-name-recarga').value;
+          clientData.cedula = form.querySelector('#add-client-cedula-recarga').value.replace(/[^0-9]/g, '');
+          clientData.phone = form.querySelector('#add-client-phone-recarga').value;
+      }
+
+      try {
+          const existingOrdersQuery = db.collection('orders').where('cedula', '==', clientData.cedula);
+          const snapshot = await existingOrdersQuery.get();
+          let isDuplicate = false;
+
+          snapshot.forEach(doc => {
+              const existingOrder = doc.data();
+              if (type === 'transferencia' && existingOrder.type === 'transferencia' && existingOrder.accountNumber === clientData.accountNumber) {
+                  isDuplicate = true;
+              }
+              if ((type === 'pago-movil' || type === 'recarga-saldo') && (existingOrder.type === 'pago-movil' || existingOrder.type === 'recarga-saldo') && existingOrder.phone === clientData.phone) {
+                  isDuplicate = true;
+              }
+          });
+
+          if (isDuplicate) {
+              throw new Error('Este método de pago ya existe para este cliente.');
+          }
+
+          await db.collection('orders').add(clientData);
+
+          showMessage('add-client-message', '¡Cliente guardado con éxito!', true);
+          await fetchAndRenderClients();
+          
+          setTimeout(() => {
+              addClientModal.classList.add('hidden');
+              addClientModal.classList.remove('flex');
+          }, 1500);
+
+      } catch (error) {
+          console.error("Error al guardar cliente:", error);
+          showMessage('add-client-message', `Error: ${error.message}`, false);
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
+  };
+
+  [addClientFormTransferencia, addClientFormPagoMovil, addClientFormRecarga].forEach(form => {
+      form.addEventListener('submit', handleAddClientSubmit);
+  });
+
+  // Paste buttons for Add Client Modal
+  pasteBtnAddClientTransferencia.addEventListener('click', () => handlePasteData(addClientTransferenciaFields, 'add-client-message'));
+  pasteBtnAddClientPm.addEventListener('click', () => handlePasteData(addClientPagoMovilFields, 'add-client-message'));
+  pasteBtnAddClientRecarga.addEventListener('click', () => handlePasteData(addClientRecargaFields, 'add-client-message'));
+
+  // Autocomplete for "Add Client" modal
+  addClientCedulaInputs.forEach(input => {
+      if (input) {
+          input.addEventListener('blur', (e) => {
+              const cedulaValue = e.target.value.replace(/[^0-9]/g, '');
+              // Clear message on every blur, then show if client found
+              showMessage('add-client-message', '', true); 
+              if (!cedulaValue || fullClientList.length === 0) return;
+
+              const clientLastOrder = fullClientList.find(c => c.cedula === cedulaValue);
+              
+              if (clientLastOrder) {
+                  const form = e.target.closest('form');
+                  if (!form) return;
+
+                  // Autocomplete name field
+                  const nameInput = form.querySelector('input[id^="add-client-name-"]');
+                  if (nameInput) {
+                      nameInput.value = clientLastOrder.clientName;
+                  }
+                  
+                  // Show message
+                  showMessage('add-client-message', 'Cliente registrado. ¿Deseas agregar otra cuenta?', true);
+              }
+          });
+      }
+  });
+
+  // --- Transfer Funds Modal Logic ---
+  const transferFromAccountSelect = document.getElementById('transfer-from-account');
+  const transferToAccountSelect = document.getElementById('transfer-to-account');
+  const transferAmountInput = document.getElementById('transfer-amount');
+  const transferFeeDetails = document.getElementById('transfer-fee-details');
+  const transferFundsMessage = document.getElementById('transfer-funds-message');
+
+  const populateTransferAccountSelects = () => {
+      const optionsHtml = accountsData.map(acc => 
+          `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${acc.balance.toLocaleString('es-VE', {minimumFractionDigits: 2})} VES)</option>`
+      ).join('');
+      transferFromAccountSelect.innerHTML = `<option value="">Seleccione origen...</option>${optionsHtml}`;
+      transferToAccountSelect.innerHTML = `<option value="">Seleccione destino...</option>${optionsHtml}`;
+  };  
+  
+  openTransferFundsModalBtn.addEventListener('click', () => {
+      populateTransferAccountSelects();
+      transferFundsForm.reset();
+      transferFeeDetails.classList.add('hidden');
+      transferFundsMessage.textContent = '';
+      transferFundsModal.classList.remove('hidden');
+      transferFundsModal.classList.add('flex');
+  });
+
+  transferFundsCloseBtn.addEventListener('click', () => {
+      transferFundsModal.classList.add('hidden');
+      transferFundsModal.classList.remove('flex');
+  });
+
+  const updateTransferForm = () => {
+      const fromId = transferFromAccountSelect.value;
+      const toId = transferToAccountSelect.value;
+      const amount = parseFloat(transferAmountInput.value) || 0;
+
+      Array.from(transferToAccountSelect.options).forEach(opt => {
+          opt.disabled = (opt.value === fromId && fromId !== "");
+      });
+
+      if (fromId && toId && fromId !== toId && amount > 0) {
+          const fromAccount = accountsData.find(acc => acc.id === fromId);
+          const toAccount = accountsData.find(acc => acc.id === toId);
+          if (fromAccount && toAccount) {
+              const fee = (fromAccount.bank !== toAccount.bank) ? amount * 0.003 : 0;
+              const totalDebit = amount + fee;
+              transferFeeDetails.innerHTML = `Comisión por transferencia interbancaria: <b>${fee.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>. Total a debitar: <b>${totalDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>.`;
+              transferFeeDetails.classList.remove('hidden');
+          }
+      } else {
+          transferFeeDetails.classList.add('hidden');
+      }
+  };
+
+  transferFromAccountSelect.addEventListener('change', updateTransferForm);
+  transferToAccountSelect.addEventListener('change', updateTransferForm);
+  transferAmountInput.addEventListener('input', updateTransferForm);
+
+  transferFundsForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+      showMessage('transfer-funds-message', 'Procesando transferencia...', true);
+
+      const fromAccountId = transferFromAccountSelect.value;
+      const toAccountId = transferToAccountSelect.value;
+      const amount = parseFloat(transferAmountInput.value);
+
+      if (!fromAccountId || !toAccountId || fromAccountId === toAccountId) {
+          showMessage('transfer-funds-message', 'Debe seleccionar cuentas de origen y destino diferentes.', false);
+          loadingSpinner.classList.add('hidden'); return;
+      }
+      if (isNaN(amount) || amount <= 0) {
+          showMessage('transfer-funds-message', 'El monto debe ser un número positivo.', false);
+          loadingSpinner.classList.add('hidden'); return;
+      }
+
+      const fromAccount = accountsData.find(acc => acc.id === fromAccountId);
+      const toAccount = accountsData.find(acc => acc.id === toAccountId);
+      const fee = (fromAccount.bank !== toAccount.bank) ? amount * 0.003 : 0;
+      const totalDebit = amount + fee;
+
+      if (fromAccount.balance < totalDebit) {
+          showMessage('transfer-funds-message', 'Saldo insuficiente en la cuenta de origen para cubrir el monto y la comisión.', false);
+          loadingSpinner.classList.add('hidden'); return;
+      }
+
+      try {
+          const fromAccountRef = db.collection('accounts').doc(fromAccountId);
+          const toAccountRef = db.collection('accounts').doc(toAccountId);
+          const batch = db.batch();
+          const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+
+          batch.update(fromAccountRef, { balance: firebase.firestore.FieldValue.increment(-totalDebit) });
+          batch.update(toAccountRef, { balance: firebase.firestore.FieldValue.increment(amount) });
+          batch.set(db.collection('balance_history').doc(), { amount, type: 'subtract', note: `Transferencia a ${toAccount.holder}`, timestamp: serverTimestamp, holder: fromAccount.holder, bank: fromAccount.bank });
+          if (fee > 0) batch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión por transferencia interna`, timestamp: serverTimestamp, holder: fromAccount.holder, bank: fromAccount.bank });
+          batch.set(db.collection('balance_history').doc(), { amount, type: 'add', note: `Transferencia desde ${fromAccount.holder}`, timestamp: serverTimestamp, holder: toAccount.holder, bank: toAccount.bank });
+
+          await batch.commit();
+          // The accountsListener will automatically refresh the payment modal.
+          // We just need to close this transfer modal.
+          transferFundsCloseBtn.click();
+      } catch (error) {
+          console.error("Error en transferencia de fondos:", error);
+          showMessage('transfer-funds-message', `Error: ${error.message}`, false);
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
+  });
 });
