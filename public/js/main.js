@@ -13,8 +13,8 @@ const storage = firebase.storage();
 
 // --- State Management ---
 let currentUser = null;
-let currentExchangeRate = 0;
 let isAdmin = false;
+let exchangeRates = {}; // Replaces currentExchangeRate
 let ordersListener = null; // To hold the unsubscribe function for the orders listener.
 let accountsListener = null; // To hold the listener for the accounts collection.
 let paymentData = {}; // To store all data related to a payment process
@@ -24,6 +24,15 @@ let isInitialOrdersLoad = true; // To prevent notification sound on first load
 const venezuelanBanks = [
     "100% Banco", "Activo", "Agrícola de Venezuela", "Bancamiga", "Bancaribe", "Bancrecer", "Banesco", "Bangente", "Banplus", "BFC (Banco Fondo Común)", "Bicentenario", "BNC (Banco Nacional de Crédito)", "Caroní", "DelSur", "Exterior", "Internacional de Desarrollo", "Mercantil", "Mi Banco", "N58 Banco Digital", "Plaza", "Provincial", "Sofitasa", "Tesoro", "Venezolano de Crédito", "Venezuela", "BANFANB"
 ].sort();
+
+const currencyFlags = {
+    VES: '🇻🇪',
+    COP: '🇨🇴',
+    PEN: '🇵🇪',
+    ARS: '🇦🇷',
+    USD: '🇺🇸',
+    EUR: '🇪🇺'
+};
 
 // --- UI Helper Functions ---
 
@@ -69,8 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminLoginForm = document.getElementById('admin-login-form');
   const adminLogoutBtn = document.getElementById('admin-logout-btn');
   const rateForm = document.getElementById('rate-form');
+  const rateCurrencySelect = document.getElementById('rate-currency-select'); // NEW
   const userIdDisplay = document.getElementById('user-id-display');
-  const rateDisplay = document.getElementById('exchange-rate-display');
+  const tickerContent = document.getElementById('ticker-content'); // NEW
   const loadingSpinner = document.getElementById('loading-spinner');
 
   // Order Submission & Modal Elements
@@ -258,14 +268,40 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- UI Control Logic (The Definitive Solution) ---
 
   /**
+   * Renders the exchange rate ticker.
+   */
+  const renderExchangeRateTicker = () => {
+      if (!tickerContent) return;
+
+      const availableRates = Object.entries(exchangeRates)
+          .filter(([currency, rate]) => rate > 0);
+
+      if (availableRates.length === 0) {
+          tickerContent.innerHTML = '<span>No hay tasas de cambio disponibles.</span>';
+          return;
+      }
+
+      const ratesHtml = availableRates
+          .map(([currency, rate]) => {
+              const flag = currencyFlags[currency] || '🏳️';
+              return `<span class="flex items-center gap-2">${flag} 1 CLP = ${rate.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} ${currency}</span>`;
+          })
+          .join('');
+      
+      // Duplicate the content for a smooth, continuous loop
+      tickerContent.innerHTML = ratesHtml + ratesHtml;
+  };
+
+  /**
    * Calculates and updates the VES amount display based on CLP input.
    * @param {HTMLInputElement} clpInput The input element for CLP amount.
    * @param {HTMLSpanElement} vesDisplay The span element to display the VES amount.
    */
   const updateVesAmount = (clpInput, vesDisplay) => {
       const clpAmount = parseFloat(clpInput.value);
-      if (!isNaN(clpAmount) && currentExchangeRate > 0) {
-          const vesAmount = clpAmount * currentExchangeRate;
+      const vesRate = exchangeRates.VES || 0; // Use the VES rate from the new object
+      if (!isNaN(clpAmount) && vesRate > 0) {
+          const vesAmount = clpAmount * vesRate;
           vesDisplay.textContent = vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
       } else {
           vesDisplay.textContent = '0,00 VES';
@@ -892,6 +928,11 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const form = e.target;
       const messageElId = form.querySelector('p[id^="user-message-"]').id;
+      const vesRate = exchangeRates.VES || 0;
+      if (vesRate <= 0) {
+          showMessage(messageElId, 'La tasa de cambio para VES no está disponible. No se puede crear el pedido.', false);
+          return;
+      }
 
       let orderData = {
           type: type,
@@ -907,7 +948,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
       }
 
-      orderData.vesAmount = orderData.clpAmount * currentExchangeRate;
+      orderData.vesAmount = orderData.clpAmount * vesRate;
 
       let detailsHtml = `
         <p><span class="font-semibold">Nombre:</span> ${orderData.clientName}</p>
@@ -1020,29 +1061,66 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Admin: Update Exchange Rate
-  rateForm.addEventListener('submit', (e) => {
+  rateForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const newRateInput = document.getElementById('new-rate');
+      const currencyToUpdate = rateCurrencySelect.value;
       const newRate = parseFloat(newRateInput.value);
 
+      if (!currencyToUpdate) {
+          showMessage('rate-message', 'Por favor, selecciona una moneda.', false);
+          return;
+      }
       if (isNaN(newRate) || newRate <= 0) {
           showMessage('rate-message', 'Por favor, ingresa un número válido.', false);
           return;
       }
 
-      // Use .set() to update the document.
-      rateRef.set({
-              value: newRate,
-              lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-          })
-          .then(() => {
-              showMessage('rate-message', '¡Tasa actualizada con éxito!', true);
-              newRateInput.value = '';
-          })
-          .catch((error) => {
-              console.error("Error al actualizar la tasa: ", error);
-              showMessage('rate-message', `Error: ${error.message}`, false);
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+
+      try {
+          await db.runTransaction(async (transaction) => {
+              const rateDoc = await transaction.get(rateRef);
+              
+              // Start with an empty map for values
+              let currentValues = {};
+
+              if (rateDoc.exists) {
+                  const data = rateDoc.data();
+                  // If the new 'values' map exists, use it.
+                  if (data.values && typeof data.values === 'object') {
+                      currentValues = data.values;
+                  } 
+                  // Else, if the old 'value' field exists, use it to start the map (migration).
+                  else if (data.value) {
+                      currentValues.VES = data.value;
+                  }
+              }
+              
+              // Update the map with the new rate
+              currentValues[currencyToUpdate] = newRate;
+
+              // Prepare the data to be written back. This structure ensures the old 'value' field is removed.
+              const newData = {
+                  values: currentValues,
+                  lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+              };
+
+              // Use set to overwrite the document with the new, clean structure.
+              transaction.set(rateRef, newData);
           });
+
+          showMessage('rate-message', `¡Tasa para ${currencyToUpdate} actualizada con éxito!`, true);
+          newRateInput.value = '';
+
+      } catch (error) {
+          console.error("Error al actualizar la tasa en transacción: ", error);
+          showMessage('rate-message', `Error: ${error.message}`, false);
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
   });
 
   // Admin: Balance Management
@@ -1442,16 +1520,38 @@ document.addEventListener('DOMContentLoaded', () => {
   // Listen for real-time updates to the exchange rate
   const rateRef = db.collection('config').doc('rate');
   rateRef.onSnapshot((doc) => {
+      const defaultRates = { VES: 0, COP: 0, PEN: 0, ARS: 0, USD: 0, EUR: 0 };
+
       if (doc.exists) {
-          currentExchangeRate = doc.data().value;
-          rateDisplay.textContent = `Tasa de cambio: 1 CLP = ${currentExchangeRate.toFixed(4)} VES`;
+          const rateData = doc.data();
+          const firestoreValues = rateData.values;
+
+          // Check for the new 'values' structure, with fallback to the old one
+          if (firestoreValues && typeof firestoreValues === 'object') {
+              // Combine the defaults with the fetched values to ensure all keys are present
+              exchangeRates = { ...defaultRates, ...firestoreValues };
+          } else if (rateData.value) { // Fallback for old structure
+              exchangeRates = { ...defaultRates, VES: rateData.value };
+          } else {
+              exchangeRates = defaultRates;
+          }
       } else {
-          rateDisplay.textContent = 'Tasa no disponible';
           console.log("No se encontró el documento de la tasa de cambio!");
+          exchangeRates = defaultRates;
       }
+
+      renderExchangeRateTicker(); // Render the ticker with the final, complete rates object
+
+      // This is important: after fetching all rates, update the user forms if needed
+      clpInputs.forEach((input, index) => {
+          if (input && input.value) {
+              updateVesAmount(input, vesDisplays[index]);
+          }
+      });
   }, (error) => {
       console.error("Error al obtener la tasa de cambio:", error);
-      rateDisplay.textContent = 'Error al cargar tasa';
+      exchangeRates = {};
+      renderExchangeRateTicker(); // Render empty state
   });
 
   // --- Historical Search & Client List Logic ---
