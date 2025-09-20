@@ -1,3 +1,5 @@
-﻿{
-  "projects": { "default": "manoapp-prod" }
+{
+  "projects": {
+    "default": "manzanoapp-2f775"
+  }
 }

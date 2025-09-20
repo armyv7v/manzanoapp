@@ -2,35 +2,39 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Regla para la colección 'orders'
-    match /orders/{orderId} {
-      // Cualquier usuario autenticado puede crear un pedido.
-      allow create: if request.auth != null;
-      
-      // Solo los administradores pueden leer, actualizar y borrar pedidos.
-      allow read, update, delete: if request.auth.token.admin == true;
-    }
-    
-    // Regla para la colección 'config' (tasa de cambio)
-    match /config/{docId} {
-      // Cualquiera puede leer la tasa de cambio.
+
+    // Rule 1: Public read access for exchange rates.
+    match /config/rate {
       allow read: if true;
-      
-      // Solo los administradores pueden escribir en la configuración.
+      // Only admins can write to config.
       allow write: if request.auth.token.admin == true;
     }
-    
-    // Regla para la colección 'accounts' (saldos por cuenta)
+
+    // Rule 2: Rules for the 'orders' collection.
+    match /orders/{orderId} {
+      // A logged-in user can create an order if they are setting their own userId.
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+
+      // A user can read their own orders. Admins can read any order.
+      // This rule allows the query: .where('userId', '==', request.auth.uid)
+      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || request.auth.token.admin == true;
+
+      // Only admins can update or delete orders.
+      allow update, delete: if request.auth.token.admin == true;
+    }
+
+    // Rule for FCM tokens, only admins can have tokens.
+    match /fcm_tokens/{userId} {
+      allow read, write: if request.auth.uid == userId && request.auth.token.admin == true;
+    }
+
+    // Rule 3: Rules for 'accounts' and 'balance_history' - only accessible by admins.
     match /accounts/{accountId} {
-      // Solo los administradores pueden leer y escribir en las cuentas.
       allow read, write: if request.auth.token.admin == true;
     }
-    
-    // Regla para la colección 'balance_history' (historial de movimientos)
+
     match /balance_history/{historyId} {
-      // Solo los administradores pueden crear y leer el historial de saldo.
-      allow create, read: if request.auth.token.admin == true;
+      allow read, write: if request.auth.token.admin == true;
     }
   }
 }

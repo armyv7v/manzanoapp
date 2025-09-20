@@ -1,11 +1,11 @@
-﻿<!DOCTYPE html>
+﻿﻿<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>App de Remesas Venezuela-Chile</title>
+    <title>Cambios Manzano</title>
     <!-- Tailwind CSS con cache-busting -->
-    <link href="/css/styles.css?v=final-v45" rel="stylesheet">
+    <link href="/css/styles.css?v=final-v89" rel="stylesheet">
     <!-- SheetJS (xlsx) para exportar a Excel -->
     <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <!-- Inter Font -->
@@ -51,7 +51,7 @@
         <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
     </div>
 
-    <div class="mx-auto w-full max-w-6xl rounded-2xl bg-white p-8 shadow-xl">
+    <div class="relative mx-auto w-full max-w-6xl rounded-2xl bg-white p-8 shadow-xl">
         <!-- Encabezado y Tasa de Cambio -->
         <div class="text-center mb-8">
             <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Cambios Manzano 🍏</h1>
@@ -66,21 +66,31 @@
             <p id="user-id-display" class="mt-2 text-sm text-gray-500"></p>
         </div>
 
+        <!-- User Country Selector -->
+        <div id="user-country-selector" class="flex flex-wrap justify-center gap-2 mb-6">
+            <!-- User country tabs will be injected here -->
+        </div>
+
         <!-- Botones de Interfaz -->
-        <div class="flex justify-center mb-8 space-x-4">
-            <button id="show-user-form-btn" class="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg">
+        <div class="flex justify-center mb-8">
+            <button id="main-action-btn" class="bg-blue-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg text-lg">
                 Hacer Pedido
             </button>
-            <button id="show-admin-login-btn" class="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg">
-                Acceso Admin
-            </button>
         </div>
+        <!-- Mensaje de Tienda Cerrada -->
+        <div id="store-closed-message" class="hidden text-center bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg my-6 max-w-2xl mx-auto">
+            <p class="font-bold">Toma de Pedidos Cerrada por Hoy</p>
+            <p>Volveremos mañana. ¡Gracias por tu paciencia!</p>
+        </div>
+
+        <!-- Admin Access Button - Relocated -->
+        <button id="show-admin-login-btn" class="absolute top-6 right-6 bg-gray-200 text-gray-700 px-3 py-1 rounded-full text-xs font-semibold hover:bg-gray-300 transition">Acceso Admin</button>
 
         <!-- Contenedor principal de la aplicación -->
         <div id="main-content" class="space-y-8">
             <!-- Interfaz de Usuario: Formulario para crear un pedido -->
-            <div id="user-interface" class="border p-6 rounded-2xl shadow-inner bg-gray-50">
-                <h2 class="text-2xl font-semibold text-gray-700 mb-4">Ingresar Nuevo Pedido</h2>
+            <div id="user-interface" class="hidden border p-6 rounded-2xl shadow-inner bg-gray-50">
+                <h2 class="text-xl font-semibold text-blue-800 mb-6 p-4 bg-blue-100 rounded-lg border-l-4 border-blue-500">Portal de Cliente: Ingresar Nuevo Pedido</h2>
                 <!-- Botones de pestañas -->
                 <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
                     <button id="tab-transferencia" class="flex-1 py-3 px-4 text-center font-semibold rounded-tl-lg bg-white text-blue-600">Transferencia</button>
@@ -99,24 +109,31 @@
                                     <input type="text" id="name-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                                 <div>
-                                    <label for="cedula-transferencia" class="block text-gray-700 font-medium">Cédula</label>
+                                    <label id="doc-number-label-transferencia" for="cedula-transferencia" class="block text-gray-700 font-medium">Cédula</label>
+                                    <select id="doc-type-transferencia" class="hidden w-full mt-1 mb-2 p-3 border border-gray-300 rounded-lg">
+                                        <option value="CC">Cédula de Ciudadanía (CC)</option>
+                                        <option value="PPT">Permiso por Protección Temporal (PPT)</option>
+                                    </select>
                                     <input type="text" id="cedula-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
-                                <div>
-                                    <label for="bank-transferencia" class="block text-gray-700 font-medium">Banco</label>
-                                    <select id="bank-transferencia" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
-                                        <!-- Options will be populated by JS -->
-                                    </select>
+                                <!-- Fields specific to Venezuela -->
+                                <div id="bank-details-transferencia" class="contents">
+                                    <div>
+                                        <label for="bank-transferencia" class="block text-gray-700 font-medium">Banco</label>
+                                        <select id="bank-transferencia" class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                            <!-- Options will be populated by JS -->
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="account-type-transferencia" class="block text-gray-700 font-medium">Tipo de Cuenta</label>
+                                        <select id="account-type-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                            <option value="ahorro">Ahorro</option>
+                                            <option value="corriente">Corriente</option>
+                                        </select>
+                                    </div>
                                 </div>
                                 <div>
-                                    <label for="account-type-transferencia" class="block text-gray-700 font-medium">Tipo de Cuenta</label>
-                                    <select id="account-type-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
-                                        <option value="ahorro">Ahorro</option>
-                                        <option value="corriente">Corriente</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label for="account-number-transferencia" class="block text-gray-700 font-medium">Número de Cuenta</label>
+                                    <label for="account-number-transferencia" class="block text-gray-700 font-medium">Número de Cuenta / Destino</label>
                                     <input type="text" id="account-number-transferencia" class="w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" required>
                                 </div>
                                 <div>
@@ -125,7 +142,10 @@
                                 </div>
                             </div>
                             <div class="text-right">
-                                <p class="text-lg font-bold text-gray-800">Monto a recibir en Bolívares: <span id="ves-amount-transferencia" class="text-green-600">0.00 VES</span></p>
+                                <p class="text-lg font-bold text-gray-800">
+                                    <span id="destination-currency-label-transferencia">Monto a recibir en Bolívares:</span> 
+                                    <span id="destination-amount-transferencia" class="text-green-600">0.00 VES</span>
+                                </p>
                             </div>
                             <div class="text-right text-sm mb-2">
                                 <a href="#" id="show-example-transferencia" class="text-blue-600 hover:underline">Ver ejemplo de formato para pegar</a>
@@ -182,7 +202,10 @@ Monto en CLP: 5000</pre>
                                 </div>
                             </div>
                             <div class="text-right">
-                                <p class="text-lg font-bold text-gray-800">Monto a recibir en Bolívares: <span id="ves-amount-pm" class="text-green-600">0.00 VES</span></p>
+                                <p class="text-lg font-bold text-gray-800">
+                                    <span id="destination-currency-label-pm">Monto a recibir en Bolívares:</span> 
+                                    <span id="destination-amount-pm" class="text-green-600">0.00 VES</span>
+                                </p>
                             </div>
                             <div class="text-right text-sm mb-2">
                                 <a href="#" id="show-example-pago-movil" class="text-blue-600 hover:underline">Ver ejemplo de formato para pegar</a>
@@ -232,7 +255,10 @@ Monto en CLP: 2500</pre>
                                 </div>
                             </div>
                             <div class="text-right">
-                                <p class="text-lg font-bold text-gray-800">Monto a recibir en Bolívares: <span id="ves-amount-rs" class="text-green-600">0.00 VES</span></p>
+                                <p class="text-lg font-bold text-gray-800">
+                                    <span id="destination-currency-label-rs">Monto a recibir en Bolívares:</span> 
+                                    <span id="destination-amount-rs" class="text-green-600">0.00 VES</span>
+                                </p>
                             </div>
                             <div class="text-right text-sm mb-2">
                                 <a href="#" id="show-example-recarga-saldo" class="text-blue-600 hover:underline">Ver ejemplo de formato para pegar</a>
@@ -258,6 +284,15 @@ Monto en CLP: 1000</pre>
                             <p id="user-message-rs" class="mt-4 text-center font-medium"></p>
                         </form>
                     </div>
+                </div>
+
+                <!-- Historial de Pedidos del Cliente -->
+                <div id="user-orders-section" class="mt-8 pt-6 border-t border-gray-300 hidden">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4">Mis Pedidos Recientes</h3>
+                    <div id="user-orders-list" class="space-y-3">
+                        <!-- User orders will be rendered here by JS -->
+                    </div>
+                    <p id="no-user-orders-message" class="text-gray-500 text-center mt-4 hidden">No tienes pedidos recientes.</p>
                 </div>
 
             </div>
@@ -304,31 +339,53 @@ Monto en CLP: 1000</pre>
 
                 <!-- Panel de Admin -->
                 <div id="admin-panel" class="hidden space-y-8">
-                    <div class="flex justify-between items-center">
-                        <h2 class="text-2xl font-semibold text-gray-700">Panel de Administrador</h2>
-                        <button id="admin-logout-btn" class="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition duration-300">
-                            Cerrar Sesión
-                        </button>
+                    <!-- Nuevo Header de Admin Rediseñado -->
+                    <div class="bg-gray-100 p-4 rounded-lg border border-gray-200 shadow-sm space-y-3">
+                        <!-- Fila Superior: Título y Cerrar Sesión -->
+                        <div class="flex justify-between items-center">
+                            <h2 class="text-xl font-semibold text-gray-800">Panel de Administrador</h2>
+                            <button id="admin-logout-btn" class="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-red-700 transition duration-300">Cerrar Sesión</button>
+                        </div>
+                        <!-- Fila Inferior: Acciones -->
+                        <div class="flex flex-wrap items-center gap-x-6 gap-y-3 pt-3 border-t border-gray-200">
+                            <!-- Controles de Estado de la Tienda -->
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-medium text-gray-700">Estado de la Tienda:</span>
+                                <span id="store-status-indicator" class="px-3 py-1 text-xs font-bold uppercase rounded-full"></span>
+                                <button id="open-store-btn" class="hidden bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600">Abrir</button>
+                                <button id="close-store-btn" class="hidden bg-yellow-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-600">Cerrar</button>
+                            </div>
+                            <!-- Contenedor del Botón de Notificaciones -->
+                            <div id="notifications-section" class="hidden">
+                                <button id="enable-notifications-btn" class="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-blue-600 transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed">Activar Notificaciones</button>
+                            </div>
+                        </div>
+                        <p id="store-status-message" class="text-xs font-medium text-center"></p>
+                        <p id="notifications-message" class="text-xs font-medium text-center"></p>
                     </div>
-                     <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
-                        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Actualizar Tasa de Cambio</h2>
-                        <form id="rate-form" class="flex flex-col sm:flex-row gap-4">
-                            <select id="rate-currency-select" class="w-full sm:w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
-                                <option value="VES">VES (Bolívares)</option>
-                                <option value="COP">COP (Pesos Col.)</option>
-                                <option value="PEN">PEN (Soles)</option>
-                                <option value="ARS">ARS (Pesos Arg.)</option>
-                                <option value="USD">USD (Dólares)</option>
-                                <option value="EUR">EUR (Euros)</option>
-                            </select>
-                            <input type="number" id="new-rate" class="w-full sm:w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Nueva Tasa (Ej: 3000)" step="0.0001">
-                            <button type="submit" class="w-full sm:w-1/3 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition duration-300 shadow-md">
-                            Actualizar
-                            </button>
-                        </form>
-                        <p id="rate-message" class="mt-4 text-center font-medium text-green-600"></p>
+                    <!-- Country Selector -->
+                    <div id="admin-country-selector" class="flex flex-wrap justify-center gap-2 mb-6">
+                        <!-- Tabs will be injected here by JS -->
                     </div>
 
+                    <div class="border p-6 rounded-2xl shadow-inner bg-gray-50">
+                       <h2 class="text-2xl font-semibold text-gray-700 mb-4">Actualizar Tasa de Cambio</h2>
+                       <form id="rate-form" class="flex flex-col sm:flex-row gap-4">
+                           <select id="rate-currency-select" class="w-full sm:w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                               <option value="VES">VES (Bolívares)</option>
+                               <option value="COP">COP (Pesos Col.)</option>
+                               <option value="PEN">PEN (Soles)</option>
+                               <option value="ARS">ARS (Pesos Arg.)</option>
+                               <option value="USD">USD (Dólares)</option>
+                               <option value="EUR">EUR (Euros)</option>
+                           </select>
+                           <input type="number" id="new-rate" class="w-full sm:w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" placeholder="Nueva Tasa (Ej: 3000)" step="0.00001">
+                           <button type="submit" class="w-full sm:w-1/3 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition duration-300 shadow-md">
+                           Actualizar
+                           </button>
+                       </form>
+                       <p id="rate-message" class="mt-4 text-center font-medium text-green-600"></p>
+                   </div>
                     <!-- Saldo en VES -->
                     <div class="border p-6 rounded-2xl shadow-inner bg-gray-50 text-center">
                         <h2 class="text-2xl font-semibold text-gray-700 mb-4">Saldo Disponible en VES</h2>
@@ -357,6 +414,10 @@ Monto en CLP: 1000</pre>
                         <div id="accounts-balance-list" class="space-y-3">
                             <!-- Breakdown will be rendered here -->
                             <p class="text-gray-500">Calculando desglose...</p>
+                        </div>
+                        <!-- Admin Commission Summary -->
+                        <div id="admin-commission-summary" class="mt-4 pt-4 border-t border-gray-200">
+                            <!-- Summary will be injected here by JS -->
                         </div>
                     </div>
 
@@ -515,6 +576,56 @@ Monto en CLP: 1000</pre>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal de Autenticación de Cliente -->
+    <div id="customer-auth-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-800">Acceso de Cliente</h3>
+                <button id="customer-auth-close-btn" class="text-gray-400 hover:text-gray-800 text-3xl leading-none">&times;</button>
+            </div>
+
+            <!-- Customer Auth Tabs -->
+            <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
+                <button data-form="login" class="customer-auth-tab flex-1 py-3 px-4 text-center font-semibold rounded-tl-lg bg-white text-blue-600">Ingresar</button>
+                <button data-form="register" class="customer-auth-tab flex-1 py-3 px-4 text-center font-semibold text-gray-700 hover:bg-gray-300">Registrarse</button>
+            </div>
+
+            <!-- Login Form -->
+            <form id="customer-login-form" class="space-y-4">
+                <div>
+                    <label for="customer-login-email" class="block text-gray-700 font-medium">Correo Electrónico</label>
+                    <input type="email" id="customer-login-email" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                </div>
+                <div>
+                    <label for="customer-login-password" class="block text-gray-700 font-medium">Contraseña</label>
+                    <input type="password" id="customer-login-password" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                </div>
+                <div class="text-right">
+                    <a href="#" id="forgot-password-link" class="text-sm text-blue-600 hover:underline">¿Olvidaste tu contraseña?</a>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700">Ingresar</button>
+            </form>
+
+            <!-- Register Form -->
+            <form id="customer-register-form" class="space-y-4 hidden">
+                <div>
+                    <label for="customer-register-email" class="block text-gray-700 font-medium">Correo Electrónico</label>
+                    <input type="email" id="customer-register-email" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                </div>
+                <div>
+                    <label for="customer-register-password" class="block text-gray-700 font-medium">Contraseña</label>
+                    <input type="password" id="customer-register-password" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                </div>
+                <div>
+                    <label for="customer-register-confirm-password" class="block text-gray-700 font-medium">Confirmar Contraseña</label>
+                    <input type="password" id="customer-register-confirm-password" class="w-full mt-1 p-3 border border-gray-300 rounded-lg" required>
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700">Crear Cuenta</button>
+            </form>
+            <p id="customer-auth-message" class="mt-4 text-center font-medium"></p>
         </div>
     </div>
 
@@ -710,8 +821,10 @@ Monto en CLP: 1000</pre>
     <!-- Modal de confirmación genérico para alertas -->
     <div id="custom-alert-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden">
         <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm text-center">
-            <p id="custom-alert-message" class="text-xl font-bold mb-4"></p>
-            <button id="custom-alert-btn" class="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-blue-700">Aceptar</button>
+            <div id="custom-alert-message" class="mb-6">
+                <!-- Message content will be injected here -->
+            </div>
+            <button id="custom-alert-btn" class="bg-blue-600 text-white px-8 py-2 rounded-full font-semibold hover:bg-blue-700">Aceptar</button>
         </div>
     </div>
 
@@ -777,10 +890,10 @@ Monto en CLP: 1000</pre>
     <!-- SDKs para los servicios de Firebase que usaremos -->
     <script src="/__/firebase/11.6.1/firebase-auth-compat.js"></script>
     <script src="/__/firebase/11.6.1/firebase-firestore-compat.js"></script>
+    <script src="/__/firebase/11.6.1/firebase-messaging-compat.js"></script>
     <script src="/__/firebase/11.6.1/firebase-functions-compat.js"></script>
     <script src="/__/firebase/11.6.1/firebase-storage-compat.js"></script>
     <script src="/__/firebase/init.js"></script>
+    <script type="module" src="/js/main.js?v=final-v89"></script>
 
-    <script type="module" src="/js/main.js?v=final-v45"></script>
-</body>
 </html>
