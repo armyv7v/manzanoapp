@@ -32,7 +32,9 @@ module.exports = {
     'text-green-800',
     'text-blue-700',
     'bg-green-200',
+    'bg-red-50',
     'bg-red-200',
+    'border-red-200',
     'text-red-800'
   ],
   theme: {

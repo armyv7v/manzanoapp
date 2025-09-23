@@ -9,4 +9,56 @@
   .historical-status-btn:not(.active)[data-status="Pagado"] { @apply bg-green-100 text-green-800 border-green-400; }
   .historical-status-btn:not(.active)[data-status="Cancelado"] { @apply bg-red-100 text-red-800 border-red-400; }
   .historical-status-btn[data-status].active { @apply bg-blue-500 text-white border-blue-500 scale-105 shadow-md; }
+
+  .form-label { @apply block text-gray-700 font-medium; }
+  .form-control { @apply w-full mt-1 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500; }
+  .form-select { @apply form-control bg-white; }
+
+  .btn { @apply px-6 py-2 rounded-lg font-semibold transition duration-300 shadow-md; }
+  .btn-primary { @apply btn bg-blue-600 text-white hover:bg-blue-700; }
+  .btn-success { @apply btn bg-green-500 text-white hover:bg-green-600; }
+  .btn-muted { @apply btn bg-gray-400 text-white hover:bg-gray-500; }
+  .btn-danger { @apply btn bg-red-500 text-white hover:bg-red-600; }
+  .btn-neutral { @apply btn bg-gray-500 text-white hover:bg-gray-600; }
+  .btn-outline { @apply btn bg-orange-100 text-orange-700 hover:opacity-80; }
+  .btn-pill { @apply btn-primary px-8 py-3 rounded-full; }
+
+  .link-inline { @apply text-blue-600 hover:underline; }
+  .section-card { @apply border p-6 rounded-2xl shadow-inner bg-gray-50; }
+  .modal-card { @apply bg-white rounded-2xl p-6 w-full max-w-2xl mx-auto space-y-4; }
+
+  .ticker-wrap {
+    @apply w-full overflow-hidden flex relative;
+  }
+  .ticker-wrap::before,
+  .ticker-wrap::after {
+    content: '';
+    @apply absolute top-0 h-full w-12;
+    z-index: 1;
+  }
+  .ticker-wrap::before {
+    left: 0;
+    background: linear-gradient(to right, #DBEAFE 0%, rgba(219, 234, 254, 0) 100%);
+  }
+  .ticker-wrap::after {
+    right: 0;
+    background: linear-gradient(to left, #DBEAFE 0%, rgba(219, 234, 254, 0) 100%);
+  }
+  .ticker-content {
+    @apply flex whitespace-nowrap;
+    animation: ticker 30s linear infinite;
+  }
+  .ticker-content span {
+    @apply inline-flex px-8;
+  }
+  .ticker-wrap:hover .ticker-content {
+    animation-play-state: paused;
+  }
+}
+
+@layer utilities {
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
 }

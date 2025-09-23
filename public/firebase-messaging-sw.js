@@ -11,24 +11,36 @@ importScripts('/__/firebase/init.js');
 const messaging = firebase.messaging();
 
 /**
- * Escucha las notificaciones que llegan cuando la aplicación está en segundo plano
- * (en otra pestaña o minimizada).
+ * NOTA IMPORTANTE: El manejador `onBackgroundMessage` se ha eliminado intencionadamente.
+ * Cuando se envía un payload que contiene tanto 'notification' como 'data' desde
+ * Firebase Functions, el sistema operativo (Android, iOS, Windows) se encarga
+ * automáticamente de mostrar la notificación si la app está en segundo plano.
+ * El Service Worker solo necesita manejar el evento 'notificationclick'.
  */
-messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Mensaje recibido en segundo plano: ', payload);
 
-  // Extraemos los datos de la notificación del payload
-  const notification = payload.notification;
-  const notificationTitle = notification.title || 'Nuevo Pedido';
-  
-  // Construimos las opciones para la notificación, incluyendo el sonido y la vibración
-  const notificationOptions = {
-    body: notification.body || 'Ha llegado un nuevo pedido a la aplicación.',
-    icon: notification.icon || '/images/apple-touch-icon.png',
-    sound: notification.sound, // Usamos el sonido que viene en el payload
-    vibrate: [200, 100, 200], // Patrón: vibra 200ms, pausa 100ms, vibra 200ms
-  };
+/**
+ * Escucha los clics en las notificaciones.
+ */
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const clickAction = event.notification.data.click_action;
 
-  // Muestra la notificación al usuario
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  if (clickAction) {
+    // Este código busca una pestaña existente de la aplicación y la redirige.
+    // Si no encuentra ninguna, abre una nueva.
+    event.waitUntil(
+      clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+        // Busca una pestaña que ya esté abierta en la URL base de la aplicación.
+        for (const client of windowClients) {
+          if (new URL(client.url).origin === new URL(clickAction).origin) {
+            // Si la encuentra, la navega a la URL de la notificación y la enfoca.
+            client.navigate(clickAction);
+            return client.focus();
+          }
+        }
+        // Si no encuentra ninguna pestaña abierta, abre una nueva.
+        return clients.openWindow(clickAction);
+      })
+    );
+  }
 });

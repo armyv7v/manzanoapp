@@ -18,12 +18,23 @@ let exchangeRates = {}; // Replaces currentExchangeRate
 let ordersListener = null; // To hold the unsubscribe function for the orders listener.
 let userOrdersListener = null; // To hold the listener for the user's own orders.
 let userOwnOrders = []; // To hold the user's own orders for autocomplete.
+let userSavedBeneficiaries = []; // To hold unique beneficiaries for the logged-in user.
 let accountsListener = null; // To hold the listener for the accounts collection.
+let adminCommissionListener = null; // NEW: Listener for today's admin commission.
+let commissionCheckInterval = null; // To reset commission listener at midnight.
+let commissionListenerDate = null; // To track the day for the commission listener.
 let paymentData = {}; // To store all data related to a payment process
 let isInitialOrdersLoad = true; // To prevent notification sound on first load
 let userSelectedCountry = 'VE'; // Default country for the user forms
-let adminSelectedCountry = 'VE'; // Default country for the admin panel
-let isStoreOpen = true; // Default to open, will be updated from DB
+let adminSelectedCountry = 'VE'; // Default country for the admin panel. This fulfills the request to default to Venezuela.
+let isStoreOpen = true; // Default to open, will be updated from DB.
+
+// Client list state
+let hasClientSearchBeenPerformed = false;
+let clientListPage = 1;
+const CLIENTS_PER_PAGE = 5;
+let clientListSortBy = 'name'; // 'name' or 'cedula'
+let filteredClientList = [];
 
 // --- Constants ---
 const venezuelanBanks = [
@@ -113,6 +124,12 @@ function showToastNotification(message) {
 // --- Main Application Logic ---
 document.addEventListener('DOMContentLoaded', () => {
   // --- DOM Element Selectors ---
+  // Add version number for debugging cache issues
+  const appVersionSpan = document.getElementById('app-version');
+  if (appVersionSpan) {
+      appVersionSpan.textContent = 'v1.30';
+  }
+
   const showUserFormBtn = document.getElementById('show-user-form-btn');
   const showAdminLoginBtn = document.getElementById('show-admin-login-btn');
   const userInterface = document.getElementById('user-interface');
@@ -148,6 +165,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // Notification Elements
   const notificationsSection = document.getElementById('notifications-section');
   const enableNotificationsBtn = document.getElementById('enable-notifications-btn');
+  
+  // Admin Create Order Toggle
+  const adminCreateOrderSection = document.getElementById('admin-create-order-section');
+  const adminCreateOrderToggleBtn = document.getElementById('admin-create-order-toggle-btn');
 
   // Order Submission & Modal Elements
   const formTransferencia = document.getElementById('remittance-form-transferencia');
@@ -163,11 +184,27 @@ document.addEventListener('DOMContentLoaded', () => {
   const userOrdersList = document.getElementById('user-orders-list');
   const noUserOrdersMessage = document.getElementById('no-user-orders-message');
 
+  // Saved Beneficiaries Elements
+  const toggleSavedAccountsTransferencia = document.getElementById('toggle-saved-accounts-transferencia');
+  const savedAccountsListTransferencia = document.getElementById('saved-accounts-list-transferencia');
+  const toggleSavedAccountsPagoMovil = document.getElementById('toggle-saved-accounts-pago-movil');
+  const savedAccountsListPagoMovil = document.getElementById('saved-accounts-list-pago-movil');
+  const toggleSavedAccountsRecargaSaldo = document.getElementById('toggle-saved-accounts-recarga-saldo');
+  const savedAccountsListRecargaSaldo = document.getElementById('saved-accounts-list-recarga-saldo');
+
+
   // Admin Upload Modal Elements
   const adminUploadModal = document.getElementById('admin-upload-modal');
   const adminScreenshotInput = document.getElementById('admin-screenshot-input');
   const adminUploadBtn = document.getElementById('admin-upload-btn');
   const adminCancelUploadBtn = document.getElementById('admin-cancel-upload-btn');
+
+  // Client Upload Modal Elements
+  const clientUploadModal = document.getElementById('client-upload-modal');
+  const clientScreenshotInput = document.getElementById('client-screenshot-input');
+  const clientUploadConfirmBtn = document.getElementById('client-upload-confirm-btn');
+  const clientUploadCancelBtn = document.getElementById('client-upload-cancel-btn');
+  const clientUploadMessage = document.getElementById('client-upload-message');
 
   // Payment Source Modal Elements
   const selectPaymentSourceModal = document.getElementById('select-payment-source-modal');
@@ -258,16 +295,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const exampleRecargaSaldo = document.getElementById('example-recarga-saldo');
 
   // Historical Search Elements
-  const historicalDateStart = document.getElementById('Histórical-date-start');
-  const historicalDateEnd = document.getElementById('Histórical-date-end');
-  const historicalDateTodayBtn = document.getElementById('Histórical-date-today');
-  const historicalDateYesterdayBtn = document.getElementById('Histórical-date-yesterday');
+  const historicalDateStart = document.getElementById('historical-date-start');
+  const historicalDateEnd = document.getElementById('historical-date-end');
+  const historicalDateTodayBtn = document.getElementById('historical-date-today');
+  const historicalDateYesterdayBtn = document.getElementById('historical-date-yesterday');
   const historicalDate7DaysBtn = document.getElementById('historical-date-7days');
-  const historicalStatusFilters = document.getElementById('Histórical-status-filters');
+  const historicalSearchBtn = document.getElementById('historical-search-btn');
+  const historicalStatusFilters = document.getElementById('historical-status-filters');
   const exportExcelBtn = document.getElementById('export-excel-btn');
-  const historicalSearchSummary = document.getElementById('Histórical-search-summary');
-  const historicalOrdersList = document.getElementById('Histórical-orders-list');
-  const noHistoricalOrdersMessage = document.getElementById('no-Histórical-orders-message');
+  const historicalSearchSummary = document.getElementById('historical-search-summary');
+  const historicalOrdersList = document.getElementById('historical-orders-list');
+  const noHistoricalOrdersMessage = document.getElementById('no-historical-orders-message');
+  const historicalIdSearchInput = document.getElementById('historical-id-search');
+  const historicalIdSearchBtn = document.getElementById('historical-id-search-btn');
 
   // Client List Elements
   const clientsSearchInput = document.getElementById('clients-search');
@@ -331,13 +371,6 @@ document.addEventListener('DOMContentLoaded', () => {
   let historicalOrdersData = []; // To store data for Excel export
   let fullClientList = []; // Holds the raw client data
 
-  // Client list pagination and sorting state
-  let clientListPage = 1;
-  const CLIENTS_PER_PAGE = 5;
-  let clientListSortBy = 'name'; // 'name' or 'cedula'
-  let filteredClientList = [];
-
-  /** Populates all bank select dropdowns with a standard list of Venezuelan banks. */
   const chileTimeZone = 'America/Santiago';
 
   /**
@@ -363,6 +396,21 @@ document.addEventListener('DOMContentLoaded', () => {
       // Creating a new Date from 'YYYY-MM-DD' string gives a Date object at UTC midnight for that day.
       return new Date(dateStringInChile);
   };
+
+  /** Gets the current timezone offset between UTC and Chilean time in milliseconds. */
+  const getChileanTimezoneOffset = () => {
+      const now = new Date();
+      const chileDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Santiago' }));
+      // getTimezoneOffset returns the difference in minutes between the browser's local time and UTC.
+      // We need to calculate it manually for a specific timezone.
+      const browserDate = new Date(now.toLocaleString('en-US'));
+      // This is a trick: the difference in getTime() between a date object created for a timezone
+      // and one for the browser's locale gives us the offset we need to adjust UTC times.
+      // This is not perfectly robust, but better than a fixed offset.
+      // A more robust way:
+      const utcDate = new Date(now.toLocaleString('en-US', { timeZone: 'UTC' }));
+      return utcDate.getTime() - chileDate.getTime();
+  };
   const populateBankSelects = () => {
       const bankSelects = document.querySelectorAll('.bank-select');
       const optionsHtml = venezuelanBanks.map(bank => `<option value="${bank}">${bank}</option>`).join('');
@@ -378,8 +426,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const showPagination = filteredClientList.length > CLIENTS_PER_PAGE;
       clientPaginationControls.classList.toggle('hidden', !showPagination);
       clientPaginationControls.classList.toggle('flex', showPagination);
+
       if (filteredClientList.length === 0) {
-          clientsList.innerHTML = `<p class="text-gray-500">No se encontraron clientes.</p>`;
+          const searchTerm = clientsSearchInput.value;
+          if (!hasClientSearchBeenPerformed && !searchTerm) {
+              clientsList.innerHTML = `<p class="text-gray-500">Realice una búsqueda por nombre/cédula o utilice los filtros de orden para ver la lista.</p>`;
+          } else if (searchTerm) {
+              clientsList.innerHTML = `<p class="text-gray-500">No se encontraron clientes para "${searchTerm}".</p>`;
+          } else {
+              clientsList.innerHTML = `<p class="text-gray-500">No se encontraron clientes.</p>`;
+          }
           clientsCountDisplay.textContent = 0;
           return;
       }
@@ -423,7 +479,14 @@ document.addEventListener('DOMContentLoaded', () => {
   /** Filters, sorts, and renders the client list. */
   const updateClientView = () => {
       const searchTerm = clientsSearchInput.value.toLowerCase();
-      
+
+      // If no search has been performed, show an empty list with instructions.
+      if (!hasClientSearchBeenPerformed && !searchTerm) {
+          filteredClientList = [];
+          renderClientListPage();
+          return;
+      }
+
       // 1. Filter
       if (searchTerm) {
           filteredClientList = fullClientList.filter(client => 
@@ -447,25 +510,51 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Fetches all orders to build a unique client list with their latest data. */
   const fetchAndRenderClients = async () => {
+      // Display a non-blocking loading message in the client list area.
+      clientsList.innerHTML = `<p class="text-gray-500">Cargando lista de clientes en segundo plano...</p>`;
+      clientsCountDisplay.textContent = '...';
+
       try {
           // Order by createdAt to ensure we can get the latest data for each client.
           const snapshot = await db.collection('orders')
               .where('country', '==', adminSelectedCountry)
               .orderBy('createdAt', 'desc')
               .get();
+          
           const clientsMap = new Map();
-          snapshot.forEach(doc => {
-              const order = doc.data();
-              // Since we are ordered by descending date, the first time we see a cedula, it's the latest one.
-              if (order.cedula && order.clientName && !clientsMap.has(order.cedula)) {
-                  clientsMap.set(order.cedula, { ...order, id: doc.id }); // Store the whole last order data
-              }
-          });
+          const docs = snapshot.docs;
+
+          // Helper function to process a chunk and yield to the event loop, preventing UI freeze.
+          const processChunk = (startIndex, chunkSize) => {
+              return new Promise(resolve => {
+                  setTimeout(() => {
+                      const endIndex = Math.min(startIndex + chunkSize, docs.length);
+                      for (let i = startIndex; i < endIndex; i++) {
+                          const doc = docs[i];
+                          const order = doc.data();
+                          // Since we are ordered by descending date, the first time we see a cedula, it's the latest one.
+                          if (order.cedula && order.clientName && !clientsMap.has(order.cedula)) {
+                              clientsMap.set(order.cedula, { ...order, id: doc.id }); // Store the whole last order data
+                          }
+                      }
+                      resolve();
+                  }, 0); // setTimeout with 0ms yields to the browser's event loop.
+              });
+          };
+
+          // Process documents in chunks to keep the UI responsive.
+          const CHUNK_SIZE = 500;
+          for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
+              await processChunk(i, CHUNK_SIZE);
+          }
+
           fullClientList = Array.from(clientsMap.values());
-          updateClientView();
+          updateClientView(); // This will replace the loading message with the actual list.
+
       } catch (error) {
           console.error("Error fetching clients:", error);
           clientsList.innerHTML = `<p class="text-red-500">Error al cargar la lista de clientes.</p>`;
+          clientsCountDisplay.textContent = 'Error';
           if (error.code === 'failed-precondition') {
               showCustomAlert('Error: La base de datos requiere un índice para la lista de clientes. Por favor, abre la consola (F12) y crea el índice que solicita Firebase.');
           }
@@ -553,7 +642,7 @@ document.addEventListener('DOMContentLoaded', () => {
               .join('');
       }
       
-      const birthdayMessage = '<span class="font-bold text-purple-700">🎂🥳 Feliz Cumpleaños!!! Jefecito Nestor!! 🎁🎉</span>';
+      const birthdayMessage = '<span class="font-bold text-purple-700">Cambios Manzano, Tu Cambio a Tiempo!</span>';
       const fullTickerHtml = birthdayMessage + ratesPartHtml;
       // Duplicate the content for a smooth, continuous loop
       tickerContent.innerHTML = fullTickerHtml + fullTickerHtml;
@@ -686,16 +775,20 @@ document.addEventListener('DOMContentLoaded', () => {
   /** Manages the visibility of the main application interfaces (User vs Admin). */
   const switchMainView = (view) => {
       const isUserView = view === 'user';
+      const isClientLoggedIn = currentUser && !isAdmin;
 
-      // Show user interface if a user (any user, admin or not) is logged in.
-      userInterface.classList.toggle('hidden', !currentUser);
+      // The user interface should only be visible if a non-admin user is logged in.
+      userInterface.classList.toggle('hidden', !isClientLoggedIn);
+
       if (isUserView) {
+          // This case is for non-admins, or when an admin logs out.
           renderAdminViewState('hidden');
-      } else {
+      } else { // 'admin' view requested
+          // This shows the admin login form or the full panel.
           renderAdminViewState(isAdmin ? 'panel' : 'login'); // Si es vista admin, mostrar panel o login según el estado.
       }
 
-      if (!isUserView) {
+      if (!isUserView && isAdmin) { // If admin view is active
         try { adminInterface.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch {}
       }
   };
@@ -711,6 +804,88 @@ document.addEventListener('DOMContentLoaded', () => {
           tab.classList.toggle('text-gray-700', !isSelected);
           tab.classList.toggle('hover:bg-gray-300', !isSelected);
           pane.classList.toggle('hidden', !isSelected);
+      });
+  };
+
+  /** Processes the user's order history to create a unique list of beneficiaries. */
+  const processAndRenderBeneficiaries = () => {
+      const beneficiariesMap = new Map();
+      userOwnOrders.forEach(order => {
+          if (order.status === 'Cliente Registrado' || !order.clientName || !order.cedula) return;
+
+          let key;
+          let beneficiaryData = {
+              name: order.clientName,
+              cedula: order.cedula,
+              type: order.type
+          };
+
+          switch (order.type) {
+              case 'transferencia':
+                  if (!order.accountNumber) return;
+                  key = `transferencia-${order.accountNumber}`;
+                  beneficiaryData = { ...beneficiaryData, bank: order.bank, accountType: order.accountType, accountNumber: order.accountNumber };
+                  break;
+              case 'pago-movil':
+                  if (!order.phone) return;
+                  key = `pago-movil-${order.phone}`;
+                  beneficiaryData = { ...beneficiaryData, phone: order.phone, bank: order.bank };
+                  break;
+              case 'recarga-saldo':
+                  if (!order.phone) return;
+                  key = `recarga-saldo-${order.phone}`;
+                  beneficiaryData = { ...beneficiaryData, phone: order.phone };
+                  break;
+              default:
+                  return;
+          }
+
+          if (!beneficiariesMap.has(key)) {
+              beneficiariesMap.set(key, beneficiaryData);
+          }
+      });
+
+      userSavedBeneficiaries = Array.from(beneficiariesMap.values());
+      renderSavedBeneficiaries();
+  };
+
+  /** Renders the list of saved beneficiaries for the user to select from. */
+  const renderSavedBeneficiaries = () => {
+      const lists = {
+          transferencia: savedAccountsListTransferencia,
+          'pago-movil': savedAccountsListPagoMovil,
+          'recarga-saldo': savedAccountsListRecargaSaldo
+      };
+      const toggles = {
+          transferencia: toggleSavedAccountsTransferencia,
+          'pago-movil': toggleSavedAccountsPagoMovil,
+          'recarga-saldo': toggleSavedAccountsRecargaSaldo
+      };
+
+      // Clear all lists and hide all toggles first
+      Object.values(lists).forEach(list => { if (list) list.innerHTML = ''; });
+      Object.values(toggles).forEach(toggle => { if (toggle) toggle.classList.add('hidden'); });
+
+      userSavedBeneficiaries.forEach(beneficiary => {
+          const listContainer = lists[beneficiary.type];
+          const toggleButton = toggles[beneficiary.type];
+          if (!listContainer || !toggleButton) return;
+
+          toggleButton.classList.remove('hidden'); // Show the toggle button if there's at least one beneficiary of this type
+
+          let details = '';
+          if (beneficiary.type === 'transferencia') details = `<p class="text-xs text-gray-500">${beneficiary.bank} - Cta. ...${beneficiary.accountNumber.slice(-4)}</p>`;
+          else if (beneficiary.type === 'pago-movil') details = `<p class="text-xs text-gray-500">${beneficiary.bank} - Tel. ${beneficiary.phone}</p>`;
+          else if (beneficiary.type === 'recarga-saldo') details = `<p class="text-xs text-gray-500">Tel. ${beneficiary.phone}</p>`;
+
+          const card = document.createElement('div');
+          card.className = 'p-2 border rounded-lg cursor-pointer hover:bg-blue-50 transition-colors';
+          card.dataset.beneficiary = JSON.stringify(beneficiary);
+          card.innerHTML = `
+              <p class="font-semibold text-sm">${beneficiary.name}</p>
+              ${details}
+          `;
+          listContainer.appendChild(card);
       });
   };
 
@@ -821,7 +996,13 @@ document.addEventListener('DOMContentLoaded', () => {
       switch (order.status) {
           case 'Pendiente de pago':
               statusBadge = `<span class="text-xs font-semibold inline-block py-1 px-2 uppercase rounded-full text-amber-600 bg-amber-200">${order.status}</span>`;
+              
+              const clientProofButton = order.clientProofUrl 
+                  ? `<a href="${order.clientProofUrl}" target="_blank" rel="noopener noreferrer" class="bg-blue-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-blue-600">Ver Comprobante CLP</a>`
+                  : '';
+
               actionButtons = `
+                  ${clientProofButton}
                   <button data-id="${orderId}" class="mark-paid-btn bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600">Pagar</button>
                   <button data-id="${orderId}" class="cancel-order-btn bg-red-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-red-600">Cancelar</button>
               `;
@@ -885,7 +1066,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${actionButtons}
                 </div>
               ` : `
-                <div class="flex justify-end space-x-2 mt-3">
+                <div class="flex justify-end items-center space-x-2 mt-3">
                     ${actionButtons}
                 </div>
               `}
@@ -907,49 +1088,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Attaches a real-time listener for today's orders. */
   const attachOrdersListener = () => {
-      // This function correctly determines the start of "today" in Chile's timezone
-      // and returns a Date object in UTC, which is what Firebase queries need.
-      const getStartOfTodayInChileForQuery = () => {
-        const todayInChileStr = new Date().toLocaleDateString('en-CA', { timeZone: chileTimeZone }); // Format: YYYY-MM-DD
-        // Creating a new Date from a 'YYYY-MM-DD' string results in a Date object
-        // representing midnight UTC for that day. This is a reliable way to query
-        // for a specific day regardless of the user's local timezone.
-        return new Date(todayInChileStr);
-      };
+      // Definitive Timezone Fix: Create date strings with a fixed offset.
+      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+      const startOfDay = new Date(`${todayString}T00:00:00-04:00`);
+      const endOfDay = new Date(`${todayString}T23:59:59-04:00`);
 
       const ordersQuery = db.collection('orders')
           .where('country', '==', adminSelectedCountry)
-          .where('createdAt', '>=', getStartOfTodayInChileForQuery())
+          .where('createdAt', '>=', startOfDay)
+          .where('createdAt', '<=', endOfDay)
           .orderBy('createdAt', 'desc');
 
       ordersListener = ordersQuery.onSnapshot(snapshot => {          
-          // --- Sound Notification Logic ---
-          snapshot.docChanges().forEach(change => {
-              if (change.type === 'added' && !isInitialOrdersLoad) {
-                  const order = change.doc.data();
-                  if (order.status === 'Pendiente de pago') {
-                    // 1. Play sound
-                    const notificationSound = document.getElementById('notification-sound');
-                    if (notificationSound) {
-                        notificationSound.play().catch(error => {
-                            console.warn("No se pudo reproducir el sonido de notificación. El usuario debe interactuar con la página primero.", error);
-                        });
-                    }
-
-                    // 2. Show prominent alert
-                    const clpAmount = (order.clpAmount || 0).toLocaleString('es-CL', { style: 'currency', currency: 'CLP' });
-                    const alertMessage = `
-                        <h3 class="text-2xl font-bold text-green-600 mb-2">¡Nuevo Pedido!</h3>
-                        <p class="text-gray-700">Cliente: <span class="font-semibold">${order.clientName}</span></p>
-                        <p class="text-gray-700">Monto: <span class="font-semibold">${clpAmount}</span></p>
-                    `;
-                    showCustomAlert(alertMessage);
-
-                    // 3. Change document title to alert user
-                    document.title = '(!) Nuevo Pedido - Cambios Manzano';
-                  }
-              }
-          });
           isInitialOrdersLoad = false; // Set flag after first run
 
           ordersListPending.innerHTML = '';
@@ -1016,6 +1166,137 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   };
 
+  /** Attaches a real-time listener for the accounts collection. */
+  const attachAccountsListener = (onFirstLoad = null) => {
+      if (accountsListener) accountsListener(); // Detach previous listener
+
+      accountsListener = db.collection('accounts').onSnapshot(snapshot => {
+          let totalBalance = 0;
+          const uniqueHolders = new Set();
+          accountsData = []; // Clear previous data
+
+          snapshot.forEach(doc => {
+              const account = { id: doc.id, ...doc.data() };
+              accountsData.push(account);
+              totalBalance += account.balance || 0;
+              uniqueHolders.add(account.holder);
+          });
+
+          // Update total balance display
+          if (vesBalanceDisplay) {
+              vesBalanceDisplay.textContent = totalBalance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
+          }
+
+          // Update other UI elements that depend on accounts
+          renderAccountsBalanceList();
+          renderPaymentSourceList(); // Refresh payment modal if open
+          
+          // Populate holder select for balance operations
+          if (balanceOpHolderSelect) {
+              const sortedHolders = Array.from(uniqueHolders).sort();
+              balanceOpHolderSelect.innerHTML = sortedHolders.map(holder => `<option value="${holder}">${holder}</option>`).join('');
+          }
+
+          // Execute callback on first load
+          if (typeof onFirstLoad === 'function') {
+              onFirstLoad();
+              onFirstLoad = null; // Ensure it only runs once
+          }
+      }, error => {
+          console.error("Error fetching accounts:", error);
+          if (vesBalanceDisplay) {
+              vesBalanceDisplay.textContent = 'Error al cargar';
+          }
+      });
+  };
+
+  /** Attaches a real-time listener for today's admin commission total. */
+  const attachAdminCommissionListener = () => {
+      if (adminCommissionListener) adminCommissionListener(); // Detach old one
+
+      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+      const todayStart = new Date(`${todayString}T00:00:00-04:00`);
+      const todayEnd = new Date(`${todayString}T23:59:59-04:00`);
+
+      // Store the full date string (YYYY-MM-DD) to check for midnight crossing.
+      commissionListenerDate = todayString;
+      console.log(`[Commission Listener] Attached for date: ${commissionListenerDate}`);
+
+      const query = db.collection('balance_history')
+          .where('type', '==', 'admin_commission')
+          .where('timestamp', '>=', todayStart)
+          .where('timestamp', '<=', todayEnd);
+
+      adminCommissionListener = query.onSnapshot(snapshot => {
+          let totalAdminCommissionToday = 0;
+          snapshot.forEach(doc => {
+              totalAdminCommissionToday += doc.data().amount;
+          });
+
+          const adminCommissionSummaryEl = document.getElementById('admin-commission-summary');
+          // Always show the summary for consistency, styled differently if zero.
+          adminCommissionSummaryEl.innerHTML = `
+              <div class="flex justify-between items-center p-2 rounded-lg ${totalAdminCommissionToday > 0 ? 'bg-purple-100' : 'bg-gray-100'}">
+                  <div class="flex items-center gap-2">
+                      <p class="font-medium ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-600'}">Comisión Admin (Hoy)</p>
+                      <button id="refresh-commission-btn" title="Refrescar comisión del día" class="text-blue-500 hover:text-blue-700">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h5M20 20v-5h-5M4 4l1.5 1.5A9 9 0 0121 12M20 20l-1.5-1.5A9 9 0 003 12"></path></svg>
+                      </button>
+                  </div>
+                  <p class="font-semibold ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-700'}">${totalAdminCommissionToday.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
+              </div>
+          `;
+      }, error => {
+          console.error("Error fetching today's admin commission:", error);
+          document.getElementById('admin-commission-summary').innerHTML = '';
+      });
+  };
+
+  /**
+   * Checks for a specific order ID in the URL and opens the payment modal if found.
+   * This is used to handle clicks from push notifications.
+   */
+  const handleDirectPaymentFromUrl = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const orderIdToPay = urlParams.get('pay_order_id');
+
+      if (orderIdToPay && isAdmin) { // Double-check admin status
+          console.log(`[URL Handler] Detected order ID to pay: ${orderIdToPay}`);
+          loadingSpinner.classList.remove('hidden');
+          loadingSpinner.classList.add('flex');
+          try {
+              const orderDoc = await db.collection('orders').doc(orderIdToPay).get();
+              if (orderDoc.exists) {
+                  const orderData = orderDoc.data();
+                  if (orderData.status === 'Pendiente de pago') {
+                      // Open the correct payment flow based on currency
+                      if (orderData.destinationCurrency === 'VES') {
+                          openPaymentSourceModal(orderIdToPay, orderData);
+                      } else {
+                          paymentData = { orderId: orderIdToPay, orderData };
+                          showMessage('admin-upload-message', '', true);
+                          adminScreenshotInput.value = '';
+                          adminUploadModal.classList.remove('hidden');
+                          adminUploadModal.classList.add('flex');
+                      }
+                  } else {
+                      showCustomAlert(`El pedido #${orderIdToPay.slice(-5)} ya no está pendiente de pago (estado: ${orderData.status}).`);
+                  }
+              } else {
+                  showCustomAlert(`No se encontró el pedido con ID: ${orderIdToPay}`);
+              }
+          } catch (error) {
+              console.error('Error handling direct payment from URL:', error);
+              showCustomAlert(`Error al procesar el pedido desde la notificación: ${error.message}`);
+          } finally {
+              // Clean the URL to prevent re-triggering on refresh
+              history.replaceState({}, document.title, window.location.pathname);
+              loadingSpinner.classList.add('hidden');
+              loadingSpinner.classList.remove('flex');
+          }
+      }
+  };
+
   /** Attaches a real-time listener for the logged-in user's orders. */
   const attachUserOrdersListener = (userId) => {
       if (userOrdersListener) userOrdersListener(); // Detach previous listener
@@ -1040,6 +1321,9 @@ document.addEventListener('DOMContentLoaded', () => {
                       userOrdersList.innerHTML += renderUserOrder(orderData);
                   }
               });
+
+              // After populating all orders, process them to find unique beneficiaries
+              processAndRenderBeneficiaries();
           }
       }, error => {
           console.error("Error fetching user orders:", error);
@@ -1063,21 +1347,49 @@ document.addEventListener('DOMContentLoaded', () => {
                   renderAdminCountrySelector();
                   switchMainView('admin');
                   notificationsSection.classList.remove('hidden');
+                  adminCreateOrderToggleBtn.classList.remove('hidden');
                   setupPushNotifications();
                   if (!ordersListener) {
                       attachOrdersListener(); // Attach listener if admin
                       fetchAndRenderClients(); // Fetch clients when admin logs in
+                      attachAdminCommissionListener(); // NEW: Attach commission listener
+                      // Set up an interval to re-attach the listener if the day changes.
+                      if (!commissionCheckInterval) {
+                          commissionCheckInterval = setInterval(() => {
+                              const todayDateString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+                              if (commissionListenerDate !== null && todayDateString !== commissionListenerDate) {
+                                  console.log("Midnight (Chile time) has passed. Re-attaching admin commission listener for the new day.");
+                                  attachAdminCommissionListener();
+                              }
+                          }, 60 * 1000); // Check every minute
+                      }
                       // Attach listener and provide a callback to run after the first data load
                       attachAccountsListener(() => {
                           // Load today's data by default for both history sections
-                          // by simulating a click on the "Today" buttons.
-                          balanceHistoryTodayBtn.click();
-                          historicalDateTodayBtn.click();
+                          // by calling the functions directly. This is more robust than .click().
+                          console.log("Initial data load for histories...");
+                          const today = getChileanDateForPicker(new Date());
+                          
+                          // For balance history
+                          if (balanceHistoryStartInput && balanceHistoryEndInput) {
+                            balanceHistoryStartInput.valueAsDate = today;
+                            balanceHistoryEndInput.valueAsDate = today;
+                            fetchAndRenderBalanceHistory(today, today);
+                          }
+                          
+                          // For historical orders
+                          if (historicalDateStart && historicalDateEnd) {
+                            setDateRangeAndSearch(today, today);
+                          }
+
+                          // NEW: Handle direct payment from notification click
+                          handleDirectPaymentFromUrl();
                       });
                   }
               } else {
                   notificationsSection.classList.add('hidden');
                   if (ordersListener) {
+                      adminCreateOrderToggleBtn.classList.add('hidden');
                       ordersListener(); // Detach listener if not admin
                       ordersListener = null;
                   }
@@ -1095,6 +1407,7 @@ document.addEventListener('DOMContentLoaded', () => {
           isAdmin = false;
           currentUser = null;
           userIdDisplay.textContent = '';
+          adminCreateOrderToggleBtn.classList.add('hidden');
           notificationsSection.classList.add('hidden');
           mainActionBtn.textContent = 'Hacer Pedido';
           showAdminLoginBtn.classList.remove('hidden');
@@ -1107,12 +1420,25 @@ document.addEventListener('DOMContentLoaded', () => {
               userOrdersListener = null;
               userOrdersSection.classList.add('hidden'); // Hide the section
           }
+          userSavedBeneficiaries = [];
+          renderSavedBeneficiaries(); // This will clear lists and hide toggles
           isInitialOrdersLoad = true; // Reset flag on logout
           if (accountsListener) {
               accountsListener();
               accountsListener = null;
           }
+          if (adminCommissionListener) { // NEW
+              adminCommissionListener();
+              adminCommissionListener = null;
+          }
+          if (commissionCheckInterval) { // NEW
+              clearInterval(commissionCheckInterval);
+              commissionCheckInterval = null;
+              commissionListenerDate = null;
+          }
           fullClientList = [];
+          clientsSearchInput.value = '';
+          hasClientSearchBeenPerformed = false;
           updateClientView();
           // Clear balance history on logout
           balanceHistoryList.innerHTML = '';
@@ -1211,7 +1537,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const previouslySelectedId = paymentSourceList.querySelector('input:checked')?.value;
 
       paymentSourceList.innerHTML = '';
-      accountsData.forEach(account => {
+
+      // Sort accounts: those with enough balance first, then by balance descending.
+      const sortedAccounts = [...accountsData].sort((a, b) => {
+          const feeA = calculateFee(orderData, a);
+          const totalDebitA = (orderData.destinationAmount || 0) + feeA;
+          const hasEnoughA = a.balance >= totalDebitA;
+
+          const feeB = calculateFee(orderData, b);
+          const totalDebitB = (orderData.destinationAmount || 0) + feeB;
+          const hasEnoughB = b.balance >= totalDebitB;
+
+          if (hasEnoughA && !hasEnoughB) return -1; // a comes first
+          if (!hasEnoughA && hasEnoughB) return 1;  // b comes first
+          
+          // If both have enough, or neither has enough, sort by balance descending
+          return b.balance - a.balance;
+      });
+
+      sortedAccounts.forEach(account => {
           const fee = calculateFee(orderData, account);
           // Use destinationAmount, with a fallback to vesAmount for migrated data
           const totalDebit = (orderData.destinationAmount || orderData.vesAmount || 0) + fee;
@@ -1219,8 +1563,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const radioId = `account-${account.id}`;
           const accountEl = document.createElement('div');
           accountEl.innerHTML = `
-              <label for="${radioId}" class="flex items-center p-3 rounded-lg border transition-all ${hasEnoughBalance ? 'cursor-pointer hover:bg-gray-100' : 'opacity-50 bg-gray-200'}">
-                  <input type="radio" name="payment-source" id="${radioId}" value="${account.id}" class="mr-3" ${!hasEnoughBalance ? 'disabled' : ''} ${account.id === previouslySelectedId ? 'checked' : ''}>
+              <label for="${radioId}" class="flex items-center p-3 rounded-lg border transition-all ${hasEnoughBalance ? 'cursor-pointer hover:bg-gray-100 border-gray-200' : 'opacity-60 bg-red-50 border-red-200'}">
+                  <input type="radio" name="payment-source" id="${radioId}" value="${account.id}" class="h-5 w-5 text-blue-600 focus:ring-blue-500 mr-3" ${!hasEnoughBalance ? 'disabled' : ''} ${account.id === previouslySelectedId ? 'checked' : ''}>
                   <div class="flex-grow">
                       <p class="font-semibold">${account.holder} - ${account.bank}</p>
                       <p class="text-sm text-gray-600">Disponible: ${account.balance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>
@@ -1246,44 +1590,43 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  /** Attaches a real-time listener for the accounts collection. */
-  const attachAccountsListener = (onFirstLoadCallback) => {
-    console.log('[Listener] Adjuntando listener de cuentas...');
-    if (accountsListener) {
-        accountsListener(); // Detach previous listener
-    }
+  // --- Saved Beneficiaries Logic ---
+  toggleSavedAccountsTransferencia.addEventListener('click', () => savedAccountsListTransferencia.classList.toggle('hidden'));
+  toggleSavedAccountsPagoMovil.addEventListener('click', () => savedAccountsListPagoMovil.classList.toggle('hidden'));
+  toggleSavedAccountsRecargaSaldo.addEventListener('click', () => savedAccountsListRecargaSaldo.classList.toggle('hidden'));
 
-    let isFirstLoad = true;
+  const handleBeneficiarySelect = (e) => {
+      const card = e.target.closest('[data-beneficiary]');
+      if (!card) return;
 
-    accountsListener = db.collection('accounts').onSnapshot(snapshot => {
-        let totalBalance = 0;
-        accountsData = [];
-        snapshot.forEach(doc => {
-            const account = { id: doc.id, ...doc.data() };
-            accountsData.push(account);
-            totalBalance += account.balance || 0;
-        });
+      const beneficiary = JSON.parse(card.dataset.beneficiary);
+      const formId = `remittance-form-${beneficiary.type}`;
+      const form = document.getElementById(formId);
+      if (!form) return;
 
-        // Update global balance display
-        vesBalanceDisplay.textContent = totalBalance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
-        
-        // Render the list of individual account balances
-        renderAccountsBalanceList();
+      // Fill common fields
+      form.querySelector('input[id^="name-"]').value = beneficiary.name;
+      form.querySelector('input[id^="cedula-"]').value = beneficiary.cedula;
 
-        // NEW: Refresh the payment source modal if it's active
-        renderPaymentSourceList();
+      // Fill specific fields
+      switch (beneficiary.type) {
+          case 'transferencia':
+              form.querySelector('#bank-transferencia').value = beneficiary.bank;
+              form.querySelector('#account-type-transferencia').value = beneficiary.accountType;
+              form.querySelector('#account-number-transferencia').value = beneficiary.accountNumber;
+              break;
+          case 'pago-movil':
+              form.querySelector('#phone-pm').value = beneficiary.phone;
+              form.querySelector('#bank-pm').value = beneficiary.bank;
+              break;
+          case 'recarga-saldo':
+              form.querySelector('#phone-rs').value = beneficiary.phone;
+              break;
+      }
 
-        // If it's the first time this listener runs, execute the callback
-        if (isFirstLoad && typeof onFirstLoadCallback === 'function') {
-            onFirstLoadCallback();
-            isFirstLoad = false;
-        }
-
-    }, error => {
-        console.error("Error en listener de cuentas:", error);
-        vesBalanceDisplay.textContent = 'Error';
-        document.getElementById('accounts-balance-list').innerHTML = '<p class="text-red-500">Error al cargar saldos.</p>';
-    });
+      card.parentElement.classList.add('hidden');
+      const messageElId = form.querySelector('p[id^="user-message-"]').id;
+      showMessage(messageElId, `Datos de ${beneficiary.name} seleccionados.`, true);
   };
 
   // --- Paste from Clipboard Logic ---
@@ -1488,6 +1831,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const messaging = firebase.messaging();
 
+    // --- NEW: Handle foreground notifications ---
+    messaging.onMessage((payload) => {
+        console.log('Mensaje recibido en primer plano: ', payload);
+        
+        // 1. Play sound
+        const notificationSound = document.getElementById('notification-sound');
+        if (notificationSound) {
+            notificationSound.play().catch(error => {
+                console.warn("No se pudo reproducir el sonido de notificación.", error);
+            });
+        }
+
+        // 2. Show prominent alert using data from the payload
+        const alertMessage = `
+            <h3 class="text-2xl font-bold text-green-600 mb-2">${payload.data.title || '¡Nuevo Pedido!'}</h3>
+            <p class="text-gray-700">${payload.data.body || 'Ha llegado un nuevo pedido.'}</p>
+        `;
+        showCustomAlert(alertMessage);
+
+        // 3. Change document title to alert user
+        document.title = '(!) Nuevo Pedido - Cambios Manzano';
+    });
+
     // Check current permission status and update button
     if (Notification.permission === 'granted') {
         enableNotificationsBtn.textContent = 'Notificaciones Activadas';
@@ -1539,7 +1905,18 @@ document.addEventListener('DOMContentLoaded', () => {
         document.title = 'Cambios Manzano';
     }
   };
-  window.addEventListener('focus', resetTitle);
+  window.addEventListener('focus', () => {
+      resetTitle();
+      // Also check if the commission listener needs to be reset when the tab regains focus.
+      // This is more reliable than just setInterval for tabs that go to sleep.
+      if (isAdmin && commissionListenerDate !== null) {
+          const todayDateString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
+          if (todayDateString !== commissionListenerDate) {
+              console.log("[Focus] Window refocused and day has changed. Re-attaching admin commission listener.");
+              attachAdminCommissionListener();
+          }
+      }
+  });
   window.addEventListener('click', resetTitle);
 
   // Register the service worker for Firebase Messaging
@@ -1835,6 +2212,10 @@ document.addEventListener('DOMContentLoaded', () => {
   pasteBtnPagoMovil.addEventListener('click', () => handlePasteData(pagoMovilFields, 'user-message-pm'));
   pasteBtnRecargaSaldo.addEventListener('click', () => handlePasteData(recargaSaldoFields, 'user-message-rs'));
 
+  savedAccountsListTransferencia.addEventListener('click', handleBeneficiarySelect);
+  savedAccountsListPagoMovil.addEventListener('click', handleBeneficiarySelect);
+  savedAccountsListRecargaSaldo.addEventListener('click', handleBeneficiarySelect);
+
   // Show/Hide paste examples
   showExampleTransferencia.addEventListener('click', (e) => {
       e.preventDefault();
@@ -2119,6 +2500,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
           await batch.commit();
 
+          // Manually update local state to avoid waiting for the listener and allow consecutive payments.
+          if (orderData.destinationCurrency === 'VES' && selectedAccountId) {
+              const accountIndex = accountsData.findIndex(acc => acc.id === selectedAccountId);
+              if (accountIndex > -1) {
+                  // Recalculate totalDebit as it was defined in a higher scope
+                  const adminCommission = orderData.destinationAmount * 0.01;
+                  const totalDebit = orderData.destinationAmount + fee + adminCommission;
+                  
+                  accountsData[accountIndex].balance -= totalDebit;
+                  
+                  // Also re-render the main balance list to reflect the change immediately
+                  renderAccountsBalanceList();
+              }
+          }
+
           showMessage('rate-message', 'Pedido pagado y marcado como completado.', true);
           
           // 4. Close modal and clean up
@@ -2182,56 +2578,84 @@ document.addEventListener('DOMContentLoaded', () => {
   const setDateRangeAndSearch = (start, end) => {
       historicalDateStart.valueAsDate = start;
       historicalDateEnd.valueAsDate = end;
-      handleHistoricalSearch();
+      handleHistoricalSearch(start, end);
   };
 
-  historicalDateTodayBtn.addEventListener('click', () => {
-      const today = getChileanDateForPicker(new Date());
-      setDateRangeAndSearch(today, today);
-  });
+  // Defensive event listeners for historical search buttons
+  if (historicalDateTodayBtn) {
+    historicalDateTodayBtn.addEventListener('click', () => {
+        const today = getChileanDateForPicker(new Date());
+        setDateRangeAndSearch(today, today);
+    });
+  } else {
+      console.error("Button with ID 'historical-date-today' was not found.");
+  }
 
-  historicalDateYesterdayBtn.addEventListener('click', () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const chileYesterday = getChileanDateForPicker(yesterday);
-      setDateRangeAndSearch(chileYesterday, chileYesterday);
-  });
+  if (historicalDateYesterdayBtn) {
+    historicalDateYesterdayBtn.addEventListener('click', () => {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const chileYesterday = getChileanDateForPicker(yesterday);
+        setDateRangeAndSearch(chileYesterday, chileYesterday);
+    });
+  } else {
+      console.error("Button with ID 'historical-date-yesterday' was not found.");
+  }
 
-  historicalDate7DaysBtn.addEventListener('click', () => {
-      const start = new Date();
-      start.setDate(start.getDate() - 6);
-      const chileStart = getChileanDateForPicker(start);
-      const chileEnd = getChileanDateForPicker(new Date());
-      setDateRangeAndSearch(chileStart, chileEnd);
-  });
+  if (historicalDate7DaysBtn) {
+    historicalDate7DaysBtn.addEventListener('click', () => {
+        const start = new Date();
+        start.setDate(start.getDate() - 6);
+        const chileStart = getChileanDateForPicker(start);
+        const chileEnd = getChileanDateForPicker(new Date());
+        setDateRangeAndSearch(chileStart, chileEnd);
+    });
+  } else {
+      console.error("Button with ID 'historical-date-7days' was not found.");
+  }
 
-  historicalStatusFilters.addEventListener('click', (e) => {
-      if (e.target.tagName === 'BUTTON') {
-          historicalStatusFilters.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-          e.target.classList.add('active');
-          handleHistoricalSearch();
+  // Event delegation for the dynamically added refresh button
+  adminPanel.addEventListener('click', (e) => {
+      if (e.target.closest('#refresh-commission-btn')) {
+          attachAdminCommissionListener();
       }
   });
 
-  /** Fetches and displays historical orders based on selected filters. */
-  const handleHistoricalSearch = async () => {
-      const startDateVal = historicalDateStart.valueAsDate;
-      const endDateVal = historicalDateEnd.valueAsDate;
+  // Admin: Toggle order creation form
+  adminCreateOrderToggleBtn.addEventListener('click', () => {
+      const isHidden = userInterface.classList.toggle('hidden');
+      adminCreateOrderToggleBtn.textContent = isHidden ? 'Ingresar Pedido' : 'Ocultar Formulario';
 
-      if (!startDateVal || !endDateVal) {
+      // Show/hide backdate section for admin
+      const adminBackdateSection = document.getElementById('admin-backdate-section');
+      if (isAdmin && !isHidden) {
+          adminBackdateSection.classList.remove('hidden');
+      } else {
+          adminBackdateSection.classList.add('hidden');
+      }
+
+      if (!isHidden) {
+          userInterface.scrollIntoView({ behavior: 'smooth' });
+      }
+  });
+
+  /** Fetches and displays historical orders based on a date range and filters. */
+  const handleHistoricalSearch = async (start, end) => {
+      if (!start || !end) {
           return; // Don't search if dates are not set
       }
 
       loadingSpinner.classList.remove('hidden');
       loadingSpinner.classList.add('flex');
       historicalOrdersList.innerHTML = '';
+      historicalIdSearchInput.value = ''; // Clear ID search when doing a date search
       noHistoricalOrdersMessage.classList.add('hidden');
       exportExcelBtn.disabled = true;
 
-      // valueAsDate is already UTC midnight, which is perfect for querying.
-      const start = startDateVal;
-      const end = new Date(endDateVal);
-      end.setHours(23, 59, 59, 999);
+      const startDateString = start.toISOString().slice(0, 10);
+      const endDateString = end.toISOString().slice(0, 10);
+      const queryStart = new Date(`${startDateString}T00:00:00-04:00`);
+      const queryEnd = new Date(`${endDateString}T23:59:59-04:00`);
 
       const activeStatusBtn = historicalStatusFilters.querySelector('button.active');
       const statusFilter = activeStatusBtn ? activeStatusBtn.dataset.status : 'Todos';
@@ -2241,8 +2665,8 @@ document.addEventListener('DOMContentLoaded', () => {
           // So, we fetch by date range first, then filter by status on the client-side.
           const query = db.collection('orders')
               .where('country', '==', adminSelectedCountry)
-              .where('createdAt', '>=', start)
-              .where('createdAt', '<=', end)
+              .where('createdAt', '>=', queryStart)
+              .where('createdAt', '<=', queryEnd)
               .orderBy('createdAt', 'desc');
           
           const snapshot = await query.get();
@@ -2266,16 +2690,18 @@ document.addEventListener('DOMContentLoaded', () => {
               let totalCLP = 0;
               let totalVES = 0;
               historicalOrdersData = [];
+              let historicalOrdersHtml = '';
 
               filteredOrders.forEach(orderData => {
                   // We need to simulate a doc snapshot for renderOrder
                   const mockDoc = { id: orderData.id, data: () => orderData };
-                  historicalOrdersList.innerHTML += renderOrder(mockDoc);
+                  historicalOrdersHtml += renderOrder(mockDoc);
                   historicalOrdersData.push(orderData);
                   if (orderData.status === 'Pagado') {
                       totalCLP += orderData.clpAmount || 0;
                   }
               });
+              historicalOrdersList.innerHTML = historicalOrdersHtml;
               historicalSearchSummary.textContent = `Se encontraron ${filteredOrders.length} pedidos. Total Pagado (CLP): ${totalCLP.toLocaleString('es-CL', {style: 'currency', currency: 'CLP'})}.`;
               exportExcelBtn.disabled = false;
           }
@@ -2293,6 +2719,88 @@ document.addEventListener('DOMContentLoaded', () => {
           loadingSpinner.classList.remove('flex');
       }
   };
+
+  historicalSearchBtn.addEventListener('click', () => {
+      const startDateVal = historicalDateStart.valueAsDate;
+      const endDateVal = historicalDateEnd.valueAsDate;
+      if (!startDateVal || !endDateVal) {
+          showCustomAlert('Por favor, selecciona un rango de fechas para buscar.');
+          return;
+      }
+      handleHistoricalSearch(startDateVal, endDateVal);
+  });
+
+  historicalIdSearchBtn.addEventListener('click', async () => {
+      const lastDigits = historicalIdSearchInput.value.trim();
+      if (!lastDigits) {
+          showCustomAlert('Por favor, ingresa los últimos 5 dígitos del ID del pedido.');
+          return;
+      }
+
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+      historicalOrdersList.innerHTML = '';
+      noHistoricalOrdersMessage.classList.add('hidden');
+      historicalSearchSummary.textContent = `Buscando pedidos que terminen en "${lastDigits}"...`;
+      exportExcelBtn.disabled = true;
+      historicalOrdersData = [];
+
+      try {
+          // To avoid scanning the entire collection, we'll limit the search to the last 90 days.
+          const ninetyDaysAgo = new Date();
+          ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+          const query = db.collection('orders')
+              .where('country', '==', adminSelectedCountry)
+              .where('createdAt', '>=', ninetyDaysAgo)
+              .orderBy('createdAt', 'desc');
+
+          const snapshot = await query.get();
+          const matchingOrders = [];
+          snapshot.forEach(doc => {
+              if (doc.id.endsWith(lastDigits)) {
+                  matchingOrders.push({ id: doc.id, ...doc.data() });
+              }
+          });
+
+          if (matchingOrders.length > 0) {
+              let historicalOrdersHtml = '';
+              matchingOrders.forEach(orderData => {
+                  const mockDoc = { id: orderData.id, data: () => orderData };
+                  historicalOrdersHtml += renderOrder(mockDoc);
+              });
+              historicalOrdersList.innerHTML = historicalOrdersHtml;
+              historicalSearchSummary.textContent = `Se encontraron ${matchingOrders.length} pedido(s) en los últimos 90 días.`;
+          } else {
+              noHistoricalOrdersMessage.classList.remove('hidden');
+              noHistoricalOrdersMessage.textContent = `No se encontró ningún pedido que termine en "${lastDigits}" en los últimos 90 días. Considera usar la búsqueda por fecha.`;
+              historicalSearchSummary.textContent = 'No se encontraron resultados.';
+          }
+      } catch (error) {
+          console.error("Error searching by last digits:", error);
+          historicalSearchSummary.textContent = 'Error al buscar por ID.';
+          if (error.code === 'failed-precondition') {
+              const detailedMessage = 'Error: La base de datos requiere un índice para esta consulta. Por favor, abre la consola del navegador (F12), busca el error de Firebase y haz clic en el enlace que proporciona para crear el índice automáticamente.';
+              showCustomAlert(detailedMessage);
+          }
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
+  });
+
+  historicalStatusFilters.addEventListener('click', (e) => {
+      if (e.target.tagName === 'BUTTON') {
+          historicalStatusFilters.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+          e.target.classList.add('active');
+          // Re-run search with current dates
+          const startDateVal = historicalDateStart.valueAsDate;
+          const endDateVal = historicalDateEnd.valueAsDate;
+          if (startDateVal && endDateVal) {
+            handleHistoricalSearch(startDateVal, endDateVal);
+          }
+      }
+  });
 
   /** Exports the currently fetched historical orders to an Excel file. */
   const exportHistoricalOrdersToExcel = () => {
@@ -2336,7 +2844,6 @@ document.addEventListener('DOMContentLoaded', () => {
           exportBalanceExcelBtn.disabled = true;
           balanceHistoryData = [];
           return;
-          updateStoreStatusView(); // Re-evaluate store status on login
       }
 
       loadingSpinner.classList.remove('hidden');
@@ -2346,10 +2853,11 @@ document.addEventListener('DOMContentLoaded', () => {
       balanceHistoryHeader.classList.add('hidden');
 
       try {
-          // The date picker gives us a UTC midnight date, which is correct for starting the query.
-          const queryStart = start;
-          const queryEnd = new Date(end);
-          queryEnd.setUTCHours(23, 59, 59, 999);
+          const startDateString = start.toISOString().slice(0, 10);
+          const endDateString = end.toISOString().slice(0, 10);
+          const queryStart = new Date(`${startDateString}T00:00:00-04:00`);
+          const queryEnd = new Date(`${endDateString}T23:59:59-04:00`);
+
           // 1. Get the total current balance from all accounts to calculate running balance
           const totalCurrentBalance = accountsData.reduce((sum, acc) => sum + (acc.balance || 0), 0);
 
@@ -2365,7 +2873,6 @@ document.addEventListener('DOMContentLoaded', () => {
               noBalanceHistoryMessage.classList.remove('hidden');
               balanceHistoryData = [];
               exportBalanceExcelBtn.disabled = true;
-              document.getElementById('admin-commission-summary').innerHTML = '';
           } else {
               balanceHistoryHeader.classList.remove('hidden');
               
@@ -2392,22 +2899,6 @@ document.addEventListener('DOMContentLoaded', () => {
                   const historyElement = renderBalanceHistoryItem(item);
                   balanceHistoryList.appendChild(historyElement);
               });
-
-              // Calculate and display admin commission for the period
-              const adminCommissionSummaryEl = document.getElementById('admin-commission-summary');
-              const adminCommissions = movementsWithBalance.filter((m) => m.type === 'admin_commission');
-              const totalAdminCommission = adminCommissions.reduce((sum, item) => sum + item.amount, 0);
-
-              if (totalAdminCommission > 0) {
-                  adminCommissionSummaryEl.innerHTML = `
-                      <div class="flex justify-between items-center p-2 bg-purple-100 rounded-lg">
-                          <p class="font-medium text-purple-800">Comisión Admin (Período)</p>
-                          <p class="font-semibold text-purple-800">${totalAdminCommission.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
-                      </div>
-                  `;
-              } else {
-                  adminCommissionSummaryEl.innerHTML = '';
-              }
               exportBalanceExcelBtn.disabled = false;
           }
       } catch (error) {
@@ -2426,7 +2917,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const today = getChileanDateForPicker(new Date());
       balanceHistoryStartInput.valueAsDate = today;
       balanceHistoryEndInput.valueAsDate = today;
-      balanceHistorySearchBtn.click(); // Automatically search
+      fetchAndRenderBalanceHistory(today, today);
   });
 
   balanceHistoryYesterdayBtn.addEventListener('click', () => {
@@ -2435,16 +2926,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const chileYesterday = getChileanDateForPicker(yesterday);
       balanceHistoryStartInput.valueAsDate = chileYesterday;
       balanceHistoryEndInput.valueAsDate = chileYesterday;
-      balanceHistorySearchBtn.click(); // Automatically search
+      fetchAndRenderBalanceHistory(chileYesterday, chileYesterday);
   });
 
   balanceHistory7DaysBtn.addEventListener('click', () => {
       const end = new Date();
       const start = new Date();
       start.setDate(start.getDate() - 6);
-      balanceHistoryStartInput.valueAsDate = getChileanDateForPicker(start);
-      balanceHistoryEndInput.valueAsDate = getChileanDateForPicker(end);
-      balanceHistorySearchBtn.click(); // Automatically search
+      const chileStart = getChileanDateForPicker(start);
+      const chileEnd = getChileanDateForPicker(end);
+      balanceHistoryStartInput.valueAsDate = chileStart;
+      balanceHistoryEndInput.valueAsDate = chileEnd;
+      fetchAndRenderBalanceHistory(chileStart, chileEnd);
   });
 
   balanceHistorySearchBtn.addEventListener('click', () => {
@@ -2509,12 +3002,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // New event listeners for client list
   clientsSearchInput.addEventListener('input', () => {
+      hasClientSearchBeenPerformed = true;
       clientListPage = 1;
       updateClientView();
   });
 
   clientSortNameBtn.addEventListener('click', () => {
       clientListSortBy = 'name';
+      hasClientSearchBeenPerformed = true;
       clientListPage = 1;
       updateClientView();
   });
@@ -2522,6 +3017,7 @@ document.addEventListener('DOMContentLoaded', () => {
   clientSortCedulaBtn.addEventListener('click', () => {
       clientListSortBy = 'cedula';
       clientListPage = 1;
+      hasClientSearchBeenPerformed = true;
       updateClientView();
   });
 
@@ -2540,35 +3036,60 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   });
 
-  // Add event listeners for order form submissions
-  formTransferencia.addEventListener('submit', (e) => handleOrderSubmit(e, 'transferencia'));
-  formPagoMovil.addEventListener('submit', (e) => handleOrderSubmit(e, 'pago-movil'));
-  formRecargaSaldo.addEventListener('submit', (e) => handleOrderSubmit(e, 'recarga-saldo'));
+  /**
+   * Finalizes an order creation, handling both client (with screenshot) and admin (without screenshot/with backdating) cases.
+   * @param {boolean} withScreenshot - True if a screenshot upload is required.
+   */
+  const finalizeOrder = async (withScreenshot) => {
+      if (!orderDataToConfirm.data) {
+          const messageElId = withScreenshot ? 'client-upload-message' : orderDataToConfirm.form.querySelector('p[id^="user-message-"]').id;
+          return showMessage(messageElId, 'Error: No hay datos de pedido para procesar.', false);
+      }
 
-  // Listeners for the new order confirmation modal
-  orderFinalConfirmBtn.addEventListener('click', async () => {
+      let file = null;
+      if (withScreenshot) {
+          file = clientScreenshotInput.files[0];
+          if (!file) {
+              return showMessage('client-upload-message', 'Por favor, selecciona el archivo del comprobante.', false);
+          }
+      }
+
       loadingSpinner.classList.remove('hidden');
       loadingSpinner.classList.add('flex');
-      orderConfirmModal.classList.add('hidden');
-      orderConfirmModal.classList.remove('flex');
+      const messageElId = withScreenshot ? 'client-upload-message' : orderDataToConfirm.form.querySelector('p[id^="user-message-"]').id;
+      showMessage(messageElId, 'Procesando pedido...', true);
 
       const { data, form } = orderDataToConfirm;
-      const messageElId = form.querySelector('p[id^="user-message-"]').id;
 
       try {
-          // Add timestamp just before sending
-          data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          const newOrderRef = db.collection('orders').doc();
+          const orderId = newOrderRef.id;
 
-          await db.collection('orders').add(data);
-          
-          form.reset();
-          // This correctly resets the amounts and labels for the current country.
-          updateUserFormsForCountry();
-          
-          if (isAdmin) {
-              fetchAndRenderClients();
+          if (withScreenshot && file) {
+              const filePath = `client_proofs/${orderId}/${file.name}`;
+              const fileRef = storage.ref(filePath);
+              const uploadTask = await fileRef.put(file);
+              data.clientProofUrl = await uploadTask.ref.getDownloadURL();
+          } else {
+              data.clientProofUrl = ''; // Admin doesn't need to upload client proof
           }
 
+          // --- BACKDATING LOGIC ---
+          const backdateInput = document.getElementById('admin-order-date-input');
+          if (isAdmin && backdateInput && backdateInput.value) {
+              const dateValue = backdateInput.value; // YYYY-MM-DD
+              const timestamp = new Date(`${dateValue}T12:00:00-04:00`); // Noon Chile time with fixed offset
+              data.createdAt = timestamp;
+          } else {
+              data.createdAt = firebase.firestore.FieldValue.serverTimestamp();
+          }
+          // --- END BACKDATING LOGIC ---
+
+          await newOrderRef.set(data);
+          
+          form.reset();
+          updateUserFormsForCountry();
+          if (backdateInput) backdateInput.value = ''; // Also reset the backdate input
           showMessage(messageElId, '¡Pedido enviado con éxito!', true);
           
       } catch (error) {
@@ -2577,14 +3098,47 @@ document.addEventListener('DOMContentLoaded', () => {
       } finally {
           loadingSpinner.classList.add('hidden');
           loadingSpinner.classList.remove('flex');
+          if (withScreenshot) {
+              clientUploadModal.classList.add('hidden');
+              clientUploadModal.classList.remove('flex');
+          }
           orderDataToConfirm = {}; // Clear state
       }
+  };
+
+  // Add event listeners for order form submissions
+  formTransferencia.addEventListener('submit', (e) => handleOrderSubmit(e, 'transferencia'));
+  formPagoMovil.addEventListener('submit', (e) => handleOrderSubmit(e, 'pago-movil'));
+  formRecargaSaldo.addEventListener('submit', (e) => handleOrderSubmit(e, 'recarga-saldo'));
+
+  // Listeners for the new order confirmation modal
+  orderFinalConfirmBtn.addEventListener('click', () => {
+      orderConfirmModal.classList.add('hidden');
+      orderConfirmModal.classList.remove('flex');
+
+      // If it's an admin creating the order, they can skip the screenshot.
+      if (isAdmin) {
+          finalizeOrder(false); // Finalize without screenshot
+      } else {
+          // For regular clients, ask for the payment proof.
+          clientUploadModal.classList.remove('hidden');
+          clientUploadModal.classList.add('flex');
+          clientUploadMessage.textContent = '';
+          clientScreenshotInput.value = '';
+      }
   });
+
+  clientUploadConfirmBtn.addEventListener('click', () => finalizeOrder(true));
 
   orderFinalCancelBtn.addEventListener('click', () => {
       orderConfirmModal.classList.add('hidden');
       orderConfirmModal.classList.remove('flex');
       orderDataToConfirm = {}; // Clear state
+  });
+  clientUploadCancelBtn.addEventListener('click', () => {
+      clientUploadModal.classList.add('hidden');
+      clientUploadModal.classList.remove('flex');
+      orderDataToConfirm = {}; // Clear the state, the user cancelled the whole process.
   });
   // Autocomplete for Cedula
   cedulaInputs.forEach(input => {
@@ -2800,39 +3354,6 @@ document.addEventListener('DOMContentLoaded', () => {
       form.addEventListener('submit', handleAddClientSubmit);
   });
 
-  // Paste buttons for Add Client Modal
-  pasteBtnAddClientTransferencia.addEventListener('click', () => handlePasteData(addClientTransferenciaFields, 'add-client-message'));
-  pasteBtnAddClientPm.addEventListener('click', () => handlePasteData(addClientPagoMovilFields, 'add-client-message'));
-  pasteBtnAddClientRecarga.addEventListener('click', () => handlePasteData(addClientRecargaFields, 'add-client-message'));
-
-  // Autocomplete for "Add Client" modal
-  addClientCedulaInputs.forEach(input => {
-      if (input) {
-          input.addEventListener('blur', (e) => {
-              const cedulaValue = e.target.value.replace(/[^0-9]/g, '');
-              // Clear message on every blur, then show if client found
-              showMessage('add-client-message', '', true); 
-              if (!cedulaValue || fullClientList.length === 0) return;
-
-              const clientLastOrder = fullClientList.find(c => c.cedula === cedulaValue);
-              
-              if (clientLastOrder) {
-                  const form = e.target.closest('form');
-                  if (!form) return;
-
-                  // Autocomplete name field
-                  const nameInput = form.querySelector('input[id^="add-client-name-"]');
-                  if (nameInput) {
-                      nameInput.value = clientLastOrder.clientName;
-                  }
-                  
-                  // Show message
-                  showMessage('add-client-message', 'Cliente registrado. ¿Deseas agregar otra cuenta?', true);
-              }
-          });
-      }
-  });
-
   // Listener for the admin country selector
   adminCountrySelector.addEventListener('click', (e) => {
       const target = e.target.closest('.country-tab-btn');
@@ -2849,6 +3370,8 @@ document.addEventListener('DOMContentLoaded', () => {
               attachOrdersListener(); // Attach new one for the selected country
           }
           fetchAndRenderClients();
+          clientsSearchInput.value = '';
+          hasClientSearchBeenPerformed = false;
           
           // Instead of just clearing or partially reloading,
           // simulate clicks on the "Today" buttons for both history sections.

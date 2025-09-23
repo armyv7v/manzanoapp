@@ -62,22 +62,40 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     const amountCLP = newOrder.clpAmount.toLocaleString("es-CL", {
       style: "currency", currency: "CLP",
     });
+    const notificationTitle = "¡Nuevo Pedido Recibido! 🍏";
+    const notificationBody = `ID: ${orderId.slice(-5)} | ${newOrder.clientName} | ${amountCLP}`;
+    const clickAction = `https://manzanoapp-2f775.web.app/?pay_order_id=${orderId}`;
+
     const payload = {
+      // The 'notification' payload is for when the app is in the background.
+      // It's handled by the system, ensuring delivery.
       notification: {
-        title: "¡Nuevo Pedido Recibido! 🍏",
-        body: `ID: ${orderId.slice(-5)} | ${newOrder.clientName} | ${amountCLP}`,
+        title: notificationTitle,
+        body: notificationBody,
         icon: "https://manzanoapp-2f775.web.app/images/apple-touch-icon.png",
-        click_action: "https://manzanoapp-2f775.web.app/",
-        // Añadimos la URL del sonido que queremos que se reproduzca
-        sound: "https://manzanoapp-2f775.web.app/sounds/notification.mp3",
+        click_action: clickAction,
+        tag: "new-order",
+      },
+      // The 'data' payload is for when the app is in the foreground.
+      // It allows us to show a custom in-app alert.
+      data: {
+        title: notificationTitle,
+        body: notificationBody,
+        click_action: clickAction,
       },
     };
 
     console.log(`Sending notification to ${uniqueTokens.length} token(s).`);
 
-    // 5. Send the notification to all collected tokens.
+    // 5. Define options for high-priority delivery.
+    const options = {
+      priority: "high",
+      timeToLive: 60 * 60 * 24, // Keep message for 24 hours if device is offline
+    };
+
+    // 6. Send the notification to all collected tokens with high priority.
     try {
-      await admin.messaging().sendToDevice(uniqueTokens, payload);
+      await admin.messaging().sendToDevice(uniqueTokens, payload, options);
       console.log("Notifications sent successfully.");
     } catch (error) {
       console.error("Error sending notifications:", error);
