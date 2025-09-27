@@ -1,40 +1,66 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Rule 1: Public read access for exchange rates.
-    match /config/rate {
+    // Default deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Config collection (exchange rates, store status) is public to read
+    match /config/{docId} {
       allow read: if true;
-      // Only admins can write to config.
       allow write: if request.auth.token.admin == true;
     }
 
-    // Rule 2: Rules for the 'orders' collection.
+    // Orders collection
     match /orders/{orderId} {
-      // A logged-in user can create an order if they are setting their own userId.
+      // Admins can do anything to any order
+      allow read, write: if request.auth.token.admin == true; // read = get + list
+
+      // Logged-in users (clients or sellers) can create orders for themselves
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
 
-      // A user can read their own orders. Admins can read any order.
-      // This rule allows the query: .where('userId', '==', request.auth.uid)
-      allow read: if (request.auth != null && resource.data.userId == request.auth.uid) || request.auth.token.admin == true;
+      // Sellers can list the entire collection to build their client list for autocomplete.
+      // Regular clients cannot list the whole collection.
+      allow list: if request.auth.token.seller == true; 
 
-      // Only admins can update or delete orders.
-      allow update, delete: if request.auth.token.admin == true;
+      // Any authenticated user can read (get/list) documents where their UID matches the userId field.
+      // This is the rule that allows both clients and sellers to see their own order history.
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
-    // Rule for FCM tokens, only admins can have tokens.
+    // FCM Tokens for notifications
     match /fcm_tokens/{userId} {
-      allow read, write: if request.auth.uid == userId && request.auth.token.admin == true;
+      // Only the owner can write their own tokens
+      allow write: if request.auth != null && request.auth.uid == userId;
+      // Admins can read all tokens to send notifications
+      allow read: if request.auth.token.admin == true;
     }
 
-    // Rule 3: Rules for 'accounts' and 'balance_history' - only accessible by admins.
+    // Accounts for balance management
     match /accounts/{accountId} {
-      allow read, write: if request.auth.token.admin == true;
+        allow read, write: if request.auth.token.admin == true;
     }
 
+    // Balance history
     match /balance_history/{historyId} {
-      allow read, write: if request.auth.token.admin == true;
+        allow read, write: if request.auth.token.admin == true;
+    }
+
+    // Seller commissions collection
+    match /seller_commissions/{commissionId} {
+        // Admins can read all commissions
+        allow read: if request.auth.token.admin == true;
+        // Sellers can read their own commissions
+        allow read: if request.auth.token.seller == true && resource.data.sellerId == request.auth.uid;
+        // Nobody can write directly, only the backend function
+        allow write: if false;
+    }
+
+    // CLP balance history
+    match /clp_balance_history/{historyId} {
+        allow read, write: if request.auth.token.admin == true;
     }
   }
 }

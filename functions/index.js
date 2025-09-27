@@ -1,18 +1,41 @@
-const {onDocumentCreated} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {setGlobalOptions} = require("firebase-functions/v2");
 const admin = require("firebase-admin");
+const serviceAccount = require("./serviceAccountKey.json");
 
-admin.initializeApp();
+// This constant was removed from the frontend but is still needed here for context.
+const supportedCountries = {
+    VES: { name: 'Venezuela', flag: '🇻🇪' },
+    COP: { name: 'Colombia', flag: '🇨🇴' },
+    PEN: { name: 'Perú', flag: '🇵🇪' },
+    ARS: { name: 'Argentina', flag: '🇦🇷' },
+    USD: { name: 'EE.UU.', flag: '🇺🇸' },
+    EUR: { name: 'Europa', flag: '🇪🇺' },
+};
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  projectId: "manzanoapp-2f775", // Explicitly set the project ID
+});
 
 /**
  * This function triggers when a new order is created in Firestore.
  * It sends a push notification to all registered admin devices.
  */
 
-// Define la región donde se ejecutarán tus funciones. Es una buena práctica.
-setGlobalOptions({region: "us-central1"});
+// Define la región y aumenta los recursos para diagnóstico.
+// El error de timeout durante la inicialización a veces se resuelve
+// especificando explícitamente más memoria y tiempo.
+setGlobalOptions({
+  region: "us-central1",
+  timeoutSeconds: 60, // Aumentado de 10s (implícito) a 60s
+  memory: "256MB",    // Aumentado de 128MB (implícito)
+});
 
 exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (event) => {
+    // Add a version log to verify deployment
+    console.log("Executing function version: v3. Notif Fix.");
+
     // Get the orderId from the event parameters
     const {orderId} = event.params;
 
@@ -45,7 +68,11 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     tokensSnapshot.forEach((doc) => {
       const adminData = doc.data();
       if (adminData.tokens && Array.isArray(adminData.tokens)) {
-        adminData.tokens.forEach((token) => allTokens.add(token));
+        adminData.tokens.forEach((token) => {
+          if (token && typeof token === "string" && token.length > 0) {
+            allTokens.add(token);
+          }
+        });
       }
     });
 
@@ -85,21 +112,70 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
       },
     };
 
-    console.log(`Sending notification to ${uniqueTokens.length} token(s).`);
+    console.log(`Intentando enviar notificación a ${uniqueTokens.length} token(s).`);
 
     // 5. Define options for high-priority delivery.
     const options = {
       priority: "high",
       timeToLive: 60 * 60 * 24, // Keep message for 24 hours if device is offline
     };
-
+    
     // 6. Send the notification to all collected tokens with high priority.
     try {
-      await admin.messaging().sendToDevice(uniqueTokens, payload, options);
+      const response = await admin.messaging().sendToDevice(uniqueTokens, payload, options);
       console.log("Notifications sent successfully.");
+      // Log any failures for debugging
+      if (response.failureCount > 0) {
+        console.warn(`Falló el envío a ${response.failureCount} tokens.`);
+      }
     } catch (error) {
       console.error("Error sending notifications:", error);
     }
 
     return null;
   });
+
+exports.calculateCommissionOnPaid = onDocumentUpdated("orders/{orderId}", async (event) => {
+  const beforeData = event.data.before.data();
+  const afterData = event.data.after.data();
+  const orderId = event.params.orderId;
+
+  // Exit if status didn't change to "Pagado"
+  if (beforeData.status === "Pagado" || afterData.status !== "Pagado") {
+    return null;
+  }
+
+  console.log(`Order ${orderId} was marked as paid. Checking for seller commission.`);
+
+  // --- Seller Commission Logic ---
+  if (afterData.userId) {
+    try {
+      const user = await admin.auth().getUser(afterData.userId);
+      if (user.customClaims && user.customClaims.seller === true && user.customClaims.commissionRate > 0) {
+        const commissionRate = user.customClaims.commissionRate;
+        const commissionAmount = afterData.clpAmount * commissionRate;
+
+        const commissionData = {
+          sellerId: user.uid,
+          sellerEmail: user.email,
+          orderId,
+          orderCLPAmount: afterData.clpAmount,
+          commissionRate,
+          commissionAmountCLP: commissionAmount,
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        };
+
+        await admin.firestore().collection("seller_commissions").add(commissionData);
+        console.log(`Commission of ${commissionAmount} CLP for seller ${user.email} created for order ${orderId}.`);
+      } else {
+        console.log(`Order creator ${user.email} is not a seller or has no commission rate.`);
+      }
+    } catch (error) {
+      console.error(`Error processing seller commission for user ${afterData.userId}:`, error);
+    }
+  } else {
+    console.log("Order has no associated userId, skipping commission check.");
+  }
+
+  return null;
+});

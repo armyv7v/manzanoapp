@@ -120,6 +120,17 @@ function showMessage(elementId, message, isSuccess) {
 }
 
 /**
+ * Rounds a number up to the nearest two decimal places.
+ * @param {number} num The number to round.
+ * @returns {number} The rounded number.
+ */
+function roundUpToTwoDecimals(num) {
+    if (typeof num !== 'number' || isNaN(num)) {
+        return 0;
+    }
+    return Math.ceil(num * 100) / 100;
+}
+/**
  * Shows a custom modal alert.
  * @param {string} message The message to display.
  */
@@ -163,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add version number for debugging cache issues
   const appVersionSpan = document.getElementById('app-version');
   if (appVersionSpan) {
-      appVersionSpan.textContent = 'v3.5';
+      appVersionSpan.textContent = 'v6.8';
   }
 
   const showUserFormBtn = document.getElementById('show-user-form-btn');
@@ -205,7 +216,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const adminCreateOrderToggleBtn = document.getElementById('admin-create-order-toggle-btn');
 
   // Batch Processing Elements
-  const adminBatchProcessBtn = document.getElementById('admin-batch-process-btn');
+  const startBatchProcessBtn = document.getElementById('start-batch-process-btn');
+  const dailyOrdersHeader = document.getElementById('daily-orders-header');
+  const dailyOrdersContainer = document.getElementById('daily-orders-container');
+  const batchSelectionView = document.getElementById('batch-selection-view');
+  const batchViewClientSearch = document.getElementById('batch-view-client-search');
+  const batchViewClientList = document.getElementById('batch-view-client-list');
+  const batchActionBar = document.getElementById('batch-action-bar');
+  const batchViewSelectedCount = document.getElementById('batch-view-selected-count');
+  const cancelBatchProcessBtn = document.getElementById('cancel-batch-process-btn');
+  const continueBatchProcessBtn = document.getElementById('continue-batch-process-btn');
   const batchClientSelectionModal = document.getElementById('batch-client-selection-modal');
   const batchClientSearchInput = document.getElementById('batch-client-search');
   const batchClientList = document.getElementById('batch-client-list');
@@ -218,6 +238,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const batchAmountEntryConfirmBtn = document.getElementById('batch-amount-entry-confirm-btn');
   const batchPaymentModal = document.getElementById('batch-payment-modal');
 
+  // Historical Payment Modal Elements
+  const historicalPaymentDateModal = document.getElementById('historical-payment-date-modal');
+  const historicalPaymentOrderDetails = document.getElementById('historical-payment-order-details');
+  const historicalPaymentDateInput = document.getElementById('historical-payment-date');
+  const historicalPaymentDateNextBtn = document.getElementById('historical-payment-date-next-btn');
+  const historicalPaymentDateCancelBtn = document.getElementById('historical-payment-date-cancel-btn');
 
   // Order Submission & Modal Elements
   const formTransferencia = document.getElementById('remittance-form-transferencia');
@@ -680,7 +706,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const rate = exchangeRates['VES'] || 0; // Always use VES rate for calculation
 
       if (!isNaN(clpAmount) && rate > 0) {
-          const destAmount = clpAmount * rate;
+          const destAmount = roundUpToTwoDecimals(clpAmount * rate);
           display.textContent = `${destAmount.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
       } else {
           display.textContent = `0,00 VES`;
@@ -1169,29 +1195,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const startOfDay = new Date(`${todayString}T00:00:00-04:00`);
       const endOfDay = new Date(`${todayString}T23:59:59-04:00`);
 
-      const ordersQuery = db.collection('orders')
+      const createdTodayQuery = db.collection('orders')
           .where('createdAt', '>=', startOfDay)
           .where('createdAt', '<=', endOfDay)
           .orderBy('createdAt', 'desc');
 
-      ordersListener = ordersQuery.onSnapshot(snapshot => {          
+      ordersListener = createdTodayQuery.onSnapshot(snapshot => {
           isInitialOrdersLoad = false; // Set flag after first run
 
-          ordersListPending.innerHTML = '';
-          ordersListPaid.innerHTML = '';
-          
           let pendingOrdersCount = 0;
           let pendingDestTotal = 0;
           let paidCount = 0;
           let paidDestTotal = 0;
 
+          // Clear only the pending list. The paid list will be managed to avoid flicker.
+          ordersListPending.innerHTML = '';
+
           if (snapshot.empty) {
               noOrdersPendingMessage.classList.remove('hidden');
-              noOrdersPaidMessage.classList.remove('hidden');
-              // Clear summaries when there are no orders
-              pendingSummaryDisplay.textContent = '0 Pedidos / 0,00 VES';
-              paidSummaryDisplay.textContent = '0 Pedidos / 0,00 VES';
-              return;
+          } else {
+              noOrdersPendingMessage.classList.add('hidden');
           }
 
           snapshot.forEach(doc => {
@@ -1201,12 +1224,16 @@ document.addEventListener('DOMContentLoaded', () => {
                   return;
               }
 
-              const orderHtml = renderOrder(doc);
+              const existingCard = document.querySelector(`[data-order-id="${doc.id}"]`);
+              if (existingCard) existingCard.remove(); // Remove old card to re-render
+
+              const mockDoc = { id: doc.id, data: () => order };
+              const orderHtml = renderOrder(mockDoc);
               if (order.status === 'Pagado') {
                   ordersListPaid.innerHTML += orderHtml;
                   paidCount++;
                   paidDestTotal += order.destinationAmount || 0;
-              } else { // 'Pendiente de pago' or 'Cancelado'
+              } else { // 'Pendiente de pago' or 'Cancelado' (for orders created today)
                   ordersListPending.innerHTML += orderHtml;
                   // Only count orders with "Pendiente de pago" status for the summary
                   if (order.status === 'Pendiente de pago') {
@@ -1267,6 +1294,12 @@ document.addEventListener('DOMContentLoaded', () => {
               vesBalanceDisplay.textContent = totalBalance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
           }
 
+          // NEW: Update total balance display for sellers
+          const sellerVesBalanceDisplay = document.getElementById('seller-global-ves-balance');
+          if (sellerVesBalanceDisplay) {
+              sellerVesBalanceDisplay.textContent = totalBalance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' VES';
+          }
+
           // Update the main list of balances on the admin dashboard
           renderAccountsBalanceList();
 
@@ -1311,18 +1344,29 @@ document.addEventListener('DOMContentLoaded', () => {
           snapshot.forEach(doc => {
               totalAdminCommissionToday += doc.data().amount;
           });
+          totalAdminCommissionToday = roundUpToTwoDecimals(totalAdminCommissionToday);
+
+          // NEW: Calculate Tillo's commission (15% of admin's commission)
+          const tilloCommission = roundUpToTwoDecimals(totalAdminCommissionToday * 0.15);
+          const netAdminCommission = totalAdminCommissionToday - tilloCommission;
 
           const adminCommissionDailySummaryEl = document.getElementById('admin-commission-daily-summary');
+          const tilloCommissionSummaryEl = document.getElementById('tillo-commission-summary');
+
           // Always show the summary for consistency, styled differently if zero.
           if (adminCommissionDailySummaryEl) {
               adminCommissionDailySummaryEl.innerHTML = `
               <div class="flex justify-between items-center p-2 rounded-lg ${totalAdminCommissionToday > 0 ? 'bg-purple-100' : 'bg-gray-100'}">
                   <div class="flex items-center gap-2">
-                      <p class="font-medium ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-600'}">Comisión Admin (Hoy)</p>
+                      <p class="font-medium ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-600'}">Comisión Admin Bruta (Hoy)</p>
                   </div>
                   <p class="font-semibold ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-700'}">${totalAdminCommissionToday.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
               </div>
           `;
+              tilloCommissionSummaryEl.innerHTML = `
+                  <div class="flex justify-between items-center p-2 rounded-lg bg-red-100"><span class="text-red-800">(-) Mano Tillo (15%):</span> <span class="font-semibold text-red-800">${tilloCommission.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span></div>
+                  <div class="flex justify-between items-center p-2 rounded-lg bg-green-100 border-t border-gray-200"><span class="font-bold text-green-800">Comisión Neta Admin:</span> <span class="font-bold text-green-800">${netAdminCommission.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span></div>
+              `;
           }
       }, error => {
           console.error("Error fetching today's admin commission:", error);
@@ -1348,6 +1392,7 @@ document.addEventListener('DOMContentLoaded', () => {
           snapshot.forEach(doc => {
               totalBankFeeToday += doc.data().amount;
           });
+          totalBankFeeToday = roundUpToTwoDecimals(totalBankFeeToday);
 
           const bankFeeSummaryEl = document.getElementById('bank-fee-summary');
           if (bankFeeSummaryEl) {
@@ -1646,6 +1691,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   if (isSeller) {
                       document.getElementById('seller-commission-section').classList.remove('hidden');
                       attachSellerCommissionListener(user.uid);
+                      // NEW: Show global balance for sellers
+                      document.getElementById('seller-global-balance-section').classList.remove('hidden');
+                      attachAccountsListener(); // Attach the listener to get balance data
+
                       fetchAndRenderClients(); // Sellers get access to the full client list
                   }
 
@@ -1685,6 +1734,7 @@ document.addEventListener('DOMContentLoaded', () => {
               adminSellerCommissionsListener = null;
           }
           document.getElementById('seller-commission-section').classList.add('hidden');
+          document.getElementById('seller-global-balance-section').classList.add('hidden'); // NEW: Hide on logout
           renderSavedBeneficiaries(); // This will clear lists and hide toggles
           isInitialOrdersLoad = true; // Reset flag on logout
           if (accountsListener) {
@@ -1792,7 +1842,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Sort by holder name
     const sortedAccounts = accountsWithBalance.sort((a, b) => a.holder.localeCompare(b.holder));
 
-    // --- CORRECTED CLP Balance Calculation ---
+    // --- DEFINITIVE FIX: Calculate totalClpBalance dynamically from totalVesBalance and current purchase rate ---
+    const currentPurchaseRateVES = exchangeRates.purchaseRateVES || 0;
+    const displayedClpBalance = currentPurchaseRateVES > 0 ? roundUpToTwoDecimals(totalVesBalance / currentPurchaseRateVES) : 0;
 
     sortedAccounts.forEach(account => {
         const el = document.createElement('div');
@@ -1807,29 +1859,40 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update Admin Commission Summary with CLP details
     if (adminCommissionSummaryEl) {
         adminCommissionSummaryEl.innerHTML = `
-            <div class="space-y-2 text-sm" id="financial-summary-section">
-                <!-- Daily VES Commissions -->
-                <div id="admin-commission-daily-summary"></div>
-                <div id="bank-fee-summary"></div>
+          <div class="space-y-2 text-sm" id="financial-summary-section">
+              <!-- Daily VES Commissions -->
+              <div id="admin-commission-daily-summary">
+                  <!-- This will be populated by its listener -->
+              </div>
+              <div id="bank-fee-summary">
+                  <!-- This will be populated by its listener -->
+              </div>
+              <!-- Tillo Commission (calculated based on admin commission) -->
+              <div id="tillo-commission-summary">
+                  <!-- This will be populated by the admin commission listener -->
+              </div>
 
-                <!-- CLP Summary -->
-                <div class="flex justify-between border-t border-gray-300 pt-2 mt-2"><span class="font-bold text-gray-800">Saldo Bruto (CLP):</span> <span class="font-bold text-blue-600">${(exchangeRates.totalClpBalance || 0).toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}</span></div>
-            </div>
-        `;
+              <!-- CLP Summary -->
+              <div class="flex justify-between border-t border-gray-300 pt-2 mt-2"><span class="font-bold text-gray-800">Saldo Bruto (CLP):</span> <span class="font-bold text-blue-600">${displayedClpBalance.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}</span></div>
+          </div>
+      `;
     }
   };
 
   /** Renders or refreshes the list of accounts in the payment source modal. */
   const renderPaymentSourceList = () => {
       if (!paymentData.orderData) return; // Don't render if no payment is active
-
       const { orderData } = paymentData;
-      const previouslySelectedId = paymentSourceList.querySelector('input:checked')?.value;
 
       paymentSourceList.innerHTML = '';
 
+      // --- NEW: Filter to show only accounts with a positive balance ---
+      const accountsWithBalance = accountsData.filter(acc => acc.balance > 0);
+
+      if (accountsWithBalance.length === 0) return;
+
       // Sort accounts: those with enough balance first, then by balance descending.
-      const sortedAccounts = [...accountsData].sort((a, b) => {
+      const sortedAccounts = [...accountsWithBalance].sort((a, b) => {
           const feeA = calculateFee(orderData, a);
           const totalDebitA = (orderData.destinationAmount || 0) + feeA;
           const hasEnoughA = a.balance >= totalDebitA;
@@ -1853,8 +1916,8 @@ document.addEventListener('DOMContentLoaded', () => {
           const radioId = `account-${account.id}`;
           const accountEl = document.createElement('div');
           accountEl.innerHTML = `
-              <label for="${radioId}" class="flex items-center p-3 rounded-lg border transition-all ${hasEnoughBalance ? 'cursor-pointer hover:bg-gray-100 border-gray-200' : 'opacity-60 bg-red-50 border-red-200'}">
-                  <input type="radio" name="payment-source" id="${radioId}" value="${account.id}" class="h-5 w-5 text-blue-600 focus:ring-blue-500 mr-3" ${!hasEnoughBalance ? 'disabled' : ''} ${account.id === previouslySelectedId ? 'checked' : ''}>
+              <label for="${radioId}" class="flex items-center p-3 rounded-lg border transition-all ${hasEnoughBalance ? 'cursor-pointer hover:bg-gray-100 border-gray-200' : 'opacity-50 bg-red-50 border-red-200'}">
+                  <input type="radio" name="payment-source" id="${radioId}" value="${account.id}" class="h-5 w-5 text-blue-600 focus:ring-blue-500 mr-3" ${!hasEnoughBalance ? 'disabled' : ''}>
                   <div class="flex-grow">
                       <p class="font-semibold">${account.holder} - ${account.bank}</p>
                       <p class="text-sm text-gray-600">Disponible: ${account.balance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>
@@ -1863,21 +1926,6 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
           paymentSourceList.appendChild(accountEl);
       });
-
-      // After re-rendering, if an item was selected, re-trigger the 'change' event to update the UI
-      if (previouslySelectedId) {
-          const previouslySelectedRadio = document.getElementById(`account-${previouslySelectedId}`);
-          if (previouslySelectedRadio && !previouslySelectedRadio.disabled) {
-              previouslySelectedRadio.dispatchEvent(new Event('change', { bubbles: true }));
-          } else {
-              // The previously selected account is no longer valid, so reset the UI
-              paymentFeeDetails.classList.add('hidden');
-              paymentSourceNextBtn.disabled = true;
-          }
-      } else {
-        paymentFeeDetails.classList.add('hidden');
-        paymentSourceNextBtn.disabled = true;
-      }
   };
 
   // --- Saved Beneficiaries Logic ---
@@ -2474,7 +2522,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
       }
 
-      const clpAmount = clpRate > 0 ? amount / clpRate : 0;
+      const clpAmount = clpRate > 0 ? roundUpToTwoDecimals(amount / clpRate) : 0;
       balanceOperationData.clpAmount = clpAmount; // Store for history
 
       if (!bank || !holder) {
@@ -2489,6 +2537,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const accountId = `${holder.toUpperCase().replace(/ /g, '_')}_${bank.toUpperCase().replace(/ /g, '_')}`;
       const accountRef = db.collection('accounts').doc(accountId);
       const balanceHistoryRef = db.collection('balance_history').doc();
+      const clpBalanceHistoryRef = db.collection('clp_balance_history').doc(); // NEW: Reference for CLP history
       const configRateRef = db.collection('config').doc('rate'); // Reference to update totalClpBalance
       const batch = db.batch();
 
@@ -2517,6 +2566,17 @@ document.addEventListener('DOMContentLoaded', () => {
           totalClpBalance: firebase.firestore.FieldValue.increment(clpIncrement),
           purchaseRateVES: clpRate // NEW: Save the purchase rate
       });
+
+      // --- NEW: Create a record in the CLP balance history ---
+      if (type === 'add') {
+        batch.set(clpBalanceHistoryRef, {
+            amount: clpAmount,
+            type: 'add',
+            note: `Carga de saldo (Equivalente a ${amount.toLocaleString('es-VE')} VES)`,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            adminTag: userTags[currentUser.email] || 'ADMIN'
+        });
+      }
       // --- END NEW ---
 
       try {
@@ -2696,6 +2756,48 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   });
 
+  // --- NEW: Historical Payment Flow ---
+  const openHistoricalPaymentDateModal = (orderId, orderData) => {
+      historicalPaymentOrderDetails.innerHTML = `
+          <p><b>Pedido ID:</b> #${orderId.slice(-5)}</p>
+          <p><b>Cliente:</b> ${orderData.clientName}</p>
+          <p><b>Monto:</b> ${orderData.clpAmount.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}</p>
+      `;
+      historicalPaymentDateInput.valueAsDate = getChileanDateForPicker(new Date()); // Default to today
+      historicalPaymentDateModal.classList.remove('hidden');
+      historicalPaymentDateModal.classList.add('flex');
+  };
+
+  historicalPaymentDateNextBtn.addEventListener('click', () => {
+      const paymentDate = historicalPaymentDateInput.value;
+      if (!paymentDate) {
+          showCustomAlert('Por favor, selecciona una fecha de pago.');
+          return;
+      }
+      paymentData.historicalPaymentDate = paymentDate; // Store the selected date
+
+      historicalPaymentDateModal.classList.add('hidden');
+      historicalPaymentDateModal.classList.remove('flex');
+
+      // Continue to the standard payment flow
+      const { orderId, orderData } = paymentData;
+      if (orderData.destinationCurrency === 'VES') {
+          openPaymentSourceModal(orderId, orderData);
+      } else {
+          // Handle other currencies if necessary
+          showMessage('admin-upload-message', '', true);
+          adminScreenshotInput.value = '';
+          adminUploadModal.classList.remove('hidden');
+          adminUploadModal.classList.add('flex');
+      }
+  });
+
+  historicalPaymentDateCancelBtn.addEventListener('click', () => {
+      historicalPaymentDateModal.classList.add('hidden');
+      historicalPaymentDateModal.classList.remove('flex');
+      paymentData = {}; // Clear state
+  });
+
   /**
    * Calculates the fee for a given order and source account.
    * @param {object} order - The order data.
@@ -2706,13 +2808,13 @@ document.addEventListener('DOMContentLoaded', () => {
       const amount = order.destinationAmount;
       switch (order.type) {
           case 'pago-movil':
-              if (amount > 47) return amount * 0.003; // 0.3%
+              if (amount > 47) return roundUpToTwoDecimals(amount * 0.003); // 0.3%
               if (amount > 46) return 0.13;
               return 0;
           case 'transferencia':
               // Check for inter-bank transfer
               if (sourceAccount.bank !== order.bank) {
-                  return amount * 0.003; // 0.3%
+                  return roundUpToTwoDecimals(amount * 0.003); // 0.3%
               }
               return 0;
           case 'recarga-saldo':
@@ -2723,26 +2825,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Opens the modal to select the payment source account with pre-fetched data. */
   const openPaymentSourceModal = (orderId, orderData) => {
-      try {
-          paymentData = { orderId, orderData }; // Store initial data
+    try {
+        // CRITICAL FIX: Preserve the last used account ID before resetting paymentData
+        const lastUsedAccountId = paymentData.selectedAccountId;
 
-          // Display order details in the modal
-          paymentSourceOrderDetails.innerHTML = `<p><b>Cliente:</b> ${orderData.clientName}</p><p><b>Monto a Pagar:</b> ${orderData.destinationAmount.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${orderData.destinationCurrency}</p>`;
+        // Reset payment data for the new order
+        paymentData = { orderId, orderData, isHistorical: paymentData.isHistorical, historicalPaymentDate: paymentData.historicalPaymentDate };
 
-          // Render account options
-          renderPaymentSourceList();
+        // Display order details in the modal
+        paymentSourceOrderDetails.innerHTML = `<p><b>Cliente:</b> ${orderData.clientName}</p><p><b>Monto a Pagar:</b> ${orderData.destinationAmount.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${orderData.destinationCurrency}</p>`;
 
-          // Reset modal state
-          paymentFeeDetails.classList.add('hidden');
-          paymentSourceNextBtn.disabled = true;
+        // Render account options
+        renderPaymentSourceList();
 
-          selectPaymentSourceModal.classList.remove('hidden');
-          selectPaymentSourceModal.classList.add('flex');
+        // Reset modal state before attempting pre-selection
+        paymentFeeDetails.classList.add('hidden');
+        paymentSourceNextBtn.disabled = true;
 
-      } catch (error) {
-          console.error("Error al abrir modal de pago:", error);
-          showCustomAlert(`Error: ${error.message}`);
-      }
+        // Attempt to pre-select the last used account
+        if (lastUsedAccountId) {
+            const radioToSelect = document.getElementById(`account-${lastUsedAccountId}`);
+            // Check if the radio button exists and is not disabled (i.e., has enough balance)
+            if (radioToSelect && !radioToSelect.disabled) {
+                radioToSelect.checked = true;
+                // Manually trigger the change event to update UI (fee details, next button)
+                radioToSelect.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }
+
+        // Finally, show the modal
+        selectPaymentSourceModal.classList.remove('hidden');
+        selectPaymentSourceModal.classList.add('flex');
+
+    } catch (error) {
+        console.error("Error al abrir modal de pago:", error);
+        showCustomAlert(`Error: ${error.message}`);
+    }
   };
 
   // Listener for account selection in the payment modal
@@ -2809,6 +2927,26 @@ document.addEventListener('DOMContentLoaded', () => {
       let adminCommissionVes = 0; // Initialize commission to 0
 
       try {
+          // --- HISTORICAL PAYMENT LOGIC ---
+          let paymentTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+          if (paymentData.isHistorical && paymentData.historicalPaymentDate) {
+              const paymentDate = paymentData.historicalPaymentDate; // YYYY-MM-DD
+              const queryStart = new Date(`${paymentDate}T00:00:00-04:00`);
+              const queryEnd = new Date(`${paymentDate}T23:59:59-04:00`);
+
+              // Find the last payment of that day to set the new payment's time
+              const lastPaymentSnapshot = await db.collection('balance_history')
+                  .where('timestamp', '>=', queryStart)
+                  .where('timestamp', '<=', queryEnd)
+                  .orderBy('timestamp', 'desc')
+                  .limit(1)
+                  .get();
+
+              const lastPaymentTime = lastPaymentSnapshot.empty 
+                  ? queryEnd // If no payments that day, set it to the end of the day
+                  : new Date(lastPaymentSnapshot.docs[0].data().timestamp.toDate().getTime() + 1000); // 1 second after the last payment
+              paymentTimestamp = lastPaymentTime;
+          }
           // 1. Upload file to Storage
           const filePath = `proofs/${orderId}/${file.name}`;
           const fileRef = storage.ref(filePath);
@@ -2820,7 +2958,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const batch = db.batch();
 
           // Update order
-          batch.update(orderRef, { status: 'Pagado', proofUrl: proofUrl, paidByTag: adminTag });
+          batch.update(orderRef, { status: 'Pagado', proofUrl: proofUrl, paidByTag: adminTag, paidAt: paymentTimestamp });
 
           // Conditional logic for VES payments (which have an account and fee)
           if (orderData.destinationCurrency === 'VES') {
@@ -2833,7 +2971,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
 
               // Calculate 1% admin commission for VES orders
-              adminCommissionVes = (orderData.destinationAmount || 0) * 0.01;
+              adminCommissionVes = roundUpToTwoDecimals((orderData.destinationAmount || 0) * 0.01);
               totalDebit = (orderData.destinationAmount || 0) + fee + adminCommissionVes; // Assign value here
 
               // --- NEW: Calculate CLP equivalent for the payment ---
@@ -2850,10 +2988,10 @@ document.addEventListener('DOMContentLoaded', () => {
               batch.set(paymentHistoryRef, { 
                   amount: orderData.destinationAmount, 
                   type: 'subtract', 
-                  note: `Pago pedido ${orderId.substring(0, 5)} (${orderData.destinationCurrency})`, 
-                  timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                  holder: selectedAccount.holder,
-                  bank: selectedAccount.bank
+                  note: `Pago pedido ${orderId.slice(-5)} (${orderData.destinationCurrency})`, 
+                  timestamp: paymentTimestamp,
+                  holder: selectedAccount.holder, // Origen del pago
+                  bank: orderData.bank // CRITICAL: Banco de DESTINO del pedido
               });
               
               // Create history for fee if it exists
@@ -2861,10 +2999,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   batch.set(feeHistoryRef, { 
                       amount: fee, 
                       type: 'fee', 
-                      note: `Comisión pedido ${orderId.substring(0, 5)}`, 
-                      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                      holder: selectedAccount.holder,
-                      bank: selectedAccount.bank
+                      note: `Comisión pedido ${orderId.slice(-5)}`, 
+                      timestamp: paymentTimestamp,
+                      holder: selectedAccount.holder, // Origen del pago
+                      bank: orderData.bank // CRITICAL: Banco de DESTINO del pedido
                   });
               }
 
@@ -2874,10 +3012,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   batch.set(adminCommissionHistoryRef, {
                       amount: adminCommissionVes,
                       type: 'admin_commission',
-                      note: `Comisión Admin pedido ${orderId.substring(0, 5)}`,
-                      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                      holder: selectedAccount.holder,
-                      bank: selectedAccount.bank,
+                      note: `Comisión Admin pedido ${orderId.slice(-5)}`,
+                      timestamp: paymentTimestamp,
+                      holder: selectedAccount.holder, // Origen del pago
+                      bank: orderData.bank, // CRITICAL: Banco de DESTINO del pedido
                   });
                   
                   // --- DEFINITIVE CORRECTION for CLP Balance ---
@@ -2885,7 +3023,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   // and then converted to CLP to be decremented from the persistent balance.
                   const purchaseRate = exchangeRates['purchaseRateVES'] || 0;
                   if (purchaseRate > 0) {
-                      const totalDebitClp = ((orderData.destinationAmount || 0) + fee + adminCommissionVes) / purchaseRate;
+                      const totalDebitClp = roundUpToTwoDecimals(((orderData.destinationAmount || 0) + fee + adminCommissionVes) / purchaseRate);
                       batch.update(db.collection('config').doc('rate'), { 
                           totalClpBalance: firebase.firestore.FieldValue.increment(-totalDebitClp)
                       });
@@ -2895,6 +3033,16 @@ document.addEventListener('DOMContentLoaded', () => {
           // For non-VES payments, we just update the status and don't touch balances.
 
           await batch.commit();
+
+          // --- NEW: Manually add historical paid order to today's view ---
+          if (paymentData.isHistorical) {
+              const mockDoc = { id: orderId, data: () => ({ ...orderData, status: 'Pagado', proofUrl, paidByTag: adminTag }) };
+              const orderHtml = renderOrder(mockDoc);
+              ordersListPaid.innerHTML += orderHtml;
+              // Manually update the paid summary
+              const currentPaidCount = parseInt(paidSummaryDisplay.textContent.split(' ')[0]) || 0;
+              paidSummaryDisplay.textContent = `${currentPaidCount + 1} Pedidos / ...`; // Simplified update
+          }
 
           showToastNotification(`Pedido #${orderId.slice(-5)} pagado y completado.`);
           
@@ -2907,7 +3055,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
               const purchaseRate = exchangeRates['purchaseRateVES'] || 0;
               if (purchaseRate > 0) {
-                  const totalDebitClp = ((orderData.destinationAmount || 0) + fee + adminCommissionVes) / purchaseRate;
+                  const totalDebitClp = roundUpToTwoDecimals(((orderData.destinationAmount || 0) + fee + adminCommissionVes) / purchaseRate);
                   exchangeRates.totalClpBalance -= totalDebitClp;
               }
               // Re-render the main balance lists with the new local data
@@ -2920,11 +3068,14 @@ document.addEventListener('DOMContentLoaded', () => {
           paymentData = {}; // Clear state
 
           // 3. Find the next pending order and automatically open its payment modal.
-          const nextPendingOrderEl = ordersListPending.querySelector('.mark-paid-btn'); // Find the first "Pagar" button
-          if (nextPendingOrderEl) {
+          // CORRECTED: Find the LAST button, which corresponds to the OLDEST pending order.
+          const allPendingButtons = ordersListPending.querySelectorAll('.mark-paid-btn');
+          const oldestPendingOrderBtn = allPendingButtons.length > 0 ? allPendingButtons[allPendingButtons.length - 1] : null;
+
+          if (oldestPendingOrderBtn) {
               showToastNotification('Cargando siguiente pedido...');
               // Simulate a click to start the next payment flow with updated balances.
-              nextPendingOrderEl.click();
+              oldestPendingOrderBtn.click();
           } else {
               showCustomAlert('¡Excelente! No quedan más pedidos pendientes por pagar.');
           }
@@ -3706,6 +3857,36 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   });
 
+  // NEW: Event delegation for historical orders list
+  historicalOrdersList.addEventListener('click', async (e) => {
+      const target = e.target.closest('.mark-paid-btn');
+      if (!target) return;
+
+      const orderId = target.dataset.id;
+      if (!orderId) return;
+
+      loadingSpinner.classList.remove('hidden');
+      loadingSpinner.classList.add('flex');
+      try {
+          const orderDoc = await db.collection('orders').doc(orderId).get();
+          if (!orderDoc.exists) throw new Error("El pedido no existe.");
+          const orderData = orderDoc.data();
+
+          // Set up payment data for a historical payment
+          paymentData = { orderId, orderData, isHistorical: true };
+
+          // Open the new modal to ask for the payment date
+          openHistoricalPaymentDateModal(orderId, orderData);
+
+      } catch (error) {
+          console.error("Error al iniciar pago histórico:", error);
+          showCustomAlert(`Error: ${error.message}`);
+      } finally {
+          loadingSpinner.classList.add('hidden');
+          loadingSpinner.classList.remove('flex');
+      }
+  });
+
   /**
    * Finalizes an order creation, handling both client (with screenshot) and admin (without screenshot/with backdating) cases.
    * @param {boolean} withScreenshot - True if a screenshot upload is required.
@@ -4307,19 +4488,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Batch Processing Logic ---
 
-  const openBatchClientSelection = () => {
-      batchProcessData = { selectedClients: new Map() }; // Reset
-      batchClientListPage = 1; // Reset page number
-
-      // Make the modal visible
-      batchClientSelectionModal.classList.remove('hidden');
-      batchClientSelectionModal.classList.add('flex');
-
-      batchClientSearchInput.value = '';
-      renderBatchClientList(true); // Pass true to clear the list
-      updateBatchSelectionCount();
-  };
-
   const renderBatchClientList = (isNewRender = false) => {
       if (isNewRender) {
           batchClientList.innerHTML = '';
@@ -4437,7 +4605,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const clientData = batchProcessData.selectedClients.get(clientId);
           const clpAmount = parseFloat(row.querySelector('.batch-clp-amount').value);
           const vesRate = parseFloat(row.querySelector('.batch-ves-amount').dataset.rate);
-          const destinationAmount = clpAmount * vesRate;
+          const destinationAmount = roundUpToTwoDecimals(clpAmount * vesRate);
 
           const newOrderRef = db.collection('orders').doc();
           const orderPayload = {
@@ -4533,7 +4701,7 @@ document.addEventListener('DOMContentLoaded', () => {
               firestoreBatch.update(orderRef, { status: 'Pagado', proofUrl, paidByTag: adminTag });
 
               const fee = calculateFee(order, sourceAccount);
-              const adminCommission = order.destinationAmount * 0.01;
+              const adminCommission = roundUpToTwoDecimals(order.destinationAmount * 0.01);
               const debit = order.destinationAmount + fee + adminCommission;
               totalDebitVes += debit;
 
@@ -4569,13 +4737,106 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  adminBatchProcessBtn.addEventListener('click', openBatchClientSelection);
-  batchClientSearchInput.addEventListener('input', () => {
-      // When searching, always do a new render from page 1
-      renderBatchClientList(true);
+  // --- NEW BATCH PROCESSING FLOW ---
+
+  const toggleBatchMode = (enable) => {
+      if (enable) {
+          // Enter batch mode
+          dailyOrdersHeader.classList.add('hidden');
+          dailyOrdersContainer.classList.add('hidden');
+          batchSelectionView.classList.remove('hidden');
+          batchActionBar.classList.remove('hidden');
+          batchActionBar.classList.add('flex');
+          
+          // Reset and render
+          batchProcessData = { selectedClients: new Map() };
+          batchClientListPage = 1;
+          batchViewClientSearch.value = '';
+          renderBatchViewClientList(true);
+          updateBatchViewSelectionCount();
+
+      } else {
+          // Exit batch mode
+          dailyOrdersHeader.classList.remove('hidden');
+          dailyOrdersContainer.classList.remove('hidden');
+          batchSelectionView.classList.add('hidden');
+          batchActionBar.classList.add('hidden');
+          batchActionBar.classList.remove('flex');
+      }
+  };
+
+  const renderBatchViewClientList = (isNewRender = false) => {
+      if (isNewRender) {
+          batchViewClientList.innerHTML = '';
+          batchClientListPage = 1;
+      }
+
+      const existingLoadMoreBtn = document.getElementById('batch-view-load-more-btn');
+      if (existingLoadMoreBtn) existingLoadMoreBtn.remove();
+
+      const searchTerm = batchViewClientSearch.value.toLowerCase();
+      const filteredClients = fullClientList.filter(client =>
+          client.clientName.toLowerCase().includes(searchTerm) ||
+          client.cedula.includes(searchTerm)
+      ).sort((a, b) => a.clientName.localeCompare(b.clientName));
+
+      const start = (batchClientListPage - 1) * CLIENTS_PER_PAGE_BATCH;
+      const end = start + CLIENTS_PER_PAGE_BATCH;
+      const clientsToRender = filteredClients.slice(start, end);
+
+      if (isNewRender && clientsToRender.length === 0) {
+          batchViewClientList.innerHTML = `<p class="text-gray-500 p-4 text-center">No se encontraron clientes.</p>`;
+          return;
+      }
+
+      const clientsHtml = clientsToRender.map(client => {
+          const isSelected = batchProcessData.selectedClients.has(client.id);
+          let paymentMethodInfo = '';
+          switch (client.type) {
+              case 'transferencia': paymentMethodInfo = `Transferencia: ...${client.accountNumber.slice(-4)}`; break;
+              case 'pago-movil': paymentMethodInfo = `Pago Móvil: ...${client.phone.slice(-4)}`; break;
+              case 'recarga-saldo': paymentMethodInfo = `Recarga: ...${client.phone.slice(-4)}`; break;
+          }
+          return `
+              <label for="batch-view-client-${client.id}" class="flex items-center p-3 rounded-lg border cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50 border-blue-300' : 'border-gray-200'}">
+                  <input type="checkbox" id="batch-view-client-${client.id}" data-client-id="${client.id}" class="h-5 w-5 text-blue-600 focus:ring-blue-500 mr-3" ${isSelected ? 'checked' : ''}>
+                  <div>
+                      <p class="font-semibold">${client.clientName}</p>
+                      <p class="text-sm text-gray-600">${client.cedula} - <span class="text-purple-700">${paymentMethodInfo}</span></p>
+                  </div>
+              </label>
+          `;
+      }).join('');
+
+      batchViewClientList.innerHTML += clientsHtml;
+
+      if (filteredClients.length > end) {
+          const loadMoreBtn = document.createElement('button');
+          loadMoreBtn.id = 'batch-view-load-more-btn';
+          loadMoreBtn.className = 'w-full text-center py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300';
+          loadMoreBtn.textContent = 'Cargar más clientes...';
+          loadMoreBtn.onclick = () => {
+              batchClientListPage++;
+              renderBatchViewClientList(false);
+          };
+          batchViewClientList.appendChild(loadMoreBtn);
+      }
+  };
+
+  const updateBatchViewSelectionCount = () => {
+      const count = batchProcessData.selectedClients.size;
+      batchViewSelectedCount.textContent = `${count} cliente(s) seleccionado(s)`;
+      continueBatchProcessBtn.disabled = count === 0;
+  };
+
+  startBatchProcessBtn.addEventListener('click', () => toggleBatchMode(true));
+  cancelBatchProcessBtn.addEventListener('click', () => toggleBatchMode(false));
+
+  batchViewClientSearch.addEventListener('input', () => {
+      renderBatchViewClientList(true);
   });
 
-  batchClientList.addEventListener('change', (e) => {
+  batchViewClientList.addEventListener('change', (e) => {
       if (e.target.type === 'checkbox') {
           const clientId = e.target.dataset.clientId;
           const clientData = fullClientList.find(c => c.id === clientId);
@@ -4584,31 +4845,39 @@ document.addEventListener('DOMContentLoaded', () => {
           } else {
               batchProcessData.selectedClients.delete(clientId);
           }
-          updateBatchSelectionCount();
+          updateBatchViewSelectionCount();
       }
   });
 
-  batchClientSelectionNextBtn.addEventListener('click', openBatchAmountEntry);
-  batchClientSelectionCancelBtn.addEventListener('click', () => batchClientSelectionModal.classList.add('hidden'));
-
-  batchAmountList.addEventListener('input', (e) => {
-      if (e.target.classList.contains('batch-clp-amount')) {
-          const row = e.target.closest('tr');
-          const clpAmount = parseFloat(e.target.value) || 0;
-          const vesDisplay = row.querySelector('.batch-ves-amount');
-          const rate = parseFloat(vesDisplay.dataset.rate);
-          const vesAmount = clpAmount * rate;
-          vesDisplay.textContent = `${vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
-          updateBatchAmountConfirmButton();
-      }
+  continueBatchProcessBtn.addEventListener('click', () => {
+      // This now opens the amount entry modal.
+      // The logic inside openBatchAmountEntry is the same as before.
+      openBatchAmountEntry(); 
   });
 
-  batchAmountEntryBackBtn.addEventListener('click', () => {
-      batchAmountEntryModal.classList.add('hidden');
-      batchClientSelectionModal.classList.remove('hidden');
-  });
+  // The rest of the batch logic (amount entry, payment) remains the same,
+  // but we need to re-add the listeners for the modals.
 
-  batchAmountEntryConfirmBtn.addEventListener('click', createBatchOrders);
+  // Re-add listeners for the second modal (Amount Entry)
+  // ... (The code for openBatchAmountEntry, updateBatchAmountConfirmButton, createBatchOrders, etc., is the same as before)
+  // ... (The code for openBatchPaymentModal, confirmBatchPayment is also the same)
+
+  // We just need to ensure the event listeners for the modals are active.
+  // These were in the old code and are still valid.
+  if (batchAmountEntryBackBtn) {
+    batchAmountEntryBackBtn.addEventListener('click', () => {
+        // Hide the current modal
+        batchAmountEntryModal.classList.add('hidden');
+        batchAmountEntryModal.classList.remove('flex');
+
+        // Show the previous view (the client selection part)
+        batchSelectionView.classList.remove('hidden');
+        batchActionBar.classList.remove('hidden');
+        batchActionBar.classList.add('flex');
+    });
+  }
+
+  if (batchAmountEntryConfirmBtn) batchAmountEntryConfirmBtn.addEventListener('click', createBatchOrders);
 
   document.getElementById('batch-payment-source-select').addEventListener('change', () => {
       document.getElementById('batch-payment-confirm-btn').disabled = false;
@@ -4618,4 +4887,18 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('batch-payment-confirm-btn').addEventListener('click', confirmBatchPayment);
   document.getElementById('batch-payment-cancel-btn').addEventListener('click', () => batchPaymentModal.classList.add('hidden'));
+
+  if (batchAmountList) {
+      batchAmountList.addEventListener('input', (e) => {
+          if (e.target.classList.contains('batch-clp-amount')) {
+              const row = e.target.closest('tr');
+              const clpAmount = parseFloat(e.target.value) || 0;
+              const vesDisplay = row.querySelector('.batch-ves-amount');
+              const rate = parseFloat(vesDisplay.dataset.rate);
+              const vesAmount = roundUpToTwoDecimals(clpAmount * rate);
+              vesDisplay.textContent = `${vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+              updateBatchAmountConfirmButton();
+          }
+      });
+  }
 });

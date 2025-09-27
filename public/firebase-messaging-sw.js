@@ -11,12 +11,32 @@ importScripts('/__/firebase/init.js');
 const messaging = firebase.messaging();
 
 /**
- * NOTA IMPORTANTE: El manejador `onBackgroundMessage` se ha eliminado intencionadamente.
- * Cuando se envía un payload que contiene tanto 'notification' como 'data' desde
- * Firebase Functions, el sistema operativo (Android, iOS, Windows) se encarga
- * automáticamente de mostrar la notificación si la app está en segundo plano.
- * El Service Worker solo necesita manejar el evento 'notificationclick'.
+ * Este manejador se activa cuando llega una notificación push y la app está en segundo plano o cerrada.
+ * Es la forma más robusta de asegurar que la notificación se muestre.
  */
+self.addEventListener('push', (event) => {
+  console.log('[Service Worker] Push Received.');
+  const payload = event.data.json();
+  console.log('[Service Worker] Push payload: ', payload);
+
+  // Robustly get title and body from either `notification` or `data` object.
+  const notificationTitle = payload.notification?.title || payload.data?.title || 'Nuevo Pedido';
+  const notificationBody = payload.notification?.body || payload.data?.body || 'Ha llegado un nuevo pedido para procesar.';
+
+  const notificationOptions = {
+    body: notificationBody,
+    icon: payload.notification?.icon || payload.data?.icon || '/images/apple-touch-icon.png',
+    badge: '/images/apple-touch-icon.png',
+    vibrate: [200, 100, 200],
+    tag: payload.notification?.tag || payload.data?.tag || 'new-order',
+    requireInteraction: true, // Mantiene la notificación visible
+    data: {
+      click_action: payload.data.click_action // Usamos el click_action de 'data'
+    }
+  };
+
+  event.waitUntil(self.registration.showNotification(notificationTitle, notificationOptions));
+});
 
 /**
  * Escucha los clics en las notificaciones.

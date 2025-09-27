@@ -11,10 +11,35 @@ admin.initializeApp({
 
 // --- LÓGICA PRINCIPAL ---
 const email = process.argv[2];
+const role = process.argv[3] || 'admin'; // 'admin' o 'seller'
+const commission = parseFloat(process.argv[4]) || 0; // Porcentaje de comisión, ej: 2.5
+const requiresProof = process.argv[5] === 'true'; // Nuevo: 'true' si el vendedor debe subir capture
 
 if (!email) {
   console.error('❌ Error: Debes proporcionar un correo electrónico.');
-  console.log('Uso: node set-admin.js correo@ejemplo.com');
+  console.log('\nUso para Administrador:');
+  console.log('  node set-admin.js correo@ejemplo.com admin');
+  console.log('\nUso para Vendedor (sin carga de capture):');
+  console.log('  node set-admin.js correo@ejemplo.com seller 2.5');
+  console.log('\nUso para Vendedor (CON carga de capture):');
+  console.log('  node set-admin.js correo@ejemplo.com seller 2.0 true');
+  process.exit(1);
+}
+
+let claims = {};
+if (role === 'admin') {
+  claims = { admin: true };
+} else if (role === 'seller') {
+  if (commission <= 0 || commission >= 100) {
+    console.error('❌ Error: La comisión para un vendedor debe ser un número entre 0 y 100.');
+    process.exit(1);
+  }
+  claims = { seller: true, commissionRate: commission / 100 };
+  if (requiresProof) {
+    claims.requiresProof = true;
+  }
+} else {
+  console.error(`❌ Error: Rol '${role}' no reconocido. Usa 'admin' o 'seller'.`);
   process.exit(1);
 }
 
@@ -25,16 +50,16 @@ async function setAndVerifyAdminRole(email) {
     const user = await admin.auth().getUserByEmail(email);
     console.log(`   ✅ Usuario encontrado con UID: ${user.uid}`);
 
-    // 2. Asignar el permiso de administrador.
-    console.log('2. Asignando permiso de administrador...');
-    await admin.auth().setCustomUserClaims(user.uid, { admin: true });
+    // 2. Asignar los permisos personalizados (claims).
+    console.log(`2. Asignando rol '${role}'...`);
+    await admin.auth().setCustomUserClaims(user.uid, claims);
     console.log('   ✅ Permiso enviado a Firebase.');
 
     // 3. VERIFICAR: Leer el usuario de nuevo para comprobar el permiso.
     console.log('3. Verificando el permiso en el backend de Firebase...');
     const updatedUser = await admin.auth().getUser(user.uid);
     
-    if (updatedUser.customClaims && updatedUser.customClaims.admin === true) {
+    if (updatedUser.customClaims && JSON.stringify(updatedUser.customClaims) === JSON.stringify(claims)) {
       console.log('\n   ✅ ¡VERIFICADO! El permiso de administrador se guardó correctamente.');
       console.log('----------------------------------------------------------------');
       console.log(`🚀 ¡Éxito! El usuario ${email} ahora es un administrador.`);

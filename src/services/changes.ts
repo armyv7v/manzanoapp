@@ -1,6 +1,6 @@
 import { db } from "../firebase";
 import {
-  collection, addDoc, serverTimestamp,
+  collection, addDoc, serverTimestamp, DocumentData,
   query, orderBy, getDocs
 } from "firebase/firestore";
 
@@ -9,10 +9,10 @@ const col = collection(db, "changes");
 export async function listChanges() {
   const q = query(col, orderBy("createdAt", "desc"));
   const snap = await getDocs(q);
-  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  return snap.docs.map((d: DocumentData) => ({ id: d.id, ...d.data() }));
 }
 
-export async function createChange(params: {
+export async function createChange(params : {
   title: string; description?: string; authorUid: string;
 }) {
   const { title, description = "", authorUid } = params;

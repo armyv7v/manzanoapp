@@ -1,12 +1,13 @@
-﻿<!DOCTYPE html>
+﻿﻿﻿﻿<!DOCTYPE html>
 
 <html lang="es">
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>Cambios Manzano</title>
+<link href="/images/icon-192x192.png" rel="icon" type="image/png"/>
 <!-- Tailwind CSS con cache-busting -->
-<link href="/css/styles.css?v=1.30" rel="stylesheet"/>
+<link href="/css/styles.css?v=6.8" rel="stylesheet"/>
 <!-- SheetJS (xlsx) para exportar a Excel -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <!-- PWA Manifest -->
@@ -20,26 +21,20 @@
 <div class="fixed inset-0 bg-gray-200 bg-opacity-75 items-center justify-center z-50 hidden" id="loading-spinner">
 <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
 </div>
-<div class="relative mx-auto w-full max-w-6xl rounded-2xl bg-white p-8 shadow-xl">
+<div class="relative mx-auto w-full max-w-6xl rounded-2xl bg-white p-4 sm:p-8 shadow-xl">
 <!-- Encabezado y Tasa de Cambio -->
 <div class="text-center mb-8">
 <h1 class="text-3xl sm:text-4xl font-bold text-gray-800 mb-2">Cambios Manzano 🇨🇱🇻🇪</h1>
 <p class="text-gray-600 mb-4">Chile <span class="text-yellow-500 font-bold">→</span> Venezuela</p>
 <div class="bg-blue-100 text-blue-800 py-3 rounded-xl font-semibold shadow-md overflow-hidden relative">
 <div class="ticker-wrap">
-<div class="ticker-content" id="ticker-content">
-<span>Cargando tasas...</span>
-</div>
+<!-- Ticker content will be injected by JS -->
 </div>
 </div>
 <p class="mt-2 text-sm text-gray-500" id="user-id-display"></p>
 </div>
-<!-- User Country Selector -->
-<div class="flex flex-wrap justify-center gap-2 mb-6" id="user-country-selector">
-<!-- User country tabs will be injected here -->
-</div>
-<!-- Botones de Interfaz -->
-<div class="flex justify-center mb-8">
+<!-- Botón de Interfaz Principal (Login/Logout Cliente) -->
+<div class="flex justify-center mb-8" id="main-action-btn-container">
 <button class="bg-blue-600 text-white px-8 py-3 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg text-lg" id="main-action-btn">
                 Hacer Pedido
             </button>
@@ -280,6 +275,23 @@ Monto en CLP: 1000</pre>
 </div>
 <p class="text-gray-500 text-center mt-4 hidden" id="no-user-orders-message">No tienes pedidos recientes.</p>
 </div>
+<!-- Seller Commission Summary -->
+<div class="hidden mt-8 pt-6 border-t border-gray-300" id="seller-commission-section">
+<h3 class="text-xl font-semibold text-gray-700 mb-4">Mis Comisiones (Hoy)</h3>
+<div class="p-4 bg-purple-100 rounded-lg text-center">
+<p class="text-sm text-purple-800">Comisión Total del Día (CLP)</p>
+<p class="text-3xl font-bold text-purple-800" id="seller-commission-total">Cargando...</p>
+<p class="text-xs text-purple-700 mt-1" id="seller-commission-details"></p>
+</div>
+</div>
+<!-- Seller Global Balance -->
+<div class="hidden mt-8 pt-6 border-t border-gray-300" id="seller-global-balance-section">
+<h3 class="text-xl font-semibold text-gray-700 mb-4">Saldo Global Disponible</h3>
+<div class="p-4 bg-blue-100 rounded-lg text-center">
+<p class="text-sm text-blue-800">Saldo Total en Cuentas (VES)</p>
+<p class="text-3xl font-bold text-blue-800" id="seller-global-ves-balance">Cargando...</p>
+</div>
+</div>
 </div>
 <!-- Modal de Confirmación de Pedido -->
 <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden" id="order-confirm-modal">
@@ -329,62 +341,117 @@ Monto en CLP: 1000</pre>
 <button class="bg-red-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-red-700 transition duration-300" id="admin-logout-btn">Cerrar Sesión</button>
 </div>
 <!-- Fila Inferior: Acciones -->
-<div class="flex flex-wrap items-center gap-x-6 gap-y-3 pt-3 border-t border-gray-200">
+<div class="flex flex-col lg:flex-row lg:flex-wrap items-start lg:items-center gap-4 pt-3 border-t border-gray-200">
 <!-- Controles de Estado de la Tienda -->
 <div class="flex items-center gap-2">
-<span class="text-sm font-medium text-gray-700">Estado de la Tienda:</span>
+<div class="flex flex-col items-start gap-2">
+<div class="flex items-center gap-2">
+<span class="text-sm font-medium text-gray-700">Estatus:</span>
 <span class="px-3 py-1 text-xs font-bold uppercase rounded-full" id="store-status-indicator"></span>
-<button class="hidden bg-green-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600" id="open-store-btn">Abrir</button>
-<button class="hidden bg-yellow-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-600" id="close-store-btn">Cerrar</button>
 </div>
-<!-- Contenedor del Botón de Notificaciones -->
+<button class="hidden bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600" id="open-store-btn">Abrir</button>
+<button class="hidden bg-yellow-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-yellow-600" id="close-store-btn">Cerrar</button>
+</div>
+<!-- Notification Bell Button (Moved here for correct initialization) -->
 <div class="hidden" id="notifications-section">
-<button class="bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-blue-600 transition duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed" id="enable-notifications-btn">Activar Notificaciones</button>
+<button class="p-2 rounded-full hover:bg-gray-200 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed" id="enable-notifications-btn" title="Activar notificaciones de escritorio">
+<svg class="w-6 h-6 text-gray-500" fill="none" id="notification-bell-icon" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
 </div>
 <!-- Botón para mostrar formulario de pedido -->
 <div id="admin-create-order-section">
 <button class="hidden bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-blue-600" id="admin-create-order-toggle-btn">Ingresar Pedido</button>
 </div>
+<!-- Botón para Procesamiento por Lote -->
+<div id="admin-batch-process-section">
+<button class="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-purple-700" id="start-batch-process-btn">Iniciar Lote</button>
+</div>
+<!-- Formulario para Actualizar Tasa -->
+<form class="w-full sm:w-auto flex flex-col sm:flex-row sm:items-center gap-2" id="rate-form">
+<select class="w-full sm:w-auto p-2 border border-gray-300 rounded-lg text-sm" id="rate-currency-select">
+<option value="VES">VES</option>
+<option value="COP">COP</option>
+<option value="PEN">PEN</option>
+<option value="ARS">ARS</option>
+<option value="USD">USD</option>
+<option value="EUR">EUR</option>
+</select>
+<input class="w-full sm:w-28 p-2 border border-gray-300 rounded-lg text-sm" id="new-rate" placeholder="Nueva Tasa" step="0.00001" type="number"/>
+<button class="w-full sm:w-auto bg-blue-500 text-white px-3 py-1.5 rounded-lg text-sm font-semibold hover:bg-blue-600" type="submit">
+                                   Actualizar
+                                   </button>
+</form>
+<p class="text-xs font-medium text-center w-full" id="rate-message"></p>
 </div>
 <p class="text-xs font-medium text-center" id="store-status-message"></p>
 <p class="text-xs font-medium text-center" id="notifications-message"></p>
 </div>
-<!-- Country Selector -->
-<div class="flex flex-wrap justify-center gap-2 mb-6" id="admin-country-selector">
-<!-- Tabs will be injected here by JS -->
-</div>
 <div class="section-card">
-<h2 class="text-2xl font-semibold text-gray-700 mb-4">Actualizar Tasa de Cambio</h2>
-<form class="flex flex-col sm:flex-row gap-4" id="rate-form">
-<select class="w-full sm:w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" id="rate-currency-select">
-<option value="VES">VES (Bolívares)</option>
-<option value="COP">COP (Pesos Col.)</option>
-<option value="PEN">PEN (Soles)</option>
-<option value="ARS">ARS (Pesos Arg.)</option>
-<option value="USD">USD (Dólares)</option>
-<option value="EUR">EUR (Euros)</option>
+<div class="flex justify-between items-center mb-4" id="daily-orders-header">
+<h2 class="text-2xl font-semibold text-gray-700">Pedidos de Hoy</h2>
+<div class="flex items-center space-x-2">
+<label class="text-gray-700 font-medium text-sm" for="order-filter">Filtrar:</label>
+<select class="p-2 border border-gray-300 rounded-lg text-sm" id="order-filter">
+<option value="Todos">Todos</option>
+<option value="Pendiente de pago">Pendiente</option>
+<option value="Pagado">Pagado</option>
+<option value="Cancelado">Cancelado</option>
 </select>
-<input class="w-full sm:w-1/3 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" id="new-rate" placeholder="Nueva Tasa (Ej: 3000)" step="0.00001" type="number"/>
-<button class="w-full sm:w-1/3 bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition duration-300 shadow-md" type="submit">
-                           Actualizar
-                           </button>
-</form>
-<p class="mt-4 text-center font-medium text-green-600" id="rate-message"></p>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="daily-orders-container">
+<!-- Columna Izquierda: Pendientes y Cancelados -->
+<div>
+<h3 class="text-xl font-semibold text-yellow-800 bg-yellow-100 p-3 rounded-lg mb-3 flex justify-between items-center">
+<span>Pendientes y Cancelados</span>
+<span class="text-sm font-normal" id="pending-summary"></span>
+</h3>
+<div class="space-y-4 max-h-96 overflow-y-auto" id="orders-list-pending"></div>
+<p class="text-gray-500 text-center mt-4 hidden" id="no-orders-pending-message">No hay pedidos en esta categoría.</p>
+</div>
+<!-- Columna Derecha: Pagados -->
+<div>
+<h3 class="text-xl font-semibold text-green-800 bg-green-100 p-3 rounded-lg mb-3 flex justify-between items-center">
+<span>Pagados</span>
+<span class="text-sm font-normal" id="paid-summary"></span>
+</h3>
+<div class="space-y-4 max-h-96 overflow-y-auto" id="orders-list-paid"></div>
+<p class="text-gray-500 text-center mt-4 hidden" id="no-orders-paid-message">No hay pedidos pagados.</p>
+</div>
+</div>
+<!-- NEW: Batch Client Selection View (replaces daily orders view) -->
+<div class="hidden" id="batch-selection-view">
+<h2 class="text-2xl font-semibold text-gray-700 mb-4">Paso 1: Seleccionar Clientes para el Lote</h2>
+<input class="form-control mb-4" id="batch-view-client-search" placeholder="Buscar cliente por nombre o cédula..." type="text"/>
+<div class="space-y-2 max-h-[60vh] overflow-y-auto border rounded-lg p-2" id="batch-view-client-list">
+<!-- Client list for batch selection will be rendered here -->
+</div>
+</div>
+</div>
+<!-- NEW: Floating Action Bar for Batch Process -->
+<div class="hidden sticky bottom-4 z-20 bg-white p-4 rounded-xl shadow-2xl border-2 border-purple-500 max-w-3xl mx-auto items-center justify-between" id="batch-action-bar">
+<p class="font-semibold text-gray-800" id="batch-view-selected-count">0 cliente(s) seleccionado(s)</p>
+<div class="flex gap-4">
+<button class="btn-neutral" id="cancel-batch-process-btn">Cancelar Lote</button>
+<button class="btn-success disabled:opacity-50" disabled="" id="continue-batch-process-btn">Continuar al Paso 2</button>
+</div>
 </div>
 <!-- Saldo en VES -->
 <div class="text-center section-card">
 <h2 class="text-2xl font-semibold text-gray-700 mb-4">Saldo Disponible en VES</h2>
 <div class="text-4xl font-bold text-green-600 mb-4" id="ves-balance-display">
                              Cargando...
-                        </div>
+</div>
 <div class="flex flex-col sm:flex-row gap-4 justify-center">
 <input class="w-full sm:w-1/2 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" id="balance-amount" placeholder="Monto (Ej: 1000000)" step="1" type="number"/>
 <button class="w-full sm:w-1/4 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition duration-300 shadow-md" id="add-balance-btn">
                                 Cargar Saldo
-                            </button>
+</button>
 <button class="w-full sm:w-1/4 bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 transition duration-300 shadow-md" id="subtract-balance-btn">
                                 Restar Saldo
-                            </button>
+ </button>
 </div>
 <p class="mt-4 text-sm font-medium text-gray-700" id="balance-message"></p>
 </div>
@@ -397,7 +464,7 @@ Monto en CLP: 1000</pre>
 <p class="text-xs text-gray-500 mb-4 italic">Saldos disponibles en tiempo real en cada cuenta.</p>
 <div class="space-y-3" id="accounts-balance-list">
 <!-- Breakdown will be rendered here -->
-<p class="text-gray-500">Calculando desglose...</p>
+<p class="text-gray-500">Calculando saldos...</p>
 </div>
 <!-- Admin Commission Summary -->
 <div class="mt-4 pt-4 border-t border-gray-200" id="admin-commission-summary">
@@ -409,8 +476,8 @@ Monto en CLP: 1000</pre>
 <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
 <h2 class="text-2xl font-semibold text-gray-700">Historial de Movimientos de Saldo</h2>
 <button class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-balance-excel-btn">
-                                Exportar a Excel
-                            </button>
+Exportar a Excel
+</button>
 </div>
 <!-- Filtros de Fecha -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -449,41 +516,107 @@ Monto en CLP: 1000</pre>
 </div>
 <p class="text-gray-500 text-center mt-4 hidden" id="no-balance-history-message">Selecciona un rango de fechas para ver los movimientos.</p>
 </div>
-<!-- Lista de Pedidos -->
+<!-- CLP Balance History (A1, A2 only) -->
+<div class="section-card hidden" id="clp-balance-history-section">
+<div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+<h2 class="text-2xl font-semibold text-gray-700">Historial de Saldos (CLP)</h2>
+<button class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-clp-balance-excel-btn">
+Exportar a Excel
+</button>
+</div>
+<!-- Filtros de Fecha -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+<div>
+<label class="form-label" for="clp-balance-history-start">Fecha de Inicio</label>
+<input class="form-control" id="clp-balance-history-start" type="date"/>
+</div>
+<div>
+<label class="form-label" for="clp-balance-history-end">Fecha de Fin</label>
+<input class="form-control" id="clp-balance-history-end" type="date"/>
+</div>
+</div>
+<div class="flex flex-wrap gap-2 mb-4">
+<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="clp-balance-history-today">Hoy</button>
+<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="clp-balance-history-yesterday">Ayer</button>
+<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="clp-balance-history-7days">Últimos 7 días</button>
+<button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="clp-balance-history-search-btn">Buscar</button>
+</div>
+<p class="text-sm text-gray-600 mb-4" id="clp-balance-history-summary"></p>
+<!-- Header for CLP Balance History -->
+<div class="max-h-96 overflow-y-auto border rounded-lg">
+<table class="w-full text-sm">
+<thead class="hidden" id="clp-balance-history-header">
+<tr class="text-xs font-bold text-gray-500 uppercase bg-gray-50 text-left">
+<th class="p-2">Fecha y Hora</th>
+<th class="p-2 text-left">Descripción</th>
+<th class="p-2 text-right">Cargo (CLP)</th>
+<th class="p-2 text-right">Abono (CLP)</th>
+<th class="p-2 text-right">Saldo (CLP)</th>
+</tr>
+</thead>
+<tbody id="clp-balance-history-list">
+<!-- El historial CLP se renderizará aquí -->
+</tbody>
+</table>
+</div>
+<p class="text-gray-500 text-center mt-4 hidden" id="no-balance-history-message">Selecciona un rango de fechas para ver los movimientos.</p>
+</div>
+<!-- Seller Commissions (Admin View) -->
 <div class="section-card">
-<div class="flex justify-between items-center mb-4">
-<h2 class="text-2xl font-semibold text-gray-700">Pedidos de Hoy</h2>
-<div class="flex items-center space-x-2">
-<label class="text-gray-700 font-medium text-sm" for="order-filter">Filtrar:</label>
-<select class="p-2 border border-gray-300 rounded-lg text-sm" id="order-filter">
-<option value="Todos">Todos</option>
-<option value="Pendiente de pago">Pendiente</option>
-<option value="Pagado">Pagado</option>
-<option value="Cancelado">Cancelado</option>
+<h3 class="text-xl font-semibold text-gray-700 mb-4">Comisiones de Vendedores (Hoy)</h3>
+<div class="space-y-3" id="admin-seller-commissions-list">
+<p class="text-gray-500">Calculando comisiones...</p>
+</div>
+</div>
+<!-- Seller Commission History -->
+<div class="section-card">
+<h2 class="text-2xl font-semibold text-gray-700 mb-4">Historial de Comisiones por Vendedor</h2>
+<!-- Compact Filter Bar -->
+<div class="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4">
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+<div>
+<label class="form-label text-sm" for="seller-commission-history-select">Vendedor</label>
+<select class="form-select text-sm" id="seller-commission-history-select">
+<option value="">-- Elige un vendedor --</option>
 </select>
 </div>
-</div>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-<!-- Columna Izquierda: Pendientes y Cancelados -->
 <div>
-<h3 class="text-xl font-semibold text-yellow-800 bg-yellow-100 p-3 rounded-lg mb-3 flex justify-between items-center">
-<span>Pendientes y Cancelados</span>
-<span class="text-sm font-normal" id="pending-summary"></span>
-</h3>
-<div class="space-y-4 max-h-96 overflow-y-auto" id="orders-list-pending"></div>
-<p class="text-gray-500 text-center mt-4 hidden" id="no-orders-pending-message">No hay pedidos en esta categoría.</p>
+<label class="form-label text-sm" for="seller-commission-history-start">Desde</label>
+<input class="form-control text-sm" id="seller-commission-history-start" type="date"/>
 </div>
-<!-- Columna Derecha: Pagados -->
 <div>
-<h3 class="text-xl font-semibold text-green-800 bg-green-100 p-3 rounded-lg mb-3 flex justify-between items-center">
-<span>Pagados</span>
-<span class="text-sm font-normal" id="paid-summary"></span>
-</h3>
-<div class="space-y-4 max-h-96 overflow-y-auto" id="orders-list-paid"></div>
-<p class="text-gray-500 text-center mt-4 hidden" id="no-orders-paid-message">No hay pedidos pagados.</p>
+<label class="form-label text-sm" for="seller-commission-history-end">Hasta</label>
+<input class="form-control text-sm" id="seller-commission-history-end" type="date"/>
+</div>
+<div class="flex gap-2">
+<button class="w-full bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600 transition duration-300 shadow-md text-sm" id="seller-commission-history-search-btn">Buscar</button>
+<button class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400 text-sm" disabled="" id="export-seller-commission-excel-btn">Excel</button>
 </div>
 </div>
+<div class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200">
+<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="seller-commission-history-today">Hoy</button>
+<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="seller-commission-history-yesterday">Ayer</button>
+<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="seller-commission-history-7days">Últimos 7 días</button>
 </div>
+</div>
+<p class="text-sm text-gray-600 mb-4" id="seller-commission-history-summary"></p>
+<!-- Commission Table -->
+<div class="max-h-96 overflow-y-auto border rounded-lg">
+<table class="w-full text-sm">
+<thead class="bg-gray-50 sticky top-0">
+<tr class="text-xs font-bold text-gray-500 uppercase text-left">
+<th class="p-2">Fecha</th>
+<th class="p-2">ID Pedido</th>
+<th class="p-2 text-right">Monto Venta (CLP)</th>
+<th class="p-2 text-right">Comisión (CLP)</th>
+</tr>
+</thead>
+<tbody id="seller-commission-history-list">
+<!-- Commission history will be rendered here as table rows -->
+</tbody>
+</table>
+</div>
+<p class="text-gray-500 text-center mt-4 hidden" id="no-seller-commission-history-message">Selecciona un vendedor y un rango de fechas para ver el historial.</p>
 <!-- Historial de Pedidos -->
 <div class="section-card">
 <h2 class="text-2xl font-semibold text-gray-700 mb-4">Búsqueda Histórica de Pedidos</h2>
@@ -524,8 +657,8 @@ Monto en CLP: 1000</pre>
 </div>
 <div class="flex justify-end items-center mb-4">
 <button class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-excel-btn">
-                                Exportar a Excel
-                            </button>
+Exportar a Excel
+</button>
 </div>
 <p class="text-sm text-gray-600 mb-4" id="historical-search-summary"></p>
 <div class="space-y-4 max-h-96 overflow-y-auto" id="historical-orders-list">
@@ -850,6 +983,11 @@ Monto en CLP: 1000</pre>
 <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="balance-confirm-modal">
 <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-left">
 <h3 class="text-xl font-bold mb-4 text-gray-800" id="balance-confirm-title">Confirmar Operación</h3>
+<div class="mt-4" id="balance-op-clp-section">
+<label class="form-label" for="balance-op-clp-rate">Tasa de Compra (CLP por 1 VES)</label>
+<input class="form-control" id="balance-op-clp-rate" placeholder="Ej: 0.035" required="" step="0.00001" type="number"/>
+<p class="text-sm text-gray-600 mt-2" id="balance-op-clp-equivalent">Equivalente: 0,00 CLP</p>
+</div>
 <div class="space-y-2 text-gray-700 border-t border-b py-4 mb-6" id="balance-confirm-details">
 <!-- Los detalles se inyectarán aquí -->
 </div>
@@ -860,6 +998,104 @@ Monto en CLP: 1000</pre>
 <button class="bg-gray-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-gray-600 transition duration-300 shadow-lg" id="balance-final-cancel-btn">
                     Atrás
                 </button>
+</div>
+</div>
+</div>
+<!-- Toast Notification -->
+<div class="fixed bottom-5 right-5 w-full max-w-xs p-4 text-gray-500 bg-white rounded-lg shadow-lg transition-transform duration-300 ease-in-out transform translate-y-20 opacity-0 z-50" id="toast-notification" role="alert">
+<div class="flex items-center">
+<div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 text-blue-500 bg-blue-100 rounded-lg">
+<svg aria-hidden="true" class="w-5 h-5" fill="currentColor" focusable="false" viewbox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" fill-rule="evenodd"></path></svg>
+</div>
+<div class="ml-3 text-sm font-normal" id="toast-message">Mensaje de notificación.</div>
+</div>
+</div>
+<!-- Modal para Fecha de Pago Histórico -->
+<div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="historical-payment-date-modal">
+<div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg">
+<h3 class="text-2xl font-bold mb-4 text-gray-800">Registrar Pago Histórico</h3>
+<p class="mb-6 text-gray-600">Selecciona la fecha en la que se realizó este pago. El sistema lo registrará al final de ese día.</p>
+<div class="mb-4 p-3 bg-gray-100 rounded-lg text-sm" id="historical-payment-order-details">
+<!-- Order details will be injected here -->
+</div>
+<div>
+<label class="form-label" for="historical-payment-date">Fecha de Pago</label>
+<input class="form-control" id="historical-payment-date" required="" type="date"/>
+</div>
+<div class="flex justify-end space-x-4 mt-8">
+<button class="btn-neutral" id="historical-payment-date-cancel-btn">Cancelar</button>
+<button class="btn-success" id="historical-payment-date-next-btn">Siguiente</button>
+</div>
+</div>
+</div>
+<!-- Modal de Procesamiento por Lote: Paso 1 - Selección de Clientes -->
+<div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="batch-client-selection-modal">
+<div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-2xl h-[90vh] flex flex-col">
+<div class="flex-shrink-0">
+<h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 1: Seleccionar Clientes para el Lote</h3>
+<input class="form-control mb-4" id="batch-client-search" placeholder="Buscar cliente por nombre o cédula..." type="text"/>
+</div>
+<div class="flex-grow overflow-y-auto border rounded-lg p-2 space-y-2" id="batch-client-list" style="min-height: 0;">
+<!-- Client list will be rendered here -->
+</div>
+<div class="flex-shrink-0 flex justify-between items-center mt-4">
+<p class="font-semibold text-gray-700" id="batch-selected-count">0 cliente(s) seleccionado(s)</p>
+<div class="flex space-x-4">
+<button class="btn-neutral" id="batch-client-selection-cancel-btn">Cancelar</button>
+<button class="btn-success disabled:bg-gray-400" disabled="" id="batch-client-selection-next-btn">Siguiente</button>
+</div>
+</div>
+</div>
+</div>
+<!-- Modal de Procesamiento por Lote: Paso 2 - Ingreso de Montos -->
+<div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="batch-amount-entry-modal">
+<div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col h-[90vh]">
+<h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 2: Ingresar Montos (CLP)</h3>
+<div class="flex-grow overflow-y-auto border rounded-lg">
+<table class="w-full text-sm">
+<thead class="bg-gray-100 sticky top-0">
+<tr>
+<th class="p-2 text-left font-semibold">Cliente</th>
+<th class="p-2 text-left font-semibold">Método de Pago</th>
+<th class="p-2 text-left font-semibold">Monto CLP</th>
+<th class="p-2 text-left font-semibold">Monto a Recibir</th>
+</tr>
+</thead>
+<tbody id="batch-amount-list">
+<!-- Amount entry rows will be rendered here -->
+</tbody>
+</table>
+</div>
+<div class="flex justify-between items-center mt-4">
+<button class="btn-neutral" id="batch-amount-entry-back-btn">Atrás</button>
+<button class="btn-success disabled:bg-gray-400" disabled="" id="batch-amount-entry-confirm-btn">Confirmar y Crear Pedidos</button>
+</div>
+</div>
+</div>
+<!-- Modal de Procesamiento por Lote: Paso 3 - Pago y Comprobantes -->
+<div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="batch-payment-modal">
+<div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg">
+<h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 3: Pagar Lote y Subir Comprobantes</h3>
+<div class="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4 space-y-1 text-gray-800" id="batch-payment-summary">
+<!-- Payment summary will be rendered here -->
+</div>
+<div class="space-y-4">
+<div>
+<label class="form-label" for="batch-payment-source-select">Pagar desde la cuenta:</label>
+<select class="form-select" id="batch-payment-source-select">
+<!-- Source accounts will be rendered here -->
+</select>
+</div>
+<div>
+<label class="form-label" for="batch-proof-upload-input">Subir todos los comprobantes (capturas):</label>
+<input accept="image/*" class="form-control" id="batch-proof-upload-input" multiple="" type="file"/>
+<p class="text-xs text-gray-500 mt-1">Asegúrate de seleccionar la misma cantidad de archivos que de pedidos.</p>
+</div>
+</div>
+<p class="mt-4 text-center font-medium" id="batch-payment-message"></p>
+<div class="flex justify-end items-center mt-6 space-x-4">
+<button class="btn-neutral" id="batch-payment-cancel-btn">Cancelar</button>
+<button class="btn-success disabled:bg-gray-400" disabled="" id="batch-payment-confirm-btn">Confirmar Pago del Lote</button>
 </div>
 </div>
 </div>
@@ -874,5 +1110,5 @@ Monto en CLP: 1000</pre>
 <script src="/__/firebase/11.6.1/firebase-functions-compat.js"></script>
 <script src="/__/firebase/11.6.1/firebase-storage-compat.js"></script>
 <script src="/__/firebase/init.js"></script>
-<script src="/js/main.js?v=1.30" type="module"></script>
+<script src="/js/app.js?v=6.8" type="module"></script>
 </body></html>

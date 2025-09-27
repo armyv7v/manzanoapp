@@ -1,12 +1,23 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
-    // Match any file inside the 'proofs' folder.
-    match /proofs/{allPaths=**} {
-      // Allow anyone to read (view/download) these files. This makes them public.
+    // Proofs uploaded by admins for paid orders
+    match /proofs/{orderId}/{allPaths=**} {
+      // Anyone can read the final proof
       allow read: if true;
-      // Only allow authenticated admins to upload, update, or delete files.
-      allow write: if request.auth.token.admin == true;
+      // Only admins can write final proofs
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Proofs uploaded by clients/sellers when creating an order
+    match /client_proofs/{orderId}/{allPaths=**} {
+      // Anyone can read the client proof (e.g., admin needs to see it)
+      allow read: if true;
+      // Any authenticated user can write a client proof.
+      // This is secure because the path is based on a unique orderId generated
+      // on the client, and the association is made in Firestore, which is protected.
+      allow write: if request.auth != null;
     }
   }
 }
