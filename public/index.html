@@ -1,4 +1,4 @@
-﻿﻿﻿﻿<!DOCTYPE html>
+<!DOCTYPE html>
 
 <html lang="es">
 <head>
@@ -444,20 +444,26 @@ Monto en CLP: 1000</pre>
 <div class="text-4xl font-bold text-green-600 mb-4" id="ves-balance-display">
                              Cargando...
 </div>
-<div class="flex flex-col sm:flex-row gap-4 justify-center">
-<input class="w-full sm:w-1/2 p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" id="balance-amount" placeholder="Monto (Ej: 1000000)" step="1" type="number"/>
-<button class="w-full sm:w-1/4 bg-green-500 text-white py-3 rounded-lg font-semibold hover:bg-green-600 transition duration-300 shadow-md" id="add-balance-btn">
-                                Cargar Saldo
-</button>
-<button class="w-full sm:w-1/4 bg-red-500 text-white py-3 rounded-lg font-semibold hover:bg-red-600 transition duration-300 shadow-md" id="subtract-balance-btn">
-                                Restar Saldo
- </button>
+<div class="flex items-center justify-center gap-2">
+    <button class="bg-red-500 text-white font-bold rounded-full shadow-md hover:bg-red-600 transition-all duration-300 w-28 h-28 flex items-center justify-center text-4xl" id="subtract-balance-btn">
+        -
+    </button>
+    <input class="w-32 text-center text-3xl font-semibold p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mx-2" id="balance-amount" placeholder="Monto" step="1" type="number"/>
+    <button class="bg-green-500 text-white font-bold rounded-full shadow-md hover:bg-green-600 transition-all duration-300 w-28 h-28 flex items-center justify-center text-4xl" id="add-balance-btn">
+        +
+    </button>
 </div>
 <p class="mt-4 text-sm font-medium text-gray-700" id="balance-message"></p>
 </div>
 <!-- Desglose de Saldo por Cuenta -->
 <div class="section-card">
-<h3 class="text-xl font-semibold text-gray-700 mb-4">Saldos por Cuenta</h3>
+<div class="flex justify-between items-center mb-4">
+    <h3 class="text-xl font-semibold text-gray-700">Saldos por Cuenta</h3>
+    <div class="flex gap-2">
+        <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day">&lt; Día Anterior</button>
+        <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day">Día Siguiente &gt;</button>
+    </div>
+</div>
 <div class="text-center mb-4">
 <button class="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition duration-300" id="open-transfer-funds-modal-btn">Transferir entre Cuentas</button>
 </div>
@@ -471,200 +477,216 @@ Monto en CLP: 1000</pre>
 <!-- Summary will be injected here by JS -->
 </div>
 </div>
-<!-- Historial de Movimientos de Saldo -->
-<div class="section-card">
-<div class="flex flex-wrap justify-between items-center mb-4 gap-4">
-<h2 class="text-2xl font-semibold text-gray-700">Historial de Movimientos de Saldo</h2>
-<button class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-balance-excel-btn">
-Exportar a Excel
-</button>
-</div>
-<!-- Filtros de Fecha -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-<div>
-<label class="form-label" for="balance-history-start">Fecha de Inicio</label>
-<input class="form-control" id="balance-history-start" type="date"/>
-</div>
-<div>
-<label class="form-label" for="balance-history-end">Fecha de Fin</label>
-<input class="form-control" id="balance-history-end" type="date"/>
-</div>
-</div>
-<div class="flex flex-wrap gap-2 mb-4">
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="balance-history-today">Hoy</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="balance-history-yesterday">Ayer</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="balance-history-7days">Últimos 7 días</button>
-<button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="balance-history-search-btn">Buscar</button>
-</div>
-<!-- Header for Balance History -->
-<div class="max-h-96 overflow-y-auto border rounded-lg">
-<table class="w-full text-sm">
-<thead class="hidden" id="balance-history-header">
-<tr class="text-xs font-bold text-gray-500 uppercase bg-gray-50">
-<th class="p-2 text-left">Fecha y Hora</th>
-<th class="p-2 text-left">Descripción</th>
-<th class="p-2 text-left">Banco</th>
-<th class="p-2 text-right">Cargo</th>
-<th class="p-2 text-right">Abono</th>
-<th class="p-2 text-right">Saldo</th>
-</tr>
-</thead>
-<tbody id="balance-history-list">
-<!-- El historial se renderizará aquí -->
-</tbody>
-</table>
-</div>
-<p class="text-gray-500 text-center mt-4 hidden" id="no-balance-history-message">Selecciona un rango de fechas para ver los movimientos.</p>
-</div>
-<!-- CLP Balance History (A1, A2 only) -->
-<div class="section-card hidden" id="clp-balance-history-section">
-<div class="flex flex-wrap justify-between items-center mb-4 gap-4">
-<h2 class="text-2xl font-semibold text-gray-700">Historial de Saldos (CLP)</h2>
-<button class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-clp-balance-excel-btn">
-Exportar a Excel
-</button>
-</div>
-<!-- Filtros de Fecha -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-<div>
-<label class="form-label" for="clp-balance-history-start">Fecha de Inicio</label>
-<input class="form-control" id="clp-balance-history-start" type="date"/>
-</div>
-<div>
-<label class="form-label" for="clp-balance-history-end">Fecha de Fin</label>
-<input class="form-control" id="clp-balance-history-end" type="date"/>
-</div>
-</div>
-<div class="flex flex-wrap gap-2 mb-4">
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="clp-balance-history-today">Hoy</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="clp-balance-history-yesterday">Ayer</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="clp-balance-history-7days">Últimos 7 días</button>
-<button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="clp-balance-history-search-btn">Buscar</button>
-</div>
-<p class="text-sm text-gray-600 mb-4" id="clp-balance-history-summary"></p>
-<!-- Header for CLP Balance History -->
-<div class="max-h-96 overflow-y-auto border rounded-lg">
-<table class="w-full text-sm">
-<thead class="hidden" id="clp-balance-history-header">
-<tr class="text-xs font-bold text-gray-500 uppercase bg-gray-50 text-left">
-<th class="p-2">Fecha y Hora</th>
-<th class="p-2 text-left">Descripción</th>
-<th class="p-2 text-right">Cargo (CLP)</th>
-<th class="p-2 text-right">Abono (CLP)</th>
-<th class="p-2 text-right">Saldo (CLP)</th>
-</tr>
-</thead>
-<tbody id="clp-balance-history-list">
-<!-- El historial CLP se renderizará aquí -->
-</tbody>
-</table>
-</div>
-<p class="text-gray-500 text-center mt-4 hidden" id="no-balance-history-message">Selecciona un rango de fechas para ver los movimientos.</p>
-</div>
 <!-- Seller Commissions (Admin View) -->
+    <div class="section-card">
+        <h3 class="text-xl font-semibold text-gray-700 mb-4">Comisiones de Vendedores (Hoy)</h3>
+        <div class="space-y-3" id="admin-seller-commissions-list">
+            <p class="text-gray-500">Calculando comisiones...</p>
+        </div>
+    </div>
+<!-- Tabbed History Section -->
 <div class="section-card">
-<h3 class="text-xl font-semibold text-gray-700 mb-4">Comisiones de Vendedores (Hoy)</h3>
-<div class="space-y-3" id="admin-seller-commissions-list">
-<p class="text-gray-500">Calculando comisiones...</p>
-</div>
-</div>
-<!-- Seller Commission History -->
-<div class="section-card">
-<h2 class="text-2xl font-semibold text-gray-700 mb-4">Historial de Comisiones por Vendedor</h2>
-<!-- Compact Filter Bar -->
-<div class="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4">
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
-<div>
-<label class="form-label text-sm" for="seller-commission-history-select">Vendedor</label>
-<select class="form-select text-sm" id="seller-commission-history-select">
-<option value="">-- Elige un vendedor --</option>
-</select>
-</div>
-<div>
-<label class="form-label text-sm" for="seller-commission-history-start">Desde</label>
-<input class="form-control text-sm" id="seller-commission-history-start" type="date"/>
-</div>
-<div>
-<label class="form-label text-sm" for="seller-commission-history-end">Hasta</label>
-<input class="form-control text-sm" id="seller-commission-history-end" type="date"/>
-</div>
-<div class="flex gap-2">
-<button class="w-full bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600 transition duration-300 shadow-md text-sm" id="seller-commission-history-search-btn">Buscar</button>
-<button class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400 text-sm" disabled="" id="export-seller-commission-excel-btn">Excel</button>
-</div>
-</div>
-<div class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200">
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="seller-commission-history-today">Hoy</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="seller-commission-history-yesterday">Ayer</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="seller-commission-history-7days">Últimos 7 días</button>
-</div>
-</div>
-<p class="text-sm text-gray-600 mb-4" id="seller-commission-history-summary"></p>
-<!-- Commission Table -->
-<div class="max-h-96 overflow-y-auto border rounded-lg">
-<table class="w-full text-sm">
-<thead class="bg-gray-50 sticky top-0">
-<tr class="text-xs font-bold text-gray-500 uppercase text-left">
-<th class="p-2">Fecha</th>
-<th class="p-2">ID Pedido</th>
-<th class="p-2 text-right">Monto Venta (CLP)</th>
-<th class="p-2 text-right">Comisión (CLP)</th>
-</tr>
-</thead>
-<tbody id="seller-commission-history-list">
-<!-- Commission history will be rendered here as table rows -->
-</tbody>
-</table>
-</div>
-<p class="text-gray-500 text-center mt-4 hidden" id="no-seller-commission-history-message">Selecciona un vendedor y un rango de fechas para ver el historial.</p>
-<!-- Historial de Pedidos -->
-<div class="section-card">
-<h2 class="text-2xl font-semibold text-gray-700 mb-4">Búsqueda Histórica de Pedidos</h2>
-<!-- Filtros de Fecha -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-<div>
-<label class="form-label" for="historical-date-start">Fecha de Inicio</label>
-<input class="form-control" id="historical-date-start" type="date"/>
-</div>
-<div>
-<label class="form-label" for="historical-date-end">Fecha de Fin</label>
-<input class="form-control" id="historical-date-end" type="date"/>
-</div>
-</div>
-<!-- Search by ID -->
-<div class="mb-4">
-<label class="form-label" for="historical-id-search">Buscar por ID de Pedido (últimos 5 dígitos)</label>
-<div class="flex gap-2">
-<input class="form-control" id="historical-id-search" maxlength="5" placeholder="Ej: IhWt6" type="text"/>
-<button class="px-4 py-2 text-sm font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600" id="historical-id-search-btn">Buscar ID</button>
-</div>
-</div>
-<div class="flex flex-wrap gap-2 mb-4">
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="historical-date-today">Hoy</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="historical-date-yesterday">Ayer</button>
-<button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-full hover:bg-gray-300" id="historical-date-7days">Últimos 7 días</button>
-<button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="historical-search-btn">Buscar por Fecha</button>
-</div>
-<!-- Filtros de Estado -->
-<div class="mb-4">
-<label class="mb-2 form-label">Filtrar por Estado</label>
-<div class="flex flex-wrap gap-2" id="historical-status-filters">
-<button class="historical-status-btn active px-4 py-2 text-sm font-semibold rounded-lg" data-status="Todos">Todos</button>
-<button class="historical-status-btn px-4 py-2 text-sm font-semibold rounded-lg" data-status="Pendiente de pago">Pendiente</button>
-<button class="historical-status-btn px-4 py-2 text-sm font-semibold rounded-lg" data-status="Pagado">Pagado</button>
-<button class="historical-status-btn px-4 py-2 text-sm font-semibold rounded-lg" data-status="Cancelado">Cancelado</button>
-</div>
-</div>
-<div class="flex justify-end items-center mb-4">
-<button class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-excel-btn">
-Exportar a Excel
-</button>
-</div>
-<p class="text-sm text-gray-600 mb-4" id="historical-search-summary"></p>
-<div class="space-y-4 max-h-96 overflow-y-auto" id="historical-orders-list">
-<!-- El historial de pedidos se renderizará aquí -->
-</div>
-<p class="text-gray-500 text-center mt-4 hidden" id="no-historical-orders-message">No hay pedidos para la fecha seleccionada.</p>
+    <div class="flex border-b border-gray-200">
+        <button class="history-tab-btn px-4 py-2 text-sm font-semibold text-blue-600 bg-white border-b-2 border-blue-600" data-target="history-section-ves">Historial Saldo VES</button>
+        <button class="history-tab-btn px-4 py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-gray-100" data-target="clp-balance-history-section">Historial Saldo CLP</button>
+        <button class="history-tab-btn px-4 py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-gray-100" data-target="history-section-commissions">Historial Comisiones</button>
+        <button class="history-tab-btn px-4 py-2 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-gray-100" data-target="history-section-orders">Historial Pedidos</button>
+    </div>
+
+    <!-- Historial de Movimientos de Saldo -->
+    <div id="history-section-ves" class="history-section">
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h2 class="text-2xl font-semibold text-gray-700">Historial de Movimientos de Saldo</h2>
+            <button class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-balance-excel-btn">
+                Exportar a Excel
+            </button>
+        </div>
+        <!-- Filtros de Fecha -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="form-label" for="balance-history-start">Fecha de Inicio</label>
+                <input class="form-control" id="balance-history-start" type="date"/>
+            </div>
+            <div>
+                <label class="form-label" for="balance-history-end">Fecha de Fin</label>
+                <input class="form-control" id="balance-history-end" type="date"/>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" class="filter-chip" id="balance-history-today">Hoy</button>
+            <button type="button" class="filter-chip" id="balance-history-yesterday">Ayer</button>
+            <button type="button" class="filter-chip" id="balance-history-7days">Últimos 7 días</button>
+            <button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="balance-history-search-btn">Buscar</button>
+            <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day">&lt; Día Anterior</button>
+            <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day">Día Siguiente &gt;</button>
+        </div>
+        <!-- Header for Balance History -->
+        <div class="max-h-96 overflow-y-auto border rounded-lg">
+            <table class="w-full text-sm">
+                <thead class="hidden" id="balance-history-header">
+                    <tr class="text-xs font-bold text-gray-500 uppercase bg-gray-50">
+                        <th class="p-2 text-left">Fecha y Hora</th>
+                        <th class="p-2 text-left">Descripción</th>
+                        <th class="p-2 text-left">Banco</th>
+                        <th class="p-2 text-right">Cargo</th>
+                        <th class="p-2 text-right">Abono</th>
+                        <th class="p-2 text-right">Saldo</th>
+                    </tr>
+                </thead>
+                <tbody id="balance-history-list">
+                    <!-- El historial se renderizará aquí -->
+                </tbody>
+            </table>
+        </div>
+        <p class="text-gray-500 text-center mt-4 hidden" id="no-balance-history-message">Selecciona un rango de fechas para ver los movimientos.</p>
+    </div>
+
+    <!-- CLP Balance History (A1, A2 only) -->
+    <div class="history-section hidden" id="clp-balance-history-section">
+        <div class="flex flex-wrap justify-between items-center mb-4 gap-4">
+            <h2 class="text-2xl font-semibold text-gray-700">Historial de Saldos (CLP)</h2>
+            <button class="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-clp-balance-excel-btn">
+                Exportar a Excel
+            </button>
+        </div>
+        <!-- Filtros de Fecha -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="form-label" for="clp-balance-history-start">Fecha de Inicio</label>
+                <input class="form-control" id="clp-balance-history-start" type="date"/>
+            </div>
+            <div>
+                <label class="form-label" for="clp-balance-history-end">Fecha de Fin</label>
+                <input class="form-control" id="clp-balance-history-end" type="date"/>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" class="filter-chip" id="clp-balance-history-today">Hoy</button>
+            <button type="button" class="filter-chip" id="clp-balance-history-yesterday">Ayer</button>
+            <button type="button" class="filter-chip" id="clp-balance-history-7days">Últimos 7 días</button>
+            <button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="clp-balance-history-search-btn">Buscar</button>
+        </div>
+        <p class="text-sm text-gray-600 mb-4" id="clp-balance-history-summary"></p>
+        <!-- Header for CLP Balance History -->
+        <div class="max-h-96 overflow-y-auto border rounded-lg">
+            <table class="w-full text-sm">
+                <thead class="hidden" id="clp-balance-history-header">
+                    <tr class="text-xs font-bold text-gray-500 uppercase bg-gray-50 text-left">
+                        <th class="p-2">Fecha y Hora</th>
+                        <th class="p-2 text-left">Descripción</th>
+                        <th class="p-2 text-right">Cargo (CLP)</th>
+                        <th class="p-2 text-right">Abono (CLP)</th>
+                        <th class="p-2 text-right">Saldo (CLP)</th>
+                    </tr>
+                </thead>
+                <tbody id="clp-balance-history-list">
+                    <!-- El historial CLP se renderizará aquí -->
+                </tbody>
+            </table>
+        </div>
+        <p class="text-gray-500 text-center mt-4 hidden" id="no-clp-balance-history-message">Selecciona un rango de fechas para ver los movimientos.</p>
+    </div>
+
+    <!-- Seller Commission History -->
+    <div id="history-section-commissions" class="history-section hidden">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Historial de Comisiones por Vendedor</h2>
+        <!-- Compact Filter Bar -->
+        <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                <div>
+                    <label class="form-label text-sm" for="seller-commission-history-select">Vendedor</label>
+                    <select class="form-select text-sm" id="seller-commission-history-select">
+                        <option value="">-- Elige un vendedor --</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label text-sm" for="seller-commission-history-start">Desde</label>
+                    <input class="form-control text-sm" id="seller-commission-history-start" type="date"/>
+                </div>
+                <div>
+                    <label class="form-label text-sm" for="seller-commission-history-end">Hasta</label>
+                    <input class="form-control text-sm" id="seller-commission-history-end" type="date"/>
+                </div>
+                <div class="flex gap-2">
+                    <button class="w-full bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600 transition duration-300 shadow-md text-sm" id="seller-commission-history-search-btn">Buscar</button>
+                    <button class="w-full bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400 text-sm" disabled="" id="export-seller-commission-excel-btn">Excel</button>
+                </div>
+            </div>
+            <div class="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200">
+                <button type="button" class="filter-chip" data-chip-group="seller-history-range" id="seller-commission-history-today">Hoy</button>
+                <button type="button" class="filter-chip" data-chip-group="seller-history-range" id="seller-commission-history-yesterday">Ayer</button>
+                <button type="button" class="filter-chip" data-chip-group="seller-history-range" id="seller-commission-history-7days">Últimos 7 días</button>
+            </div>
+        </div>
+        <p class="text-sm text-gray-600 mb-4" id="seller-commission-history-summary"></p>
+        <!-- Commission Table -->
+        <div class="max-h-96 overflow-y-auto border rounded-lg">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 sticky top-0">
+                    <tr class="text-xs font-bold text-gray-500 uppercase text-left">
+                        <th class="p-2">Fecha</th>
+                        <th class="p-2">ID Pedido</th>
+                        <th class="p-2 text-right">Monto Venta (CLP)</th>
+                        <th class="p-2 text-right">Comisión (CLP)</th>
+                    </tr>
+                </thead>
+                <tbody id="seller-commission-history-list">
+                    <!-- Commission history will be rendered here as table rows -->
+                </tbody>
+            </table>
+        </div>
+        <p class="text-gray-500 text-center mt-4 hidden" id="no-seller-commission-history-message">Selecciona un vendedor y un rango de fechas para ver el historial.</p>
+    </div>
+
+    <!-- Historial de Pedidos -->
+    <div id="history-section-orders" class="history-section hidden">
+        <h2 class="text-2xl font-semibold text-gray-700 mb-4">Búsqueda Histórica de Pedidos</h2>
+        <!-- Filtros de Fecha -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="form-label" for="historical-date-start">Fecha de Inicio</label>
+                <input class="form-control" id="historical-date-start" type="date"/>
+            </div>
+            <div>
+                <label class="form-label" for="historical-date-end">Fecha de Fin</label>
+                <input class="form-control" id="historical-date-end" type="date"/>
+            </div>
+        </div>
+        <!-- Search by ID -->
+        <div class="mb-4">
+            <label class="form-label" for="historical-id-search">Buscar por ID de Pedido (últimos 5 dígitos)</label>
+            <div class="flex gap-2">
+                <input class="form-control" id="historical-id-search" maxlength="5" placeholder="Ej: IhWt6" type="text"/>
+                <button class="px-4 py-2 text-sm font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600" id="historical-id-search-btn">Buscar ID</button>
+            </div>
+        </div>
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" class="filter-chip" id="historical-date-today">Hoy</button>
+            <button type="button" class="filter-chip" id="historical-date-yesterday">Ayer</button>
+            <button type="button" class="filter-chip" id="historical-date-7days">Últimos 7 días</button>
+            <button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="historical-search-btn">Buscar por Fecha</button>
+        </div>
+        <!-- Filtros de Estado -->
+        <div class="mb-4">
+            <label class="mb-2 form-label">Filtrar por Estado</label>
+            <div class="flex flex-wrap gap-2" id="historical-status-filters">
+                <button type="button" class="filter-chip historical-status-btn is-active" data-status="Todos">Todos</button>
+                <button type="button" class="filter-chip historical-status-btn" data-status="Pendiente de pago">Pendiente</button>
+                <button type="button" class="filter-chip historical-status-btn" data-status="Pagado">Pagado</button>
+                <button type="button" class="filter-chip historical-status-btn" data-status="Cancelado">Cancelado</button>
+            </div>
+        </div>
+        <div class="flex justify-end items-center mb-4">
+            <button class="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-green-700 transition duration-300 shadow-md disabled:bg-gray-400" disabled="" id="export-excel-btn">
+                Exportar a Excel
+            </button>
+        </div>
+        <p class="text-sm text-gray-600 mb-4" id="historical-search-summary"></p>
+        <div class="space-y-4 max-h-96 overflow-y-auto" id="historical-orders-list">
+            <!-- El historial de pedidos se renderizará aquí -->
+        </div>
+        <p class="text-gray-500 text-center mt-4 hidden" id="no-historical-orders-message">No hay pedidos para la fecha seleccionada.</p>
+    </div>
 </div>
 <!-- Lista de Clientes -->
 <div class="section-card">

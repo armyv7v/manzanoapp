@@ -37,6 +37,14 @@ let batchProcessData = {}; // NEW: To store data for the batch process
 let userSelectedCountry = 'VES'; // Default country for the user forms
 let adminSelectedCountry = 'VE'; // Default country for the admin panel.
 let isStoreOpen = true; // Default to open, will be updated from DB.
+let todaysAdminCommissionTotal = 0;
+let todaysTilloCommissionTotal = 0;
+let todaysBankFeeTotal = 0;
+let tilloCommissionListener = null; // Listener for today's Tillo commission portion
+
+const ADMIN_BASE_COMMISSION_RATE = 0.01;
+const TILLO_COMMISSION_RATE = 0.0015;
+const TOTAL_ADMIN_COMMISSION_RATE = ADMIN_BASE_COMMISSION_RATE + TILLO_COMMISSION_RATE;
 
 // Client list state
 let hasClientSearchBeenPerformed = false;
@@ -337,6 +345,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
   const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
   const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
+  const balanceHistoryPrevDayBtn = document.getElementById('balance-history-prev-day');
+  const balanceHistoryNextDayBtn = document.getElementById('balance-history-next-day');
   const exportBalanceExcelBtn = document.getElementById('export-balance-excel-btn');
   const balanceHistoryHeader = document.getElementById('balance-history-header');
 
@@ -364,6 +374,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const clpBalanceHistoryList = document.getElementById('clp-balance-history-list');
   const noClpBalanceHistoryMessage = document.getElementById('no-clp-balance-history-message');
   const exportClpBalanceExcelBtn = document.getElementById('export-clp-balance-excel-btn');
+  const clpBalanceHistoryStartInput = document.getElementById('clp-balance-history-start');
+  const clpBalanceHistoryEndInput = document.getElementById('clp-balance-history-end');
+  const clpBalanceHistoryTodayBtn = document.getElementById('clp-balance-history-today');
+  const clpBalanceHistoryYesterdayBtn = document.getElementById('clp-balance-history-yesterday');
+  const clpBalanceHistory7DaysBtn = document.getElementById('clp-balance-history-7days');
 
   // Paste buttons
   const pasteBtnTransferencia = document.getElementById('paste-btn-transferencia');
@@ -435,6 +450,23 @@ document.addEventListener('DOMContentLoaded', () => {
   const sellerCommissionHistorySummary = document.getElementById('seller-commission-history-summary');
   const sellerCommissionHistoryList = document.getElementById('seller-commission-history-list');
   const noSellerCommissionHistoryMessage = document.getElementById('no-seller-commission-history-message');
+
+  const historicalStatusButtons = historicalStatusFilters ? Array.from(historicalStatusFilters.querySelectorAll('button')) : [];
+  const historicalRangeButtons = [historicalDateTodayBtn, historicalDateYesterdayBtn, historicalDate7DaysBtn].filter(Boolean);
+  const balanceHistoryRangeButtons = [balanceHistoryTodayBtn, balanceHistoryYesterdayBtn, balanceHistory7DaysBtn].filter(Boolean);
+  const clpBalanceHistoryRangeButtons = [clpBalanceHistoryTodayBtn, clpBalanceHistoryYesterdayBtn, clpBalanceHistory7DaysBtn].filter(Boolean);
+  const sellerCommissionRangeButtons = [sellerCommissionHistoryTodayBtn, sellerCommissionHistoryYesterdayBtn, sellerCommissionHistory7DaysBtn].filter(Boolean);
+
+  const setActiveChip = (buttons, activeButton = null) => {
+      buttons.forEach(btn => {
+          if (!btn) return;
+          if (btn === activeButton) {
+              btn.classList.add('is-active');
+          } else {
+              btn.classList.remove('is-active');
+          }
+      });
+  };
 
   // Transfer Funds Modal Elements
   const openTransferFundsModalBtn = document.getElementById('open-transfer-funds-modal-btn');
@@ -1322,9 +1354,55 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   };
 
+  const updateCommissionSummary = () => {
+      const adminLine = roundUpToTwoDecimals(todaysAdminCommissionTotal);
+      const tilloLine = roundUpToTwoDecimals(todaysTilloCommissionTotal);
+      const bankLine = roundUpToTwoDecimals(todaysBankFeeTotal);
+      const totalLine = roundUpToTwoDecimals(adminLine + tilloLine + bankLine);
+
+      const breakdownEl = document.getElementById('commission-breakdown');
+      const markup = `
+          <div class="flex justify-between items-center p-2 rounded-lg ${adminLine > 0 ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600'}">
+              <span class="font-medium">Comisión Admin 1%</span>
+              <span class="font-semibold">${adminLine.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+          </div>
+          <div class="flex justify-between items-center p-2 rounded-lg ${tilloLine > 0 ? 'bg-pink-100 text-pink-800' : 'bg-gray-100 text-gray-600'}">
+              <span class="font-medium">Mano Tillo 0.15%</span>
+              <span class="font-semibold">${tilloLine.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+          </div>
+          <div class="flex justify-between items-center p-2 rounded-lg ${bankLine > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}">
+              <span class="font-medium">Comisiones Banco</span>
+              <span class="font-semibold">${bankLine.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+          </div>
+          <div class="flex justify-between items-center p-2 rounded-lg bg-blue-100 text-blue-800 border-t border-blue-200">
+              <span class="font-bold">Total Comisiones</span>
+              <span class="font-bold">${totalLine.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+          </div>
+      `;
+
+      if (breakdownEl) {
+          breakdownEl.innerHTML = markup;
+          return;
+      }
+
+      const summaryContainer = document.getElementById('admin-commission-summary');
+      if (!summaryContainer) return;
+
+      summaryContainer.innerHTML = `
+          <div class="space-y-2 text-sm">
+              <div id="commission-breakdown">
+                  ${markup}
+              </div>
+          </div>
+      `;
+  };
+
+  updateCommissionSummary();
+
   /** Attaches a real-time listener for today's admin commission total. */
   const attachAdminCommissionListener = () => {
       if (adminCommissionListener) adminCommissionListener(); // Detach old one
+      if (tilloCommissionListener) tilloCommissionListener();
 
       const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
       const todayStart = new Date(`${todayString}T00:00:00-04:00`);
@@ -1337,40 +1415,44 @@ document.addEventListener('DOMContentLoaded', () => {
       const query = db.collection('balance_history')
           .where('type', '==', 'admin_commission')
           .where('timestamp', '>=', todayStart)
-          .where('timestamp', '<=', todayEnd);
+          .where('timestamp', '<=', todayEnd)
+          .orderBy('timestamp', 'desc');
+
+      todaysAdminCommissionTotal = 0;
+      todaysTilloCommissionTotal = 0;
+      updateCommissionSummary();
 
       adminCommissionListener = query.onSnapshot(snapshot => {
           let totalAdminCommissionToday = 0;
           snapshot.forEach(doc => {
               totalAdminCommissionToday += doc.data().amount;
           });
-          totalAdminCommissionToday = roundUpToTwoDecimals(totalAdminCommissionToday);
-
-          // NEW: Calculate Tillo's commission (15% of admin's commission)
-          const tilloCommission = roundUpToTwoDecimals(totalAdminCommissionToday * 0.15);
-          const netAdminCommission = totalAdminCommissionToday - tilloCommission;
-
-          const adminCommissionDailySummaryEl = document.getElementById('admin-commission-daily-summary');
-          const tilloCommissionSummaryEl = document.getElementById('tillo-commission-summary');
-
-          // Always show the summary for consistency, styled differently if zero.
-          if (adminCommissionDailySummaryEl) {
-              adminCommissionDailySummaryEl.innerHTML = `
-              <div class="flex justify-between items-center p-2 rounded-lg ${totalAdminCommissionToday > 0 ? 'bg-purple-100' : 'bg-gray-100'}">
-                  <div class="flex items-center gap-2">
-                      <p class="font-medium ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-600'}">Comisión Admin Bruta (Hoy)</p>
-                  </div>
-                  <p class="font-semibold ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-700'}">${totalAdminCommissionToday.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
-              </div>
-          `;
-              tilloCommissionSummaryEl.innerHTML = `
-                  <div class="flex justify-between items-center p-2 rounded-lg bg-red-100"><span class="text-red-800">(-) Mano Tillo (15%):</span> <span class="font-semibold text-red-800">${tilloCommission.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span></div>
-                  <div class="flex justify-between items-center p-2 rounded-lg bg-green-100 border-t border-gray-200"><span class="font-bold text-green-800">Comisión Neta Admin:</span> <span class="font-bold text-green-800">${netAdminCommission.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span></div>
-              `;
-          }
+          todaysAdminCommissionTotal = roundUpToTwoDecimals(totalAdminCommissionToday);
+          updateCommissionSummary();
       }, error => {
           console.error("Error fetching today's admin commission:", error);
-          document.getElementById('admin-commission-summary').innerHTML = '';
+          todaysAdminCommissionTotal = 0;
+          todaysTilloCommissionTotal = 0;
+          updateCommissionSummary();
+      });
+
+      const tilloQuery = db.collection('balance_history')
+          .where('type', '==', 'tillo_commission')
+          .where('timestamp', '>=', todayStart)
+          .where('timestamp', '<=', todayEnd)
+          .orderBy('timestamp', 'desc');
+
+      tilloCommissionListener = tilloQuery.onSnapshot(snapshot => {
+          let totalTillo = 0;
+          snapshot.forEach(doc => {
+              totalTillo += doc.data().amount;
+          });
+          todaysTilloCommissionTotal = roundUpToTwoDecimals(totalTillo);
+          updateCommissionSummary();
+      }, error => {
+          console.error("Error fetching today's Tillo commission:", error);
+          todaysTilloCommissionTotal = 0;
+          updateCommissionSummary();
       });
   };
 
@@ -1387,25 +1469,20 @@ document.addEventListener('DOMContentLoaded', () => {
           .where('timestamp', '>=', todayStart)
           .where('timestamp', '<=', todayEnd);
 
+      todaysBankFeeTotal = 0;
+      updateCommissionSummary();
+
       bankFeeListener = query.onSnapshot(snapshot => {
           let totalBankFeeToday = 0;
           snapshot.forEach(doc => {
               totalBankFeeToday += doc.data().amount;
           });
-          totalBankFeeToday = roundUpToTwoDecimals(totalBankFeeToday);
-
-          const bankFeeSummaryEl = document.getElementById('bank-fee-summary');
-          if (bankFeeSummaryEl) {
-              bankFeeSummaryEl.innerHTML = `
-                  <div class="flex justify-between items-center p-2 rounded-lg bg-orange-100">
-                      <span class="text-gray-600">Comisión Banco (Hoy):</span>
-                      <span class="font-semibold text-orange-700">${totalBankFeeToday.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
-                  </div>
-              `;
-          }
+          todaysBankFeeTotal = roundUpToTwoDecimals(totalBankFeeToday);
+          updateCommissionSummary();
       }, error => {
           console.error("Error fetching today's bank fees:", error);
-          document.getElementById('bank-fee-summary').innerHTML = '';
+          todaysBankFeeTotal = 0;
+          updateCommissionSummary();
       });
   };
 
@@ -1745,10 +1822,18 @@ document.addEventListener('DOMContentLoaded', () => {
               adminCommissionListener();
               adminCommissionListener = null;
           }
+          if (tilloCommissionListener) { // NEW
+              tilloCommissionListener();
+              tilloCommissionListener = null;
+          }
           if (bankFeeListener) { // NEW
               bankFeeListener();
               bankFeeListener = null;
           }
+          todaysAdminCommissionTotal = 0;
+          todaysTilloCommissionTotal = 0;
+          todaysBankFeeTotal = 0;
+          updateCommissionSummary();
           if (clpBalanceHistorySection) {
               clpBalanceHistorySection.classList.add('hidden');
           }
@@ -1802,6 +1887,9 @@ document.addEventListener('DOMContentLoaded', () => {
               // The note will be more specific, but this is a fallback.
               description = `Comisión Admin`;
           }
+      } else if (history.type === 'tillo_commission') {
+          debit = formattedAmount;
+          if (!description) description = `Mano Tillo`;
       } else { // subtract
           debit = formattedAmount;
           if (!description) description = `Pago de Pedido`;
@@ -1859,23 +1947,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Update Admin Commission Summary with CLP details
     if (adminCommissionSummaryEl) {
         adminCommissionSummaryEl.innerHTML = `
-          <div class="space-y-2 text-sm" id="financial-summary-section">
-              <!-- Daily VES Commissions -->
-              <div id="admin-commission-daily-summary">
-                  <!-- This will be populated by its listener -->
-              </div>
-              <div id="bank-fee-summary">
-                  <!-- This will be populated by its listener -->
-              </div>
-              <!-- Tillo Commission (calculated based on admin commission) -->
-              <div id="tillo-commission-summary">
-                  <!-- This will be populated by the admin commission listener -->
-              </div>
-
-              <!-- CLP Summary -->
+          <div class="space-y-2 text-sm">
+              <div id="commission-breakdown"></div>
               <div class="flex justify-between border-t border-gray-300 pt-2 mt-2"><span class="font-bold text-gray-800">Saldo Bruto (CLP):</span> <span class="font-bold text-blue-600">${displayedClpBalance.toLocaleString('es-CL', { style: 'currency', currency: 'CLP' })}</span></div>
           </div>
       `;
+        updateCommissionSummary();
     }
   };
 
@@ -2612,6 +2689,38 @@ document.addEventListener('DOMContentLoaded', () => {
       balanceOperationModal.classList.add('flex');
   });
 
+  // --- Tabbed History Logic ---
+  const historyTabButtons = document.querySelectorAll('.history-tab-btn');
+  const historySections = document.querySelectorAll('.history-section');
+
+  historyTabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+          const targetId = button.dataset.target;
+
+          // Hide all sections
+          historySections.forEach(section => {
+              section.classList.add('hidden');
+          });
+
+          // Show the target section
+          const targetSection = document.getElementById(targetId);
+          if (targetSection) {
+              targetSection.classList.remove('hidden');
+          }
+
+          // Update button styles
+          historyTabButtons.forEach(btn => {
+              if (btn === button) {
+                  btn.classList.add('text-blue-600', 'bg-white', 'border-b-2', 'border-blue-600');
+                  btn.classList.remove('text-gray-500', 'hover:text-blue-600', 'hover:bg-gray-100');
+              } else {
+                  btn.classList.remove('text-blue-600', 'bg-white', 'border-b-2', 'border-blue-600');
+                  btn.classList.add('text-gray-500', 'hover:text-blue-600', 'hover:bg-gray-100');
+              }
+          });
+      });
+  });
+
   // --- Initial App Setup ---
   // onAuthStateChanged handles the initial view, but we can set a default
   switchTab(tabs[0]); // Set default tab
@@ -2925,6 +3034,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const adminTag = userTags[currentUser.email] || 'ADMIN';
       let totalDebit = 0; // Declare totalDebit here to be available in the whole scope
       let adminCommissionVes = 0; // Initialize commission to 0
+      let tilloCommissionVes = 0;
 
       try {
           // --- HISTORICAL PAYMENT LOGIC ---
@@ -2970,9 +3080,11 @@ document.addEventListener('DOMContentLoaded', () => {
                   throw new Error("La cuenta de origen seleccionada ya no es válida.");
               }
 
-              // Calculate 1% admin commission for VES orders
-              adminCommissionVes = roundUpToTwoDecimals((orderData.destinationAmount || 0) * 0.01);
-              totalDebit = (orderData.destinationAmount || 0) + fee + adminCommissionVes; // Assign value here
+              const baseAmount = orderData.destinationAmount || 0;
+              adminCommissionVes = roundUpToTwoDecimals(baseAmount * ADMIN_BASE_COMMISSION_RATE);
+              tilloCommissionVes = roundUpToTwoDecimals(baseAmount * TILLO_COMMISSION_RATE);
+              const totalCommissionVes = adminCommissionVes + tilloCommissionVes;
+              totalDebit = baseAmount + fee + totalCommissionVes; // Assign value here
 
               // --- NEW: Calculate CLP equivalent for the payment ---
               const accountRef = db.collection('accounts').doc(selectedAccountId);
@@ -2986,7 +3098,7 @@ document.addEventListener('DOMContentLoaded', () => {
               
               // Create history for payment
               batch.set(paymentHistoryRef, { 
-                  amount: orderData.destinationAmount, 
+                  amount: baseAmount, 
                   type: 'subtract', 
                   note: `Pago pedido ${orderId.slice(-5)} (${orderData.destinationCurrency})`, 
                   timestamp: paymentTimestamp,
@@ -3017,17 +3129,28 @@ document.addEventListener('DOMContentLoaded', () => {
                       holder: selectedAccount.holder, // Origen del pago
                       bank: orderData.bank, // CRITICAL: Banco de DESTINO del pedido
                   });
-                  
-                  // --- DEFINITIVE CORRECTION for CLP Balance ---
-                  // The total debit in VES (payment + fee + admin commission) is calculated once
-                  // and then converted to CLP to be decremented from the persistent balance.
-                  const purchaseRate = exchangeRates['purchaseRateVES'] || 0;
-                  if (purchaseRate > 0) {
-                      const totalDebitClp = roundUpToTwoDecimals(((orderData.destinationAmount || 0) + fee + adminCommissionVes) / purchaseRate);
-                      batch.update(db.collection('config').doc('rate'), { 
-                          totalClpBalance: firebase.firestore.FieldValue.increment(-totalDebitClp)
-                      });
-                  }
+              }
+              if (tilloCommissionVes > 0) {
+                  const tilloCommissionHistoryRef = db.collection('balance_history').doc();
+                  batch.set(tilloCommissionHistoryRef, {
+                      amount: tilloCommissionVes,
+                      type: 'tillo_commission',
+                      note: `Mano Tillo pedido ${orderId.slice(-5)}`,
+                      timestamp: paymentTimestamp,
+                      holder: selectedAccount.holder,
+                      bank: orderData.bank,
+                  });
+              }
+
+              // --- DEFINITIVE CORRECTION for CLP Balance ---
+              // The total debit in VES (payment + fee + commissions) is calculated once
+              // and then converted to CLP to be decremented from the persistent balance.
+              const purchaseRate = exchangeRates['purchaseRateVES'] || 0;
+              if (purchaseRate > 0) {
+                  const totalDebitClp = roundUpToTwoDecimals((baseAmount + fee + totalCommissionVes) / purchaseRate);
+                  batch.update(db.collection('config').doc('rate'), { 
+                      totalClpBalance: firebase.firestore.FieldValue.increment(-totalDebitClp)
+                  });
               }
           }
           // For non-VES payments, we just update the status and don't touch balances.
@@ -3055,7 +3178,7 @@ document.addEventListener('DOMContentLoaded', () => {
               }
               const purchaseRate = exchangeRates['purchaseRateVES'] || 0;
               if (purchaseRate > 0) {
-                  const totalDebitClp = roundUpToTwoDecimals(((orderData.destinationAmount || 0) + fee + adminCommissionVes) / purchaseRate);
+                  const totalDebitClp = roundUpToTwoDecimals((baseAmount + fee + totalCommissionVes) / purchaseRate);
                   exchangeRates.totalClpBalance -= totalDebitClp;
               }
               // Re-render the main balance lists with the new local data
@@ -3164,6 +3287,7 @@ document.addEventListener('DOMContentLoaded', () => {
     historicalDateTodayBtn.addEventListener('click', () => {
         const today = getChileanDateForPicker(new Date());
         setDateRangeAndSearch(today, today);
+        setActiveChip(historicalRangeButtons, historicalDateTodayBtn);
     });
   } else {
       console.error("Button with ID 'historical-date-today' was not found.");
@@ -3175,6 +3299,7 @@ document.addEventListener('DOMContentLoaded', () => {
         yesterday.setDate(yesterday.getDate() - 1);
         const chileYesterday = getChileanDateForPicker(yesterday);
         setDateRangeAndSearch(chileYesterday, chileYesterday);
+        setActiveChip(historicalRangeButtons, historicalDateYesterdayBtn);
     });
   } else {
       console.error("Button with ID 'historical-date-yesterday' was not found.");
@@ -3187,6 +3312,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const chileStart = getChileanDateForPicker(start);
         const chileEnd = getChileanDateForPicker(new Date());
         setDateRangeAndSearch(chileStart, chileEnd);
+        setActiveChip(historicalRangeButtons, historicalDate7DaysBtn);
     });
   } else {
       console.error("Button with ID 'historical-date-7days' was not found.");
@@ -3348,6 +3474,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
       }
       handleHistoricalSearch(startDateVal, endDateVal);
+      setActiveChip(historicalRangeButtons, null);
   });
 
   historicalIdSearchBtn.addEventListener('click', async () => {
@@ -3408,18 +3535,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   });
 
-  historicalStatusFilters.addEventListener('click', (e) => {
-      if (e.target.tagName === 'BUTTON') {
-          historicalStatusFilters.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-          e.target.classList.add('active');
-          // Re-run search with current dates
+  if (historicalStatusFilters) {
+      historicalStatusFilters.addEventListener('click', (e) => {
+          const targetButton = e.target.closest('button');
+          if (!targetButton) return;
+          setActiveChip(historicalStatusButtons, targetButton);
           const startDateVal = historicalDateStart.valueAsDate;
           const endDateVal = historicalDateEnd.valueAsDate;
           if (startDateVal && endDateVal) {
-            handleHistoricalSearch(startDateVal, endDateVal);
+              handleHistoricalSearch(startDateVal, endDateVal);
           }
-      }
-  });
+      });
+  }
 
   /** Exports the currently fetched historical orders to an Excel file. */
   const exportHistoricalOrdersToExcel = () => {
@@ -3739,6 +3866,7 @@ document.addEventListener('DOMContentLoaded', () => {
       balanceHistoryStartInput.valueAsDate = today;
       balanceHistoryEndInput.valueAsDate = today;
       fetchAndRenderBalanceHistory(today, today);
+      setActiveChip(balanceHistoryRangeButtons, balanceHistoryTodayBtn);
   });
 
   balanceHistoryYesterdayBtn.addEventListener('click', () => {
@@ -3748,6 +3876,7 @@ document.addEventListener('DOMContentLoaded', () => {
       balanceHistoryStartInput.valueAsDate = chileYesterday;
       balanceHistoryEndInput.valueAsDate = chileYesterday;
       fetchAndRenderBalanceHistory(chileYesterday, chileYesterday);
+      setActiveChip(balanceHistoryRangeButtons, balanceHistoryYesterdayBtn);
   });
 
   balanceHistory7DaysBtn.addEventListener('click', () => {
@@ -3759,6 +3888,7 @@ document.addEventListener('DOMContentLoaded', () => {
       balanceHistoryStartInput.valueAsDate = chileStart;
       balanceHistoryEndInput.valueAsDate = chileEnd;
       fetchAndRenderBalanceHistory(chileStart, chileEnd);
+      setActiveChip(balanceHistoryRangeButtons, balanceHistory7DaysBtn);
   });
 
   balanceHistorySearchBtn.addEventListener('click', () => {
@@ -3770,12 +3900,31 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
       }
 
-      // The valueAsDate property already provides a Date object set to midnight UTC for the selected day.
-      // This is exactly what we need for the query, so we can use them directly.
       const start = startDateVal;
       const end = endDateVal;
 
       fetchAndRenderBalanceHistory(start, end);
+      setActiveChip(balanceHistoryRangeButtons, null);
+  });
+
+  balanceHistoryPrevDayBtn.addEventListener('click', () => {
+      const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
+      currentDate.setDate(currentDate.getDate() - 1);
+      const newDate = getChileanDateForPicker(currentDate);
+      balanceHistoryStartInput.valueAsDate = newDate;
+      balanceHistoryEndInput.valueAsDate = newDate;
+      fetchAndRenderBalanceHistory(newDate, newDate);
+      setActiveChip(balanceHistoryRangeButtons, null);
+  });
+
+  balanceHistoryNextDayBtn.addEventListener('click', () => {
+      const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
+      currentDate.setDate(currentDate.getDate() + 1);
+      const newDate = getChileanDateForPicker(currentDate);
+      balanceHistoryStartInput.valueAsDate = newDate;
+      balanceHistoryEndInput.valueAsDate = newDate;
+      fetchAndRenderBalanceHistory(newDate, newDate);
+      setActiveChip(balanceHistoryRangeButtons, null);
   });
 
   const exportBalanceHistoryToExcel = () => {
@@ -3792,11 +3941,12 @@ document.addEventListener('DOMContentLoaded', () => {
           if (item.type === 'add') {
               credit = item.amount;
               if (!description) description = `Carga de Saldo: ${item.holder}`;
-          } else { // subtract, fee, or admin_commission
+          } else { // subtract, fee, admin_commission, or tillo_commission
               debit = item.amount;
               if (!description) {
                   if (item.type === 'fee') description = 'Comisión Bancaria';
                   else if (item.type === 'admin_commission') description = 'Comisión Admin';
+                  else if (item.type === 'tillo_commission') description = 'Mano Tillo';
                   else description = 'Pago de Pedido';
               }
           }
@@ -4115,57 +4265,91 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // CLP Balance History Listeners
-  clpBalanceHistorySearchBtn.addEventListener('click', () => {
-      const start = document.getElementById('clp-balance-history-start').valueAsDate;
-      const end = document.getElementById('clp-balance-history-end').valueAsDate;
-      handleClpBalanceHistorySearch(start, end);
-  });
-  exportClpBalanceExcelBtn.addEventListener('click', exportClpBalanceHistoryToExcel);
+  if (clpBalanceHistorySearchBtn) {
+      clpBalanceHistorySearchBtn.addEventListener('click', () => {
+          const start = clpBalanceHistoryStartInput ? clpBalanceHistoryStartInput.valueAsDate : null;
+          const end = clpBalanceHistoryEndInput ? clpBalanceHistoryEndInput.valueAsDate : null;
+          if (!start || !end) {
+              showCustomAlert('Por favor, selecciona un rango de fechas para buscar en CLP.');
+              return;
+          }
+          handleClpBalanceHistorySearch(start, end);
+          setActiveChip(clpBalanceHistoryRangeButtons, null);
+      });
+  }
+  if (exportClpBalanceExcelBtn) {
+      exportClpBalanceExcelBtn.addEventListener('click', exportClpBalanceHistoryToExcel);
+  }
 
-  document.getElementById('clp-balance-history-today').addEventListener('click', () => {
-      const today = getChileanDateForPicker(new Date());
-      document.getElementById('clp-balance-history-start').valueAsDate = today;
-      document.getElementById('clp-balance-history-end').valueAsDate = today;
-      handleClpBalanceHistorySearch(today, today);
-  });
-  document.getElementById('clp-balance-history-yesterday').addEventListener('click', () => {
-      const yesterday = getChileanDateForPicker(new Date(Date.now() - 86400000));
-      document.getElementById('clp-balance-history-start').valueAsDate = yesterday;
-      document.getElementById('clp-balance-history-end').valueAsDate = yesterday;
-      handleClpBalanceHistorySearch(yesterday, yesterday);
-  });
-  document.getElementById('clp-balance-history-7days').addEventListener('click', () => {
-      const end = getChileanDateForPicker(new Date());
-      const start = getChileanDateForPicker(new Date(Date.now() - 6 * 86400000));
-      document.getElementById('clp-balance-history-start').valueAsDate = start;
-      document.getElementById('clp-balance-history-end').valueAsDate = end;
-      handleClpBalanceHistorySearch(start, end);
-  });
+  if (clpBalanceHistoryTodayBtn) {
+      clpBalanceHistoryTodayBtn.addEventListener('click', () => {
+          const today = getChileanDateForPicker(new Date());
+          if (clpBalanceHistoryStartInput) clpBalanceHistoryStartInput.valueAsDate = today;
+          if (clpBalanceHistoryEndInput) clpBalanceHistoryEndInput.valueAsDate = today;
+          handleClpBalanceHistorySearch(today, today);
+          setActiveChip(clpBalanceHistoryRangeButtons, clpBalanceHistoryTodayBtn);
+      });
+  }
+  if (clpBalanceHistoryYesterdayBtn) {
+      clpBalanceHistoryYesterdayBtn.addEventListener('click', () => {
+          const yesterday = getChileanDateForPicker(new Date(Date.now() - 86400000));
+          if (clpBalanceHistoryStartInput) clpBalanceHistoryStartInput.valueAsDate = yesterday;
+          if (clpBalanceHistoryEndInput) clpBalanceHistoryEndInput.valueAsDate = yesterday;
+          handleClpBalanceHistorySearch(yesterday, yesterday);
+          setActiveChip(clpBalanceHistoryRangeButtons, clpBalanceHistoryYesterdayBtn);
+      });
+  }
+  if (clpBalanceHistory7DaysBtn) {
+      clpBalanceHistory7DaysBtn.addEventListener('click', () => {
+          const end = getChileanDateForPicker(new Date());
+          const start = getChileanDateForPicker(new Date(Date.now() - 6 * 86400000));
+          if (clpBalanceHistoryStartInput) clpBalanceHistoryStartInput.valueAsDate = start;
+          if (clpBalanceHistoryEndInput) clpBalanceHistoryEndInput.valueAsDate = end;
+          handleClpBalanceHistorySearch(start, end);
+          setActiveChip(clpBalanceHistoryRangeButtons, clpBalanceHistory7DaysBtn);
+      });
+  }
 
   // Seller Commission History Listeners
-  sellerCommissionHistorySearchBtn.addEventListener('click', handleSellerCommissionSearch);
-  exportSellerCommissionExcelBtn.addEventListener('click', exportSellerCommissionHistoryToExcel);
+  if (sellerCommissionHistorySearchBtn) {
+      sellerCommissionHistorySearchBtn.addEventListener('click', () => {
+          handleSellerCommissionSearch();
+          setActiveChip(sellerCommissionRangeButtons, null);
+      });
+  }
+  if (exportSellerCommissionExcelBtn) {
+      exportSellerCommissionExcelBtn.addEventListener('click', exportSellerCommissionHistoryToExcel);
+  }
 
-  sellerCommissionHistoryTodayBtn.addEventListener('click', () => {
-      const today = getChileanDateForPicker(new Date());
-      setSellerCommissionDateRangeAndSearch(today, today);
-  });
+  if (sellerCommissionHistoryTodayBtn) {
+      sellerCommissionHistoryTodayBtn.addEventListener('click', () => {
+          const today = getChileanDateForPicker(new Date());
+          setSellerCommissionDateRangeAndSearch(today, today);
+          setActiveChip(sellerCommissionRangeButtons, sellerCommissionHistoryTodayBtn);
+      });
+  }
 
-  sellerCommissionHistoryYesterdayBtn.addEventListener('click', () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const chileYesterday = getChileanDateForPicker(yesterday);
-      setSellerCommissionDateRangeAndSearch(chileYesterday, chileYesterday);
-  });
+  if (sellerCommissionHistoryYesterdayBtn) {
+      sellerCommissionHistoryYesterdayBtn.addEventListener('click', () => {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const chileYesterday = getChileanDateForPicker(yesterday);
+          setSellerCommissionDateRangeAndSearch(chileYesterday, chileYesterday);
+          setActiveChip(sellerCommissionRangeButtons, sellerCommissionHistoryYesterdayBtn);
+      });
+  }
 
-  sellerCommissionHistory7DaysBtn.addEventListener('click', () => {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - 6);
-      const chileStart = getChileanDateForPicker(start);
-      const chileEnd = getChileanDateForPicker(end);
-      setSellerCommissionDateRangeAndSearch(chileStart, chileEnd);
-  });
+  if (sellerCommissionHistory7DaysBtn) {
+      sellerCommissionHistory7DaysBtn.addEventListener('click', () => {
+          const end = new Date();
+          const start = new Date();
+          start.setDate(start.getDate() - 6);
+          const chileStart = getChileanDateForPicker(start);
+          const chileEnd = getChileanDateForPicker(end);
+          setSellerCommissionDateRangeAndSearch(chileStart, chileEnd);
+          setActiveChip(sellerCommissionRangeButtons, sellerCommissionHistory7DaysBtn);
+      });
+  }
 
   // --- Add Client Modal Logic ---
 
@@ -4661,6 +4845,7 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const confirmBatchPayment = async () => {
+      const confirmBtn = document.getElementById('batch-payment-confirm-btn');
       const sourceAccountId = document.getElementById('batch-payment-source-select').value;
       const files = document.getElementById('batch-proof-upload-input').files;
 
@@ -4671,6 +4856,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return showMessage('batch-payment-message', `Debes seleccionar exactamente ${batchProcessData.createdOrders.length} archivos (uno por pedido).`, false);
       }
 
+      confirmBtn.disabled = true; // Disable button to prevent double-clicks
       loadingSpinner.classList.remove('hidden');
       loadingSpinner.classList.add('flex');
       showMessage('batch-payment-message', 'Subiendo comprobantes y procesando pagos...', true);
@@ -4679,6 +4865,7 @@ document.addEventListener('DOMContentLoaded', () => {
           const adminTag = userTags[currentUser.email] || 'ADMIN';
           const firestoreBatch = db.batch();
           const proofUrls = [];
+          const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp(); // Use a single timestamp
 
           // 1. Upload all files in parallel
           const uploadPromises = Array.from(files).map((file, index) => {
@@ -4698,17 +4885,20 @@ document.addEventListener('DOMContentLoaded', () => {
               const proofUrl = uploadedUrls[index];
               proofUrls.push({ name: order.clientName, url: proofUrl });
 
-              firestoreBatch.update(orderRef, { status: 'Pagado', proofUrl, paidByTag: adminTag });
+              firestoreBatch.update(orderRef, { status: 'Pagado', proofUrl, paidByTag: adminTag, paidAt: serverTimestamp });
 
               const fee = calculateFee(order, sourceAccount);
-              const adminCommission = roundUpToTwoDecimals(order.destinationAmount * 0.01);
-              const debit = order.destinationAmount + fee + adminCommission;
+              const adminCommission = roundUpToTwoDecimals(order.destinationAmount * ADMIN_BASE_COMMISSION_RATE);
+              const tilloCommission = roundUpToTwoDecimals(order.destinationAmount * TILLO_COMMISSION_RATE);
+              const totalCommission = adminCommission + tilloCommission;
+              const debit = order.destinationAmount + fee + totalCommission;
               totalDebitVes += debit;
 
               // History records for each order
-              firestoreBatch.set(db.collection('balance_history').doc(), { amount: order.destinationAmount, type: 'subtract', note: `Pago lote ${order.id.slice(-5)}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (fee > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión lote ${order.id.slice(-5)}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (adminCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: adminCommission, type: 'admin_commission', note: `Comisión Admin lote ${order.id.slice(-5)}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), holder: sourceAccount.holder, bank: sourceAccount.bank });
+              firestoreBatch.set(db.collection('balance_history').doc(), { amount: order.destinationAmount, type: 'subtract', note: `Pago lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
+              if (fee > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
+              if (adminCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: adminCommission, type: 'admin_commission', note: `Comisión Admin lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
+              if (tilloCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: tilloCommission, type: 'tillo_commission', note: `Mano Tillo lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
           });
 
           // 3. Decrement main account balance
@@ -4727,10 +4917,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
           batchPaymentModal.classList.add('hidden');
           showCustomAlert('¡Lote procesado con éxito! El mensaje con todos los enlaces a los comprobantes ha sido copiado a tu portapapeles. Pégalo en WhatsApp para enviarlo.');
+          
+          // Clear state on success
+          batchProcessData = {};
+          toggleBatchMode(false); // Exit batch mode
 
       } catch (error) {
           console.error("Error confirming batch payment:", error);
           showMessage('batch-payment-message', `Error: ${error.message}`, false);
+          confirmBtn.disabled = false; // Re-enable button on error
       } finally {
           loadingSpinner.classList.add('hidden');
           loadingSpinner.classList.remove('flex');
