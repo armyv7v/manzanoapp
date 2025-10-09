@@ -182,7 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Add version number for debugging cache issues
   const appVersionSpan = document.getElementById('app-version');
   if (appVersionSpan) {
-      appVersionSpan.textContent = 'v6.8';
+      appVersionSpan.textContent = 'v6.9';
   }
 
   const showUserFormBtn = document.getElementById('show-user-form-btn');
@@ -345,8 +345,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
   const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
   const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
-  const balanceHistoryPrevDayBtn = document.getElementById('balance-history-prev-day');
-  const balanceHistoryNextDayBtn = document.getElementById('balance-history-next-day');
+  const balanceHistoryPrevDayBtn = document.getElementById('accounts-balance-prev-day');
+  const balanceHistoryNextDayBtn = document.getElementById('accounts-balance-next-day');
   const exportBalanceExcelBtn = document.getElementById('export-balance-excel-btn');
   const balanceHistoryHeader = document.getElementById('balance-history-header');
 
@@ -3355,6 +3355,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Fetches and displays historical orders based on a date range and filters. */
   const handleHistoricalSearch = async (start, end) => {
+      console.log('[Debug] handleHistoricalSearch triggered with:', { start, end });
       if (!start || !end) {
           return; // Don't search if dates are not set
       }
@@ -3682,6 +3683,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Fetches and displays the CLP balance history. */
   const handleClpBalanceHistorySearch = async (start, end) => {
+      console.log('[Debug] handleClpBalanceHistorySearch triggered with:', { start, end });
       if (!start || !end) return;
 
       loadingSpinner.classList.remove('hidden');
@@ -3861,71 +3863,83 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  balanceHistoryTodayBtn.addEventListener('click', () => {
-      const today = getChileanDateForPicker(new Date());
-      balanceHistoryStartInput.valueAsDate = today;
-      balanceHistoryEndInput.valueAsDate = today;
-      fetchAndRenderBalanceHistory(today, today);
-      setActiveChip(balanceHistoryRangeButtons, balanceHistoryTodayBtn);
-  });
+  if (balanceHistoryTodayBtn) {
+    balanceHistoryTodayBtn.addEventListener('click', () => {
+        const today = getChileanDateForPicker(new Date());
+        balanceHistoryStartInput.valueAsDate = today;
+        balanceHistoryEndInput.valueAsDate = today;
+        fetchAndRenderBalanceHistory(today, today);
+        setActiveChip(balanceHistoryRangeButtons, balanceHistoryTodayBtn);
+    });
+  }
 
-  balanceHistoryYesterdayBtn.addEventListener('click', () => {
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const chileYesterday = getChileanDateForPicker(yesterday);
-      balanceHistoryStartInput.valueAsDate = chileYesterday;
-      balanceHistoryEndInput.valueAsDate = chileYesterday;
-      fetchAndRenderBalanceHistory(chileYesterday, chileYesterday);
-      setActiveChip(balanceHistoryRangeButtons, balanceHistoryYesterdayBtn);
-  });
+  if (balanceHistoryYesterdayBtn) {
+    balanceHistoryYesterdayBtn.addEventListener('click', () => {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const chileYesterday = getChileanDateForPicker(yesterday);
+        balanceHistoryStartInput.valueAsDate = chileYesterday;
+        balanceHistoryEndInput.valueAsDate = chileYesterday;
+        fetchAndRenderBalanceHistory(chileYesterday, chileYesterday);
+        setActiveChip(balanceHistoryRangeButtons, balanceHistoryYesterdayBtn);
+    });
+  }
 
-  balanceHistory7DaysBtn.addEventListener('click', () => {
-      const end = new Date();
-      const start = new Date();
-      start.setDate(start.getDate() - 6);
-      const chileStart = getChileanDateForPicker(start);
-      const chileEnd = getChileanDateForPicker(end);
-      balanceHistoryStartInput.valueAsDate = chileStart;
-      balanceHistoryEndInput.valueAsDate = chileEnd;
-      fetchAndRenderBalanceHistory(chileStart, chileEnd);
-      setActiveChip(balanceHistoryRangeButtons, balanceHistory7DaysBtn);
-  });
+  if (balanceHistory7DaysBtn) {
+    balanceHistory7DaysBtn.addEventListener('click', () => {
+        const end = new Date();
+        const start = new Date();
+        start.setDate(start.getDate() - 6);
+        const chileStart = getChileanDateForPicker(start);
+        const chileEnd = getChileanDateForPicker(end);
+        balanceHistoryStartInput.valueAsDate = chileStart;
+        balanceHistoryEndInput.valueAsDate = chileEnd;
+        fetchAndRenderBalanceHistory(chileStart, chileEnd);
+        setActiveChip(balanceHistoryRangeButtons, balanceHistory7DaysBtn);
+    });
+  }
 
-  balanceHistorySearchBtn.addEventListener('click', () => {
-      const startDateVal = balanceHistoryStartInput.valueAsDate;
-      const endDateVal = balanceHistoryEndInput.valueAsDate;
+  if (balanceHistorySearchBtn) {
+    balanceHistorySearchBtn.addEventListener('click', () => {
+        const startDateVal = balanceHistoryStartInput.valueAsDate;
+        const endDateVal = balanceHistoryEndInput.valueAsDate;
 
-      if (!startDateVal || !endDateVal) {
-          showCustomAlert('Por favor, selecciona un rango de fechas para buscar.');
-          return;
-      }
+        if (!startDateVal || !endDateVal) {
+            showCustomAlert('Por favor, selecciona un rango de fechas para buscar.');
+            return;
+        }
 
-      const start = startDateVal;
-      const end = endDateVal;
+        const start = startDateVal;
+        const end = endDateVal;
 
-      fetchAndRenderBalanceHistory(start, end);
-      setActiveChip(balanceHistoryRangeButtons, null);
-  });
+        fetchAndRenderBalanceHistory(start, end);
+        setActiveChip(balanceHistoryRangeButtons, null);
+    });
+  }
 
-  balanceHistoryPrevDayBtn.addEventListener('click', () => {
-      const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
-      currentDate.setDate(currentDate.getDate() - 1);
-      const newDate = getChileanDateForPicker(currentDate);
-      balanceHistoryStartInput.valueAsDate = newDate;
-      balanceHistoryEndInput.valueAsDate = newDate;
-      fetchAndRenderBalanceHistory(newDate, newDate);
-      setActiveChip(balanceHistoryRangeButtons, null);
-  });
+  if (balanceHistoryPrevDayBtn) {
+    balanceHistoryPrevDayBtn.addEventListener('click', () => {
+        const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
+        currentDate.setDate(currentDate.getDate() - 1);
+        const newDate = getChileanDateForPicker(currentDate);
+        balanceHistoryStartInput.valueAsDate = newDate;
+        balanceHistoryEndInput.valueAsDate = newDate;
+        fetchAndRenderBalanceHistory(newDate, newDate);
+        setActiveChip(balanceHistoryRangeButtons, null);
+    });
+  }
 
-  balanceHistoryNextDayBtn.addEventListener('click', () => {
-      const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
-      currentDate.setDate(currentDate.getDate() + 1);
-      const newDate = getChileanDateForPicker(currentDate);
-      balanceHistoryStartInput.valueAsDate = newDate;
-      balanceHistoryEndInput.valueAsDate = newDate;
-      fetchAndRenderBalanceHistory(newDate, newDate);
-      setActiveChip(balanceHistoryRangeButtons, null);
-  });
+  if (balanceHistoryNextDayBtn) {
+    balanceHistoryNextDayBtn.addEventListener('click', () => {
+        const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
+        currentDate.setDate(currentDate.getDate() + 1);
+        const newDate = getChileanDateForPicker(currentDate);
+        balanceHistoryStartInput.valueAsDate = newDate;
+        balanceHistoryEndInput.valueAsDate = newDate;
+        fetchAndRenderBalanceHistory(newDate, newDate);
+        setActiveChip(balanceHistoryRangeButtons, null);
+    });
+  }
 
   const exportBalanceHistoryToExcel = () => {
       if (balanceHistoryData.length === 0) {

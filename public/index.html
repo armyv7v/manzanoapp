@@ -459,9 +459,10 @@ Monto en CLP: 1000</pre>
 <div class="section-card">
 <div class="flex justify-between items-center mb-4">
     <h3 class="text-xl font-semibold text-gray-700">Saldos por Cuenta</h3>
-    <div class="flex gap-2">
-        <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day">&lt; Día Anterior</button>
-        <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day">Día Siguiente &gt;</button>
+    <div class="flex items-center gap-2">
+        <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day">&lt;</button>
+        <input type="date" class="form-control text-sm w-auto" id="balance-history-date-picker">
+        <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day">&gt;</button>
     </div>
 </div>
 <div class="text-center mb-4">
@@ -517,8 +518,6 @@ Monto en CLP: 1000</pre>
             <button type="button" class="filter-chip" id="balance-history-yesterday">Ayer</button>
             <button type="button" class="filter-chip" id="balance-history-7days">Últimos 7 días</button>
             <button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="balance-history-search-btn">Buscar</button>
-            <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day">&lt; Día Anterior</button>
-            <button class="px-4 py-1 text-sm font-semibold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day">Día Siguiente &gt;</button>
         </div>
         <!-- Header for Balance History -->
         <div class="max-h-96 overflow-y-auto border rounded-lg">
