@@ -460,15 +460,15 @@ Monto en CLP: 1000</pre>
 <div class="flex justify-between items-center mb-4">
     <h3 class="text-xl font-semibold text-gray-700">Saldos por Cuenta</h3>
     <div class="flex items-center gap-2">
-        <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day">&lt;</button>
-        <input type="date" class="form-control text-sm w-auto" id="balance-history-date-picker">
-        <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day">&gt;</button>
+        <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="accounts-balance-display-prev-btn">&lt;</button>
+        <input type="date" class="form-control text-sm w-auto" id="accounts-balance-display-date-picker">
+        <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="accounts-balance-display-next-btn">&gt;</button>
     </div>
 </div>
 <div class="text-center mb-4">
 <button class="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition duration-300" id="open-transfer-funds-modal-btn">Transferir entre Cuentas</button>
 </div>
-<p class="text-xs text-gray-500 mb-4 italic">Saldos disponibles en tiempo real en cada cuenta.</p>
+<p class="text-xs text-gray-500 mb-4 italic" id="accounts-balance-display-date-info">Saldos disponibles en tiempo real en cada cuenta.</p>
 <div class="space-y-3" id="accounts-balance-list">
 <!-- Breakdown will be rendered here -->
 <p class="text-gray-500">Calculando saldos...</p>

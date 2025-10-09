@@ -345,8 +345,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
   const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
   const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
-  const balanceHistoryPrevDayBtn = document.getElementById('accounts-balance-prev-day');
-  const balanceHistoryNextDayBtn = document.getElementById('accounts-balance-next-day');
+  // Account Balance Display Elements (New for "Saldos por Cuenta" section)
+  const accountsBalanceDisplayPrevBtn = document.getElementById('accounts-balance-display-prev-btn');
+  const accountsBalanceDisplayDatePicker = document.getElementById('accounts-balance-display-date-picker');
+  const accountsBalanceDisplayNextBtn = document.getElementById('accounts-balance-display-next-btn');
+  const accountsBalanceDisplayDateInfo = document.getElementById('accounts-balance-display-date-info');
+
+  // Balance History Elements (Historial Saldo VES tab)
+  const balanceHistoryStartInput = document.getElementById('balance-history-start');
+  const balanceHistoryEndInput = document.getElementById('balance-history-end');
+  const balanceHistoryTodayBtn = document.getElementById('balance-history-today');
+  const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
+  const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
+  const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
+  // Note: balanceHistoryPrevDayBtn and balanceHistoryNextDayBtn are now correctly mapped to the VES History tab directly.
   const exportBalanceExcelBtn = document.getElementById('export-balance-excel-btn');
   const balanceHistoryHeader = document.getElementById('balance-history-header');
 
@@ -3282,7 +3294,32 @@ document.addEventListener('DOMContentLoaded', () => {
       handleHistoricalSearch(start, end);
   };
 
-  // Defensive event listeners for historical search buttons
+  // Event listeners for "Saldos por Cuenta" date navigation
+  if (accountsBalanceDisplayPrevBtn) {
+      accountsBalanceDisplayPrevBtn.addEventListener('click', () => {
+          const currentDate = accountsBalanceDisplayDatePicker.valueAsDate || getChileanDateForPicker(new Date());
+          currentDate.setDate(currentDate.getDate() - 1);
+          accountsBalanceDisplayDatePicker.valueAsDate = getChileanDateForPicker(currentDate);
+          accountsBalanceDisplayDateInfo.textContent = `Saldos disponibles en tiempo real en cada cuenta (Fecha de referencia: ${accountsBalanceDisplayDatePicker.value}).`;
+      });
+  }
+
+  if (accountsBalanceDisplayNextBtn) {
+      accountsBalanceDisplayNextBtn.addEventListener('click', () => {
+          const currentDate = accountsBalanceDisplayDatePicker.valueAsDate || getChileanDateForPicker(new Date());
+          currentDate.setDate(currentDate.getDate() + 1);
+          accountsBalanceDisplayDatePicker.valueAsDate = getChileanDateForPicker(currentDate);
+          accountsBalanceDisplayDateInfo.textContent = `Saldos disponibles en tiempo real en cada cuenta (Fecha de referencia: ${accountsBalanceDisplayDatePicker.value}).`;
+      });
+  }
+
+  if (accountsBalanceDisplayDatePicker) {
+      accountsBalanceDisplayDatePicker.addEventListener('change', () => {
+          accountsBalanceDisplayDateInfo.textContent = `Saldos disponibles en tiempo real en cada cuenta (Fecha de referencia: ${accountsBalanceDisplayDatePicker.value}).`;
+      });
+  }
+
+  // Defensive event listeners for historical search buttons (Historial Pedidos section)
   if (historicalDateTodayBtn) {
     historicalDateTodayBtn.addEventListener('click', () => {
         const today = getChileanDateForPicker(new Date());
