@@ -2314,6 +2314,38 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const messageElId = messageEl.id;
 
+      const fieldMap = {
+          transferencia: {
+              name: 'name-transferencia',
+              cedula: 'cedula-transferencia',
+              clp: 'clp-amount-transferencia',
+              bank: 'bank-transferencia',
+              accountType: 'account-type-transferencia',
+              accountNumber: 'account-number-transferencia',
+          },
+          'pago-movil': {
+              name: 'name-pm',
+              cedula: 'cedula-pm',
+              clp: 'clp-amount-pm',
+              bank: 'bank-pm',
+              phone: 'phone-pm',
+          },
+          'recarga-saldo': {
+              name: 'name-rs',
+              cedula: 'cedula-rs',
+              clp: 'clp-amount-rs',
+              phone: 'phone-rs',
+          },
+      };
+
+      const getField = (fieldId) => {
+          const el = form.querySelector(`#${fieldId}`) || document.getElementById(fieldId);
+          if (!el) {
+              console.warn(`No se encontró el campo ${fieldId} dentro del formulario ${form.id}`);
+          }
+          return el;
+      };
+
       if (!currentUser || !currentUser.uid) {
           showMessage(messageElId, 'Error de autenticación. Por favor, recarga la página e inicia sesión de nuevo.', false);
           return;
@@ -2326,6 +2358,16 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const currentUserTag = userTags[currentUser.email] || 'CLIENTE';
+      const typeFields = fieldMap[type] || {};
+      const nameInput = getField(typeFields.name);
+      const cedulaInput = getField(typeFields.cedula);
+      const clpAmountInput = getField(typeFields.clp);
+
+      if (!nameInput || !cedulaInput || !clpAmountInput) {
+          showMessage(messageElId, 'El formulario no está completo. Por favor, recarga la página e inténtalo nuevamente.', false);
+          return;
+      }
+
       let orderData = {
           type: type,
           status: 'Pendiente de pago',
@@ -2333,9 +2375,9 @@ document.addEventListener('DOMContentLoaded', () => {
           createdByTag: currentUserTag,
           country: userSelectedCountry,
           // createdAt will be added on final confirmation
-          clientName: form.querySelector('input[id^="name-"]').value,
-          cedula: form.querySelector('input[id^="cedula-"]').value.replace(/[^0-9]/g, ''),
-          clpAmount: parseFloat(form.querySelector('input[id^="clp-amount-"]').value),
+          clientName: nameInput.value,
+          cedula: cedulaInput.value.replace(/[^0-9]/g, ''),
+          clpAmount: parseFloat(clpAmountInput.value),
           // New generalized fields
           destinationCurrency: userSelectedCountry,
           destinationAmount: 0,
@@ -2356,9 +2398,18 @@ document.addEventListener('DOMContentLoaded', () => {
       // Add type-specific fields
       if (type === 'transferencia') {
           // Simplified for Venezuela
-          orderData.bank = form.querySelector('#bank-transferencia').value;
-          orderData.accountType = form.querySelector('#account-type-transferencia').value;
-          orderData.accountNumber = form.querySelector('#account-number-transferencia').value.replace(/[^0-9]/g, '');
+          const bankInput = getField(typeFields.bank);
+          const accountTypeInput = getField(typeFields.accountType);
+          const accountNumberInput = getField(typeFields.accountNumber);
+
+          if (!bankInput || !accountTypeInput || !accountNumberInput) {
+              showMessage(messageElId, 'Faltan campos necesarios para crear el pedido de transferencia.', false);
+              return;
+          }
+
+          orderData.bank = bankInput.value;
+          orderData.accountType = accountTypeInput.value;
+          orderData.accountNumber = accountNumberInput.value.replace(/[^0-9]/g, '');
 
           if (orderData.accountNumber.length !== 20) {
               showMessage(messageElId, 'El número de cuenta debe tener exactamente 20 dígitos.', false);
@@ -2371,8 +2422,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <p><span class="font-semibold">Nro. Cuenta:</span> ${orderData.accountNumber}</p>
           `;
       } else if (type === 'pago-movil') {
-          orderData.phone = form.querySelector('#phone-pm').value.replace(/[^0-9]/g, '');
-          orderData.bank = form.querySelector('#bank-pm').value;
+          const phoneInput = getField(typeFields.phone);
+          const bankInput = getField(typeFields.bank);
+
+          if (!phoneInput || !bankInput) {
+              showMessage(messageElId, 'Faltan campos necesarios para crear el pedido de Pago Móvil.', false);
+              return;
+          }
+
+          orderData.phone = phoneInput.value.replace(/[^0-9]/g, '');
+          orderData.bank = bankInput.value;
 
           if (orderData.phone.length !== 11) {
               showMessage(messageElId, 'El número de teléfono para Pago Móvil debe tener exactamente 11 dígitos (Ej: 04141234567).', false);
@@ -2384,7 +2443,13 @@ document.addEventListener('DOMContentLoaded', () => {
             <p><span class="font-semibold">Banco:</span> ${orderData.bank}</p>
           `;
       } else if (type === 'recarga-saldo') {
-          orderData.phone = form.querySelector('#phone-rs').value.replace(/[^0-9]/g, '');
+          const phoneInput = getField(typeFields.phone);
+          if (!phoneInput) {
+              showMessage(messageElId, 'Faltan campos necesarios para crear el pedido de Recarga.', false);
+              return;
+          }
+
+          orderData.phone = phoneInput.value.replace(/[^0-9]/g, '');
           if (orderData.phone.length !== 11) {
               showMessage(messageElId, 'El número de teléfono para Recarga debe tener exactamente 11 dígitos (Ej: 04121234567).', false);
               return;
