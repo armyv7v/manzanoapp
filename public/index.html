@@ -89,18 +89,14 @@
 <input class="form-control" id="cedula-transferencia" required="" type="text"/>
 </div>
 <!-- Fields specific to Venezuela -->
-<div class="contents" id="bank-details-transferencia">
+<div class="contents" id="bank-details-transferencia"><div>
+<label class="form-label" for="email-transferencia">Correo Electrónico</label>
+<input class="form-control" id="email-transferencia" required="" type="email"/>
+</div>
 <div>
 <label class="form-label" for="bank-transferencia">Banco</label>
 <select class="bank-select form-select" id="bank-transferencia">
 <!-- Options will be populated by JS -->
-</select>
-</div>
-<div>
-<label class="form-label" for="account-type-transferencia">Tipo de Cuenta</label>
-<select class="form-select" id="account-type-transferencia">
-<option value="ahorro">Ahorro</option>
-<option value="corriente">Corriente</option>
 </select>
 </div>
 </div>
@@ -127,7 +123,6 @@
 <pre class="whitespace-pre-wrap font-mono">Nombre: Ana María Rojas
 Cédula: 12345678
 Banco: Banesco
-Tipo de Cuenta: Corriente
 Número de Cuenta: 01340001230001234567
 Monto en CLP: 5000</pre>
 <p class="mt-2 text-xs italic text-gray-600">
@@ -164,6 +159,10 @@ Monto en CLP: 5000</pre>
 <input class="form-control" id="cedula-pm" required="" type="text"/>
 </div>
 <div>
+<label class="form-label" for="email-pm">Correo Electrónico</label>
+<input class="form-control" id="email-pm" required="" type="email"/>
+</div>
+<div>
 <label class="form-label" for="phone-pm">Número de Teléfono</label>
 <input class="form-control" id="phone-pm" required="" type="tel"/>
 </div>
@@ -191,6 +190,7 @@ Monto en CLP: 5000</pre>
 <p class="font-bold mb-2">Formato de datos:</p>
 <pre class="whitespace-pre-wrap font-mono">Nombre: Carlos Pérez
 Cédula: 19876543
+Correo: carlos.perez@email.com
 Número de Teléfono: 04141234567
 Banco Receptor: Mercantil
 Monto en CLP: 2500</pre>
@@ -228,6 +228,10 @@ Monto en CLP: 2500</pre>
 <input class="form-control" id="cedula-rs" required="" type="text"/>
 </div>
 <div>
+<label class="form-label" for="email-rs">Correo Electrónico</label>
+<input class="form-control" id="email-rs" required="" type="email"/>
+</div>
+<div>
 <label class="form-label" for="phone-rs">Número de Teléfono a Recargar</label>
 <input class="form-control" id="phone-rs" required="" type="tel"/>
 </div>
@@ -249,6 +253,7 @@ Monto en CLP: 2500</pre>
 <p class="font-bold mb-2">Formato de datos:</p>
 <pre class="whitespace-pre-wrap font-mono">Nombre: Luisa Fernández
 Cédula: 9876543
+Correo: luisa.fernandez@email.com
 Número de Teléfono a Recargar: 04129876543
 Monto en CLP: 1000</pre>
 <p class="mt-2 text-xs italic text-gray-600">
@@ -424,6 +429,16 @@ Monto en CLP: 1000</pre>
 <!-- NEW: Batch Client Selection View (replaces daily orders view) -->
 <div class="hidden" id="batch-selection-view">
 <h2 class="text-2xl font-semibold text-gray-700 mb-4">Paso 1: Seleccionar Clientes para el Lote</h2>
+<!-- NEW: Letter filter bar -->
+<div class="flex flex-wrap gap-1 justify-center mb-4" id="batch-view-letter-filter">
+    <script>
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+        const container = document.getElementById('batch-view-letter-filter');
+        if (container) {
+            container.innerHTML = letters.map(l => `<button data-letter="${l}" class="w-8 h-8 rounded-md text-xs font-bold bg-gray-200 text-gray-700 hover:bg-gray-300">${l}</button>`).join('');
+        }
+    </script>
+</div>
 <input class="form-control mb-4" id="batch-view-client-search" placeholder="Buscar cliente por nombre o cédula..." type="text"/>
 <div class="space-y-2 max-h-[60vh] overflow-y-auto border rounded-lg p-2" id="batch-view-client-list">
 <!-- Client list for batch selection will be rendered here -->
@@ -445,11 +460,11 @@ Monto en CLP: 1000</pre>
                              Cargando...
 </div>
 <div class="flex items-center justify-center gap-2">
-    <button class="bg-red-500 text-white font-bold rounded-full shadow-md hover:bg-red-600 transition-all duration-300 w-28 h-28 flex items-center justify-center text-4xl" id="subtract-balance-btn">
+    <button class="bg-red-500 text-white font-bold rounded-lg shadow-md hover:bg-red-600 transition-all duration-300 px-8 py-4 text-2xl" id="subtract-balance-btn">
         -
     </button>
     <input class="w-32 text-center text-3xl font-semibold p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 mx-2" id="balance-amount" placeholder="Monto" step="1" type="number"/>
-    <button class="bg-green-500 text-white font-bold rounded-full shadow-md hover:bg-green-600 transition-all duration-300 w-28 h-28 flex items-center justify-center text-4xl" id="add-balance-btn">
+    <button class="bg-green-500 text-white font-bold rounded-lg shadow-md hover:bg-green-600 transition-all duration-300 px-8 py-4 text-2xl" id="add-balance-btn">
         +
     </button>
 </div>
@@ -517,6 +532,12 @@ Monto en CLP: 1000</pre>
             <button type="button" class="filter-chip" id="balance-history-today">Hoy</button>
             <button type="button" class="filter-chip" id="balance-history-yesterday">Ayer</button>
             <button type="button" class="filter-chip" id="balance-history-7days">Últimos 7 días</button>
+            <!-- NEW: Day navigation buttons -->
+            <div class="flex items-center gap-2 ml-auto">
+                <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-prev-day-btn">&lt;</button>
+                <span class="text-sm text-gray-600">Día</span>
+                <button class="px-3 py-1 font-bold text-white bg-gray-500 rounded-full hover:bg-gray-600" id="balance-history-next-day-btn">&gt;</button>
+            </div>
             <button class="px-4 py-1 text-sm font-semibold text-white bg-blue-500 rounded-full hover:bg-blue-600" id="balance-history-search-btn">Buscar</button>
         </div>
         <!-- Header for Balance History -->
@@ -703,7 +724,7 @@ Monto en CLP: 1000</pre>
 <button class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 hover:bg-gray-300" id="client-sort-name">Nombre (A-Z)</button>
 <button class="px-3 py-1 text-sm font-semibold rounded-full bg-gray-200 hover:bg-gray-300" id="client-sort-cedula">Cédula</button>
 </div>
-<div class="items-center gap-2 hidden" id="client-pagination-controls">
+<div class="flex items-center gap-2 hidden" id="client-pagination-controls">
 <button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" id="client-pagination-prev">&lt; Anterior</button>
 <span class="text-sm font-medium text-gray-700" id="client-pagination-info"></span>
 <button class="px-3 py-1 text-sm font-semibold text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed" id="client-pagination-next">Siguiente &gt;</button>
@@ -813,16 +834,13 @@ Monto en CLP: 1000</pre>
 <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-cedula-transferencia" required="" type="text"/>
 </div>
 <div>
+<label class="form-label" for="add-client-email-transferencia">Correo Electrónico</label>
+<input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-email-transferencia" type="email"/>
+</div>
+<div>
 <label class="form-label" for="add-client-bank-transferencia">Banco</label>
 <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-bank-transferencia" required="">
 <!-- Options will be populated by JS -->
-</select>
-</div>
-<div>
-<label class="form-label" for="add-client-account-type-transferencia">Tipo de Cuenta</label>
-<select class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-account-type-transferencia" required="">
-<option value="ahorro">Ahorro</option>
-<option value="corriente">Corriente</option>
 </select>
 </div>
 <div class="md:col-span-2">
@@ -846,6 +864,10 @@ Monto en CLP: 1000</pre>
 <div>
 <label class="form-label" for="add-client-cedula-pm">Cédula</label>
 <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-cedula-pm" required="" type="text"/>
+</div>
+<div>
+<label class="form-label" for="add-client-email-pm">Correo Electrónico</label>
+<input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-email-pm" type="email"/>
 </div>
 <div>
 <label class="form-label" for="add-client-phone-pm">Número de Teléfono</label>
@@ -875,6 +897,10 @@ Monto en CLP: 1000</pre>
 <label class="form-label" for="add-client-cedula-recarga">Cédula</label>
 <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-cedula-recarga" required="" type="text"/>
 </div>
+<div>
+<label class="form-label" for="add-client-email-recarga">Correo Electrónico</label>
+<input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-email-recarga" type="email"/>
+</div>
 <div class="md:col-span-2">
 <label class="form-label" for="add-client-phone-recarga">Número de Teléfono a Recargar</label>
 <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-phone-recarga" required="" type="tel"/>
@@ -888,6 +914,77 @@ Monto en CLP: 1000</pre>
 </div>
 <p class="mt-4 text-center font-medium" id="add-client-message"></p>
 </div>
+</div>
+<!-- Modal para EDITAR Cliente -->
+<div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="edit-client-modal">
+    <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-800">Editar Cliente</h3>
+            <button class="text-gray-400 hover:text-gray-800 text-3xl leading-none" id="edit-client-close-btn">×</button>
+        </div>
+        <p class="mb-6 text-gray-600">Modifica los datos del cliente y guarda los cambios.</p>
+
+        <form class="space-y-4" id="edit-client-form">
+            <!-- Hidden input to store client ID -->
+            <input name="clientId" type="hidden" id="edit-client-id"/>
+            <input name="type" type="hidden" id="edit-client-type"/>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="form-label" for="edit-client-name">Nombre Completo</label>
+                    <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-name" required="" type="text"/>
+                </div>
+                <div>
+                    <label class="form-label" for="edit-client-cedula">Cédula</label>
+                    <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-cedula" required="" type="text"/>
+                </div>
+                <div>
+                    <label class="form-label" for="edit-client-email">Correo Electrónico</label>
+                    <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-email" type="email"/>
+                </div>
+
+                <!-- Transferencia Fields -->
+                <div class="contents" id="edit-client-fields-transferencia">
+                    <div>
+                        <label class="form-label" for="edit-client-bank-transferencia">Banco</label>
+                        <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-bank-transferencia">
+                            <!-- Options will be populated by JS -->
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="form-label" for="edit-client-account-number-transferencia">Número de Cuenta</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-account-number-transferencia" type="text"/>
+                    </div>
+                </div>
+
+                <!-- Pago Movil Fields -->
+                <div class="contents" id="edit-client-fields-pago-movil">
+                    <div>
+                        <label class="form-label" for="edit-client-phone-pm">Número de Teléfono</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-phone-pm" type="tel"/>
+                    </div>
+                    <div>
+                        <label class="form-label" for="edit-client-bank-pm">Banco Receptor</label>
+                        <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-bank-pm">
+                            <!-- Options will be populated by JS -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Recarga Fields -->
+                <div class="contents" id="edit-client-fields-recarga">
+                    <div class="md:col-span-2">
+                        <label class="form-label" for="edit-client-phone-recarga">Número de Teléfono a Recargar</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-phone-recarga" type="tel"/>
+                    </div>
+                </div>
+            </div>
+            <div class="flex justify-end">
+                <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700" type="submit">Guardar Cambios</button>
+            </div>
+        </form>
+        <p class="mt-4 text-center font-medium" id="edit-client-message"></p>
+    </div>
 </div>
 <!-- Modal para Transferir Fondos entre Cuentas -->
 <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="transfer-funds-modal">
@@ -1096,21 +1193,14 @@ Monto en CLP: 1000</pre>
 <!-- Modal de Procesamiento por Lote: Paso 3 - Pago y Comprobantes -->
 <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="batch-payment-modal">
 <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg">
-<h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 3: Pagar Lote y Subir Comprobantes</h3>
+<h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 3: Subir Comprobantes</h3>
 <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4 space-y-1 text-gray-800" id="batch-payment-summary">
 <!-- Payment summary will be rendered here -->
 </div>
 <div class="space-y-4">
-<div>
-<label class="form-label" for="batch-payment-source-select">Pagar desde la cuenta:</label>
-<select class="form-select" id="batch-payment-source-select">
-<!-- Source accounts will be rendered here -->
-</select>
-</div>
-<div>
-<label class="form-label" for="batch-proof-upload-input">Subir todos los comprobantes (capturas):</label>
-<input accept="image/*" class="form-control" id="batch-proof-upload-input" multiple="" type="file"/>
-<p class="text-xs text-gray-500 mt-1">Asegúrate de seleccionar la misma cantidad de archivos que de pedidos.</p>
+<p class="form-label">Sube un comprobante para cada pedido:</p>
+<div class="max-h-60 overflow-y-auto border rounded-lg" id="batch-payment-order-list">
+<!-- Individual order upload rows will be rendered here -->
 </div>
 </div>
 <p class="mt-4 text-center font-medium" id="batch-payment-message"></p>
@@ -1119,6 +1209,31 @@ Monto en CLP: 1000</pre>
 <button class="btn-success disabled:bg-gray-400" disabled="" id="batch-payment-confirm-btn">Confirmar Pago del Lote</button>
 </div>
 </div>
+</div>
+<!-- NEW: Batch Success Modal -->
+<div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden" id="batch-success-modal">
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-4">
+        <div class="p-6">
+            <div class="text-center">
+                <svg class="mx-auto mb-4 w-14 h-14 text-green-500" fill="none" stroke="currentColor" viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+                <h3 class="text-xl font-bold text-gray-900">Lote Procesado con Éxito</h3>
+                <p class="text-sm text-gray-500 mt-2">Puedes compartir cada comprobante individualmente o copiar todos los enlaces de una vez.</p>
+            </div>
+            
+            <div class="mt-4 max-h-64 overflow-y-auto space-y-2" id="batch-success-order-list">
+                <!-- Individual paid orders will be rendered here by JS -->
+            </div>
+
+        </div>
+        <div class="bg-gray-50 px-6 py-4 flex justify-between items-center rounded-b-lg">
+            <button class="btn-secondary" id="batch-success-share-all-btn" type="button">
+                Compartir Todos
+            </button>
+            <button class="btn-primary" id="batch-success-close-btn" type="button">
+                Finalizar
+            </button>
+        </div>
+    </div>
 </div>
 <!-- Sonido de Notificación -->
 <audio id="notification-sound" preload="auto" src="/sounds/notification.mp3"></audio>

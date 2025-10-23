@@ -71,7 +71,7 @@ const userTags = {
 
 // --- Constants ---
 const venezuelanBanks = [
-    "100% Banco", "Activo", "Agrícola de Venezuela", "Bancamiga", "Bancaribe", "Bancrecer", "Banesco", "Bangente", "Banplus", "BFC (Banco Fondo Común)", "Bicentenario", "BNC (Banco Nacional de Crédito)", "Caroní", "DelSur", "Exterior", "Internacional de Desarrollo", "Mercantil", "Mi Banco", "N58 Banco Digital", "Plaza", "Provincial", "Sofitasa", "Tesoro", "Venezolano de Crédito", "Venezuela", "BANFANB"
+    "100% Banco", "Activo", "Agrícola de Venezuela", "Bancamiga", "Bancaribe", "Bancrecer", "Banesco", "Bangente", "Banplus", "BFC (Banco Fondo Común)", "Banco Digital de Los Trabajadores", "BNC (Banco Nacional de Crédito)", "Caroní", "DelSur", "Exterior", "Internacional de Desarrollo", "Mercantil", "Mi Banco", "N58 Banco Digital", "Plaza", "Provincial", "Sofitasa", "Tesoro", "Venezolano de Crédito", "Venezuela", "BANFANB"
 ].sort();
 
 const venezuelanBankPrefixes = {
@@ -97,7 +97,7 @@ const venezuelanBankPrefixes = {
     '0171': 'Activo',
     '0172': 'Bancamiga',
     '0174': 'Banplus',
-    '0175': 'Bicentenario',
+    '0175': 'Banco Digital de Los Trabajadores',
     '0177': 'BANFANB',
     '0178': 'N58 Banco Digital',
     '0191': 'BNC (Banco Nacional de Crédito)'

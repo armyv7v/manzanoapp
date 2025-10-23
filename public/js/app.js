@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿// Demo/hosting detection
+﻿﻿// Demo/hosting detection
 (function(){
   try {
     const __proj = (firebase.app && firebase.app().options && firebase.app().options.projectId) || '';
@@ -49,7 +49,7 @@ const TOTAL_ADMIN_COMMISSION_RATE = ADMIN_BASE_COMMISSION_RATE + TILLO_COMMISSIO
 // Client list state
 let hasClientSearchBeenPerformed = false;
 let clientListPage = 1;
-const CLIENTS_PER_PAGE = 5;
+const CLIENTS_PER_PAGE = 20; // Increased for infinite scroll
 let clientListSortBy = 'name'; // 'name' or 'cedula'
 let filteredClientList = [];
 let batchClientListPage = 1;
@@ -79,7 +79,7 @@ const userTags = {
 
 // --- Constants ---
 const venezuelanBanks = [
-    "100% Banco", "Activo", "Agrícola de Venezuela", "Bancamiga", "Bancaribe", "Bancrecer", "Banesco", "Bangente", "Banplus", "BFC (Banco Fondo Común)", "Bicentenario", "BNC (Banco Nacional de Crédito)", "Caroní", "DelSur", "Exterior", "Internacional de Desarrollo", "Mercantil", "Mi Banco", "N58 Banco Digital", "Plaza", "Provincial", "Sofitasa", "Tesoro", "Venezolano de Crédito", "Venezuela", "BANFANB"
+    "100% Banco", "Activo", "Agrícola de Venezuela", "Bancamiga", "Bancaribe", "Bancrecer", "Banesco", "Bangente", "Banplus", "BFC (Banco Fondo Común)", "Banco Digital de Los Trabajadores", "BNC (Banco Nacional de Crédito)", "Caroní", "DelSur", "Exterior", "Internacional de Desarrollo", "Mercantil", "Mi Banco", "N58 Banco Digital", "Plaza", "Provincial", "Sofitasa", "Tesoro", "Venezolano de Crédito", "Venezuela", "BANFANB"
 ].sort();
 
 const venezuelanBankPrefixes = {
@@ -105,7 +105,7 @@ const venezuelanBankPrefixes = {
     '0171': 'Activo',
     '0172': 'Bancamiga',
     '0174': 'Banplus',
-    '0175': 'Bicentenario',
+    '0175': 'Banco Digital de Los Trabajadores',
     '0177': 'BANFANB',
     '0178': 'N58 Banco Digital',
     '0191': 'BNC (Banco Nacional de Crédito)'
@@ -246,6 +246,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const batchAmountEntryConfirmBtn = document.getElementById('batch-amount-entry-confirm-btn');
   const batchPaymentModal = document.getElementById('batch-payment-modal');
 
+  // NEW: Batch Success Modal Elements
+  const batchSuccessModal = document.getElementById('batch-success-modal');
+  const batchSuccessOrderList = document.getElementById('batch-success-order-list');
+  const batchSuccessShareAllBtn = document.getElementById('batch-success-share-all-btn');
+  const batchSuccessCloseBtn = document.getElementById('batch-success-close-btn');
+
+  // NEW: Edit Client Modal Elements
+  const editClientModal = document.getElementById('edit-client-modal');
+  const editClientForm = document.getElementById('edit-client-form');
+  const editClientCloseBtn = document.getElementById('edit-client-close-btn');
+
   // Historical Payment Modal Elements
   const historicalPaymentDateModal = document.getElementById('historical-payment-date-modal');
   const historicalPaymentOrderDetails = document.getElementById('historical-payment-order-details');
@@ -345,22 +356,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
   const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
   const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
+  const exportBalanceExcelBtn = document.getElementById('export-balance-excel-btn');
+  const balanceHistoryHeader = document.getElementById('balance-history-header');
+  const balanceHistoryPrevDayBtn = document.getElementById('balance-history-prev-day-btn');
+  const balanceHistoryNextDayBtn = document.getElementById('balance-history-next-day-btn');
   // Account Balance Display Elements (New for "Saldos por Cuenta" section)
   const accountsBalanceDisplayPrevBtn = document.getElementById('accounts-balance-display-prev-btn');
   const accountsBalanceDisplayDatePicker = document.getElementById('accounts-balance-display-date-picker');
   const accountsBalanceDisplayNextBtn = document.getElementById('accounts-balance-display-next-btn');
   const accountsBalanceDisplayDateInfo = document.getElementById('accounts-balance-display-date-info');
-
-  // Balance History Elements (Historial Saldo VES tab)
-  const balanceHistoryStartInput = document.getElementById('balance-history-start');
-  const balanceHistoryEndInput = document.getElementById('balance-history-end');
-  const balanceHistoryTodayBtn = document.getElementById('balance-history-today');
-  const balanceHistoryYesterdayBtn = document.getElementById('balance-history-yesterday');
-  const balanceHistory7DaysBtn = document.getElementById('balance-history-7days');
-  const balanceHistorySearchBtn = document.getElementById('balance-history-search-btn');
-  // Note: balanceHistoryPrevDayBtn and balanceHistoryNextDayBtn are now correctly mapped to the VES History tab directly.
-  const exportBalanceExcelBtn = document.getElementById('export-balance-excel-btn');
-  const balanceHistoryHeader = document.getElementById('balance-history-header');
+  const adminCommissionSummaryEl = document.getElementById('admin-commission-summary');
 
   // Balance Modal Elements
   const balanceOperationModal = document.getElementById('balance-operation-modal');
@@ -565,12 +570,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Renders the current page of the client list. */
   const renderClientListPage = () => {
-      clientsList.innerHTML = '';
-      const showPagination = filteredClientList.length > CLIENTS_PER_PAGE;
-      clientPaginationControls.classList.toggle('hidden', !showPagination);
-      clientPaginationControls.classList.toggle('flex', showPagination);
+      // For infinite scroll, we clear the list only on a new search/sort
+      if (clientListPage === 1) {
+          clientsList.innerHTML = '';
+      }
 
       if (filteredClientList.length === 0) {
+          clientPaginationControls.classList.add('hidden'); // Hide pagination if no results
           const searchTerm = clientsSearchInput.value;
           if (!hasClientSearchBeenPerformed && !searchTerm) {
               clientsList.innerHTML = `<p class="text-gray-500">Realice una búsqueda por nombre/cédula o utilice los filtros de orden para ver la lista.</p>`;
@@ -584,7 +590,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const totalPages = Math.ceil(filteredClientList.length / CLIENTS_PER_PAGE);
-      clientListPage = Math.max(1, Math.min(clientListPage, totalPages)); // Clamp page number
 
       const start = (clientListPage - 1) * CLIENTS_PER_PAGE;
       const end = start + CLIENTS_PER_PAGE;
@@ -598,15 +603,21 @@ document.addEventListener('DOMContentLoaded', () => {
                   <p class="font-semibold text-gray-800">${client.clientName}</p>
                   <p class="text-sm text-gray-600 font-mono">${client.cedula}</p>
               </div>
-              <button data-cedula="${client.cedula}" data-name="${client.clientName}" class="copy-client-btn bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-200">Copiar</button>
+              <div class="flex items-center gap-2">
+                <button data-client-id="${client.id}" class="edit-client-btn bg-yellow-100 text-yellow-800 px-3 py-1 rounded-md text-xs font-semibold hover:bg-yellow-200">Editar</button>
+                <button data-cedula="${client.cedula}" data-name="${client.clientName}" class="copy-client-btn bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-200">Copiar</button>
+              </div>
           `;
           clientsList.appendChild(clientEl);
       });
 
-      // Update pagination UI
-      clientPaginationInfo.textContent = `Página ${clientListPage} de ${totalPages}`;
-      clientPaginationPrevBtn.disabled = clientListPage === 1;
-      clientPaginationNextBtn.disabled = clientListPage === totalPages;
+      // Update pagination UI for infinite scroll
+      const hasMorePages = clientListPage < totalPages;
+      clientPaginationControls.classList.toggle('hidden', !hasMorePages);
+      clientPaginationControls.classList.toggle('flex', hasMorePages);
+      if (hasMorePages) {
+        clientPaginationInfo.textContent = `Mostrando ${end > filteredClientList.length ? filteredClientList.length : end} de ${filteredClientList.length}. Desplaza para ver más.`;
+      }
       clientsCountDisplay.textContent = filteredClientList.length;
 
       // Update sort button styles
@@ -621,6 +632,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Filters, sorts, and renders the client list. */
   const updateClientView = () => {
+      // Reset to the first page whenever the view is updated by a search or sort
+      clientListPage = 1;
+      // Detach any existing scroll listener to prevent multiple triggers
+      clientsList.removeEventListener('scroll', handleClientListScroll);
+
       const searchTerm = clientsSearchInput.value.toLowerCase();
 
       // If no search has been performed, show an empty list with instructions.
@@ -649,6 +665,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // 3. Render
       renderClientListPage();
+      // Re-attach the scroll listener for infinite scrolling
+      clientsList.addEventListener('scroll', handleClientListScroll);
   };
 
   /** Fetches all orders to build a unique client list with their latest data. */
@@ -701,6 +719,114 @@ document.addEventListener('DOMContentLoaded', () => {
               showCustomAlert('Error: La base de datos requiere un índice para la lista de clientes. Por favor, abre la consola (F12) y crea el índice que solicita Firebase.');
           }
       }
+  };
+
+  /** Handles infinite scrolling for the client list. */
+  const handleClientListScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = clientsList;
+      const totalPages = Math.ceil(filteredClientList.length / CLIENTS_PER_PAGE);
+
+      // Check if we are near the bottom of the scroll and there are more pages to load
+      if (scrollTop + clientHeight >= scrollHeight - 100 && clientListPage < totalPages) {
+          clientListPage++;
+          // Temporarily remove the listener to prevent multiple loads while rendering
+          clientsList.removeEventListener('scroll', handleClientListScroll);
+          renderClientListPage(); // This will append the next page
+          clientsList.addEventListener('scroll', handleClientListScroll); // Re-attach after rendering
+      }
+  };
+
+  /**
+   * Abre el modal de edición de cliente y lo puebla con los datos existentes.
+   * @param {string} clientId - El ID del cliente a editar.
+   */
+  const openEditClientModal = (clientId) => {
+    const client = fullClientList.find(c => c.id === clientId);
+    if (!client) {
+      console.error("No se pudo encontrar el cliente para editar.");
+      return;
+    }
+
+    // Limpiar y poblar campos comunes
+    editClientForm.reset();
+    document.getElementById('edit-client-message').textContent = '';
+    document.getElementById('edit-client-id').value = client.id;
+    document.getElementById('edit-client-type').value = client.type;
+    document.getElementById('edit-client-name').value = client.clientName;
+    document.getElementById('edit-client-cedula').value = client.cedula;
+    document.getElementById('edit-client-email').value = client.email || '';
+
+    // Ocultar todos los bloques de campos específicos
+    document.getElementById('edit-client-fields-transferencia').style.display = 'none';
+    document.getElementById('edit-client-fields-pago-movil').style.display = 'none';
+    document.getElementById('edit-client-fields-recarga').style.display = 'none';
+
+    // Mostrar y poblar campos según el tipo de cliente
+    if (client.type === 'transferencia') {
+      document.getElementById('edit-client-fields-transferencia').style.display = 'contents';
+      document.getElementById('edit-client-bank-transferencia').value = client.bank;
+      document.getElementById('edit-client-account-number-transferencia').value = client.accountNumber;
+    } else if (client.type === 'pago-movil') {
+      document.getElementById('edit-client-fields-pago-movil').style.display = 'contents';
+      document.getElementById('edit-client-phone-pm').value = client.phone;
+      document.getElementById('edit-client-bank-pm').value = client.bank;
+    } else if (client.type === 'recarga-saldo') {
+      document.getElementById('edit-client-fields-recarga').style.display = 'contents';
+      document.getElementById('edit-client-phone-recarga').value = client.phone;
+    }
+
+    editClientModal.classList.remove('hidden');
+    editClientModal.classList.add('flex');
+  };
+
+  /**
+   * Guarda los cambios realizados en el formulario de edición de cliente.
+   * @param {Event} e - El evento de submit del formulario.
+   */
+  const handleSaveClientChanges = async (e) => {
+    e.preventDefault();
+    const messageEl = document.getElementById('edit-client-message');
+    showMessage(messageEl, 'Guardando cambios...', true);
+
+    const clientId = document.getElementById('edit-client-id').value;
+    const clientType = document.getElementById('edit-client-type').value;
+
+    const updatedData = {
+      clientName: document.getElementById('edit-client-name').value,
+      cedula: document.getElementById('edit-client-cedula').value,
+      email: document.getElementById('edit-client-email').value || null,
+    };
+
+    if (clientType === 'transferencia') {
+      updatedData.bank = document.getElementById('edit-client-bank-transferencia').value;
+      updatedData.accountNumber = document.getElementById('edit-client-account-number-transferencia').value;
+    } else if (clientType === 'pago-movil') {
+      updatedData.phone = document.getElementById('edit-client-phone-pm').value;
+      updatedData.bank = document.getElementById('edit-client-bank-pm').value;
+    } else if (clientType === 'recarga-saldo') {
+      updatedData.phone = document.getElementById('edit-client-phone-recarga').value;
+    }
+
+    try {
+      await db.collection('clients').doc(clientId).update(updatedData);
+
+      // Actualizar la lista local para reflejar los cambios instantáneamente
+      const clientIndex = fullClientList.findIndex(c => c.id === clientId);
+      if (clientIndex !== -1) {
+        // Preserve the original ID while updating the rest of the data
+        fullClientList[clientIndex] = { ...fullClientList[clientIndex], ...updatedData };
+      }
+
+      editClientModal.classList.add('hidden');
+      editClientModal.classList.remove('flex');
+      showToastNotification('¡Cliente actualizado con éxito!');
+      
+      // Re-renderizar la lista de clientes para mostrar los cambios
+      updateClientView(); 
+    } catch (error) {
+      console.error("Error al actualizar el cliente:", error);
+      showMessage(messageEl, 'Error al guardar los cambios. Inténtalo de nuevo.', false);
+    }
   };
 
   // --- UI Control Logic (The Definitive Solution) ---
@@ -3936,6 +4062,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // NEW: Event listeners for balance history day navigation
+  if (balanceHistoryPrevDayBtn) {
+    balanceHistoryPrevDayBtn.addEventListener('click', () => {
+        changeBalanceHistoryDate(-1);
+    });
+  } else {
+      console.error("Button with ID 'balance-history-prev-day-btn' was not found.");
+  }
+
+  if (balanceHistoryNextDayBtn) {
+    balanceHistoryNextDayBtn.addEventListener('click', () => {
+        changeBalanceHistoryDate(1);
+    });
+  } else {
+      console.error("Button with ID 'balance-history-next-day-btn' was not found.");
+  }
+
   if (balanceHistorySearchBtn) {
     balanceHistorySearchBtn.addEventListener('click', () => {
         const startDateVal = balanceHistoryStartInput.valueAsDate;
@@ -3954,29 +4097,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  if (balanceHistoryPrevDayBtn) {
-    balanceHistoryPrevDayBtn.addEventListener('click', () => {
-        const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
-        currentDate.setDate(currentDate.getDate() - 1);
-        const newDate = getChileanDateForPicker(currentDate);
-        balanceHistoryStartInput.valueAsDate = newDate;
-        balanceHistoryEndInput.valueAsDate = newDate;
-        fetchAndRenderBalanceHistory(newDate, newDate);
-        setActiveChip(balanceHistoryRangeButtons, null);
-    });
-  }
+  // NEW: Helper function for balance history day navigation
+  const changeBalanceHistoryDate = (offset) => {
+      const currentStartDate = balanceHistoryStartInput.valueAsDate || getChileanDateForPicker(new Date());
+      const newDate = new Date(currentStartDate);
+      newDate.setDate(newDate.getDate() + offset);
+      const chileNewDate = getChileanDateForPicker(newDate);
 
-  if (balanceHistoryNextDayBtn) {
-    balanceHistoryNextDayBtn.addEventListener('click', () => {
-        const currentDate = balanceHistoryStartInput.valueAsDate || new Date();
-        currentDate.setDate(currentDate.getDate() + 1);
-        const newDate = getChileanDateForPicker(currentDate);
-        balanceHistoryStartInput.valueAsDate = newDate;
-        balanceHistoryEndInput.valueAsDate = newDate;
-        fetchAndRenderBalanceHistory(newDate, newDate);
-        setActiveChip(balanceHistoryRangeButtons, null);
-    });
-  }
+      balanceHistoryStartInput.valueAsDate = chileNewDate;
+      balanceHistoryEndInput.valueAsDate = chileNewDate;
+      fetchAndRenderBalanceHistory(chileNewDate, chileNewDate);
+      setActiveChip(balanceHistoryRangeButtons, null); // Clear active chip when navigating day by day
+  };
+
+
+  // Legacy prev/next day buttons removed; use the range chips instead.
 
   const exportBalanceHistoryToExcel = () => {
       if (balanceHistoryData.length === 0) {
@@ -4043,24 +4178,10 @@ document.addEventListener('DOMContentLoaded', () => {
       updateClientView();
   });
 
-  clientPaginationPrevBtn.addEventListener('click', () => {
-      if (clientListPage > 1) {
-          clientListPage--;
-          renderClientListPage();
-      }
-  });
-
-  clientPaginationNextBtn.addEventListener('click', () => {
-      const totalPages = Math.ceil(filteredClientList.length / CLIENTS_PER_PAGE);
-      if (clientListPage < totalPages) {
-          clientListPage++;
-          renderClientListPage();
-      }
-  });
-
   // NEW: Event delegation for historical orders list
   historicalOrdersList.addEventListener('click', async (e) => {
       const target = e.target.closest('.mark-paid-btn');
+      const debtorTarget = e.target.closest('.debtor-toggle-btn');
       if (!target) return;
 
       const orderId = target.dataset.id;
@@ -4237,6 +4358,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Copy individual client data from the client list
   clientsList.addEventListener('click', (e) => {
+      const editBtn = e.target.closest('.edit-client-btn');
+      if (editBtn) {
+        const clientId = editBtn.dataset.clientId;
+        openEditClientModal(clientId);
+        return; // Stop further execution
+      }
+
       const target = e.target.closest('.copy-client-btn');
       if (!target) return;
 
@@ -4815,7 +4943,10 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
           batchAmountList.appendChild(row);
       });
-      batchClientSelectionModal.classList.add('hidden');
+      // Hide the new batch selection view, not the old modal
+      batchSelectionView.classList.add('hidden');
+      batchActionBar.classList.add('hidden');
+      batchActionBar.classList.remove('flex');
       batchAmountEntryModal.classList.remove('hidden');
       batchAmountEntryModal.classList.add('flex');
       updateBatchAmountConfirmButton();
@@ -4956,22 +5087,11 @@ document.addEventListener('DOMContentLoaded', () => {
           firestoreBatch.update(db.collection('accounts').doc(sourceAccountId), {
               balance: firebase.firestore.FieldValue.increment(-totalDebitVes)
           });
-
           // 4. Commit all changes
           await firestoreBatch.commit();
-
-          // 5. Generate WhatsApp message and copy to clipboard
-          const header = `*Comprobantes de Pago - Lote* 🍏\n\n`;
-          const linksText = proofUrls.map(p => `*${p.name}:* ${p.url}`).join('\n');
-          const fullMessage = header + linksText;
-          await navigator.clipboard.writeText(fullMessage);
-
-          batchPaymentModal.classList.add('hidden');
-          showCustomAlert('¡Lote procesado con éxito! El mensaje con todos los enlaces a los comprobantes ha sido copiado a tu portapapeles. Pégalo en WhatsApp para enviarlo.');
           
-          // Clear state on success
-          batchProcessData = {};
-          toggleBatchMode(false); // Exit batch mode
+          // 5. Show the new success modal with sharing options
+          openBatchSuccessModal(uploadedUrls);
 
       } catch (error) {
           console.error("Error confirming batch payment:", error);
@@ -4981,6 +5101,36 @@ document.addEventListener('DOMContentLoaded', () => {
           loadingSpinner.classList.add('hidden');
           loadingSpinner.classList.remove('flex');
       }
+  };
+
+  /** Opens the success modal with options to share proofs. */
+  const openBatchSuccessModal = (proofUrls) => {
+      batchPaymentModal.classList.add('hidden'); // Hide the payment modal
+      batchSuccessModal.classList.remove('hidden');
+      batchSuccessModal.classList.add('flex');
+
+      // Store urls for the "share all" button
+      batchProcessData.proofUrls = proofUrls;
+
+      batchSuccessOrderList.innerHTML = batchProcessData.createdOrders.map((order, index) => {
+          const proofUrl = proofUrls[index];
+          return `
+              <div class="flex justify-between items-center p-3 border-b border-gray-200">
+                  <div>
+                      <p class="font-semibold">${order.clientName}</p>
+                      <p class="text-sm text-gray-500">${order.destinationAmount.toLocaleString('es-VE', {minimumFractionDigits: 2})} VES</p>
+                  </div>
+                  <button 
+                      data-proof-url="${proofUrl}" 
+                      data-client-name="${order.clientName}" 
+                      class="share-proof-btn bg-green-500 text-white px-4 py-1.5 rounded-lg text-sm font-semibold hover:bg-green-600">
+                      Compartir
+                  </button>
+              </div>
+          `;
+      }).join('');
+
+      // The main `share-proof-btn` listener in the body will handle individual clicks.
   };
 
   // --- NEW BATCH PROCESSING FLOW ---
@@ -4995,7 +5145,7 @@ document.addEventListener('DOMContentLoaded', () => {
           batchActionBar.classList.add('flex');
           
           // Reset and render
-          batchProcessData = { selectedClients: new Map() };
+          batchProcessData = { selectedClients: new Map(), createdOrders: [], proofUrls: [] };
           batchClientListPage = 1;
           batchViewClientSearch.value = '';
           renderBatchViewClientList(true);
@@ -5075,13 +5225,15 @@ document.addEventListener('DOMContentLoaded', () => {
       continueBatchProcessBtn.disabled = count === 0;
   };
 
-  startBatchProcessBtn.addEventListener('click', () => toggleBatchMode(true));
-  cancelBatchProcessBtn.addEventListener('click', () => toggleBatchMode(false));
-
-  batchViewClientSearch.addEventListener('input', () => {
-      renderBatchViewClientList(true);
-  });
-
+  if (startBatchProcessBtn) {
+    startBatchProcessBtn.addEventListener('click', () => toggleBatchMode(true));
+  }
+  if (cancelBatchProcessBtn) {
+    cancelBatchProcessBtn.addEventListener('click', () => toggleBatchMode(false));
+  }
+  if (batchViewClientSearch) {
+    batchViewClientSearch.addEventListener('input', () => renderBatchViewClientList(true));
+  }
   batchViewClientList.addEventListener('change', (e) => {
       if (e.target.type === 'checkbox') {
           const clientId = e.target.dataset.clientId;
@@ -5095,11 +5247,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   });
 
-  continueBatchProcessBtn.addEventListener('click', () => {
-      // This now opens the amount entry modal.
-      // The logic inside openBatchAmountEntry is the same as before.
-      openBatchAmountEntry(); 
-  });
+  if (continueBatchProcessBtn) {
+    continueBatchProcessBtn.addEventListener('click', () => {
+        // This now opens the amount entry modal.
+        // The logic inside openBatchAmountEntry is the same as before.
+        openBatchAmountEntry();
+    });
+  }
 
   // The rest of the batch logic (amount entry, payment) remains the same,
   // but we need to re-add the listeners for the modals.
@@ -5125,15 +5279,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (batchAmountEntryConfirmBtn) batchAmountEntryConfirmBtn.addEventListener('click', createBatchOrders);
 
-  document.getElementById('batch-payment-source-select').addEventListener('change', () => {
-      document.getElementById('batch-payment-confirm-btn').disabled = false;
-  });
-  document.getElementById('batch-proof-upload-input').addEventListener('change', () => {
-      document.getElementById('batch-payment-confirm-btn').disabled = false;
-  });
   document.getElementById('batch-payment-confirm-btn').addEventListener('click', confirmBatchPayment);
   document.getElementById('batch-payment-cancel-btn').addEventListener('click', () => batchPaymentModal.classList.add('hidden'));
 
+  // NEW: Listeners for the Batch Success Modal
+  if (batchSuccessShareAllBtn) {
+      batchSuccessShareAllBtn.addEventListener('click', async () => {
+          const header = `*Comprobantes de Pago - Lote* 🍏\n\n`;
+          const linksText = batchProcessData.createdOrders.map((order, index) => {
+              return `*${order.clientName}:* ${batchProcessData.proofUrls[index]}`;
+          }).join('\n');
+          const fullMessage = header + linksText;
+          await navigator.clipboard.writeText(fullMessage);
+          showToastNotification('¡Mensaje con todos los comprobantes copiado!');
+      });
+  }
+
+  if (batchSuccessCloseBtn) {
+      batchSuccessCloseBtn.addEventListener('click', () => {
+          batchSuccessModal.classList.add('hidden');
+          batchSuccessModal.classList.remove('flex');
+          // Clear state and exit batch mode completely
+          batchProcessData = {};
+          toggleBatchMode(false);
+      });
+  }
   if (batchAmountList) {
       batchAmountList.addEventListener('input', (e) => {
           if (e.target.classList.contains('batch-clp-amount')) {
@@ -5147,4 +5317,14 @@ document.addEventListener('DOMContentLoaded', () => {
           }
       });
   }
+
+  // Listeners para el modal de edición
+  if (editClientModal) {
+    editClientCloseBtn.addEventListener('click', () => {
+      editClientModal.classList.add('hidden');
+      editClientModal.classList.remove('flex');
+    });
+    editClientForm.addEventListener('submit', handleSaveClientChanges);
+  }
+
 });
