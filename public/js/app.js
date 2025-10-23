@@ -2298,7 +2298,21 @@ document.addEventListener('DOMContentLoaded', () => {
   const handleOrderSubmit = async (e, type) => {
       e.preventDefault();
       const form = e.target;
-      const messageElId = form.querySelector('p[id^="user-message-"]').id;
+      const defaultMessageIds = {
+          transferencia: 'user-message-transferencia',
+          'pago-movil': 'user-message-pm',
+          'recarga-saldo': 'user-message-rs',
+      };
+      const fallbackMessageId = defaultMessageIds[type] ?? `user-message-${type}`;
+
+      let messageEl = form.querySelector('p[id^="user-message-"]') || document.getElementById(fallbackMessageId);
+      if (!messageEl) {
+          messageEl = document.createElement('p');
+          messageEl.id = fallbackMessageId;
+          messageEl.className = 'mt-4 text-center font-medium';
+          form.appendChild(messageEl);
+      }
+      const messageElId = messageEl.id;
 
       if (!currentUser || !currentUser.uid) {
           showMessage(messageElId, 'Error de autenticación. Por favor, recarga la página e inicia sesión de nuevo.', false);
