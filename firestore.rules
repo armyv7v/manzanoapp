@@ -38,6 +38,13 @@ service cloud.firestore {
       allow read: if request.auth.token.admin == true;
     }
 
+    // Clients collection (stored client profiles for quick reuse)
+    match /clients/{clientId} {
+      // Admins can manage all clients; sellers can manage their assigned clients list.
+      allow read: if request.auth != null && (request.auth.token.admin == true || request.auth.token.seller == true);
+      allow write: if request.auth != null && (request.auth.token.admin == true || request.auth.token.seller == true);
+    }
+
     // Accounts for balance management
     match /accounts/{accountId} {
         allow read, write: if request.auth.token.admin == true;

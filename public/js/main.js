@@ -1,4 +1,4 @@
-﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿// Demo/hosting detection
+﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿﻿// Demo/hosting detection
 (function(){
   try {
     const __proj = (firebase.app && firebase.app().options && firebase.app().options.projectId) || '';

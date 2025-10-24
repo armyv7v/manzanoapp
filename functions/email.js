@@ -69,6 +69,13 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
             return;
         }
 
+        // Validar que destinationAmount sea un número válido
+        const destinationAmount = newValue.destinationAmount;
+        if (typeof destinationAmount !== 'number' || isNaN(destinationAmount)) {
+            console.error(`[${orderId}] El campo 'destinationAmount' no es un número válido (${destinationAmount}). No se puede generar el correo de confirmación.`);
+            return; 
+        }
+
         // 3. Preparar el correo transaccional para Brevo
         const sendSmtpEmail = new SibApiV3Sdk.SendSmtpEmail();
 
@@ -100,7 +107,7 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
                 <div class="content">
                     <p>Hola <strong>${newValue.clientName}</strong>,</p>
                     <p>Te confirmamos que tu pedido por <strong>${newValue.destinationAmount.toLocaleString("es-VE", { style: "currency", currency: "VES" })}</strong> ha sido procesado y pagado con éxito.</p>
-                    <p>Adjunto encontrarás el comprobante de la operación.</p>
+                    <p>Te confirmamos que tu pedido por <strong>${destinationAmount.toLocaleString("es-VE", { style: "currency", currency: "VES" })}</strong> ha sido procesado y pagado con éxito.</p>
                     <p>Gracias por confiar en ${APP_NAME}.</p>
                 </div>
                 <div class="footer">

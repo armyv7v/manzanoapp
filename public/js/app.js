@@ -1,4 +1,4 @@
-﻿﻿// Demo/hosting detection
+﻿// Demo/hosting detection
 (function(){
   try {
     const __proj = (firebase.app && firebase.app().options && firebase.app().options.projectId) || '';
@@ -54,6 +54,7 @@ let clientListSortBy = 'name'; // 'name' or 'cedula'
 let filteredClientList = [];
 let batchClientListPage = 1;
 const CLIENTS_PER_PAGE_BATCH = 30;
+const LETTER_NAV_KEYS = [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ', '#'];
 
 const currencyFlags = {
     VES: '🇻🇪',
@@ -137,6 +138,17 @@ function roundUpToTwoDecimals(num) {
         return 0;
     }
     return Math.ceil(num * 100) / 100;
+}
+/**
+ * Returns the uppercase initial for letter navigation; non A-Z characters map to '#'. 
+ * @param {string} name The client name.
+ * @returns {string}
+ */
+function getClientInitial(name = '') {
+    const trimmed = (name || '').trim();
+    if (!trimmed) return '#';
+    const firstChar = trimmed.charAt(0).toUpperCase();
+    return /^[A-Z]$/.test(firstChar) ? firstChar : '#';
 }
 /**
  * Shows a custom modal alert.
@@ -229,6 +241,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const dailyOrdersContainer = document.getElementById('daily-orders-container');
   const batchSelectionView = document.getElementById('batch-selection-view');
   const batchViewClientSearch = document.getElementById('batch-view-client-search');
+  const batchViewLetterNav = document.getElementById('batch-view-letter-nav');
   const batchViewClientList = document.getElementById('batch-view-client-list');
   const batchActionBar = document.getElementById('batch-action-bar');
   const batchViewSelectedCount = document.getElementById('batch-view-selected-count');
@@ -251,6 +264,36 @@ document.addEventListener('DOMContentLoaded', () => {
   const batchSuccessOrderList = document.getElementById('batch-success-order-list');
   const batchSuccessShareAllBtn = document.getElementById('batch-success-share-all-btn');
   const batchSuccessCloseBtn = document.getElementById('batch-success-close-btn');
+
+  const buildBatchLetterNav = () => {
+      if (!batchViewLetterNav) return;
+      batchViewLetterNav.innerHTML = LETTER_NAV_KEYS.map(letter => {
+          const label = letter === '#' ? '#' : letter;
+          return `
+              <button type="button"
+                  data-letter="${letter}"
+                  class="letter-nav-btn w-8 h-8 rounded-md flex items-center justify-center bg-gray-200 text-gray-500 hover:bg-gray-300 transition disabled:opacity-30 disabled:cursor-not-allowed">
+                  ${label}
+              </button>
+          `;
+      }).join('');
+  };
+
+  const updateBatchLetterNavState = (availableLetters = new Set()) => {
+      if (!batchViewLetterNav) return;
+      const buttons = batchViewLetterNav.querySelectorAll('.letter-nav-btn');
+      buttons.forEach(btn => {
+          const letter = btn.dataset.letter;
+          const isAvailable = availableLetters.has(letter);
+          btn.disabled = !isAvailable;
+          btn.classList.toggle('bg-purple-200', isAvailable);
+          btn.classList.toggle('text-purple-700', isAvailable);
+          btn.classList.toggle('bg-gray-200', !isAvailable);
+          btn.classList.toggle('text-gray-500', !isAvailable);
+      });
+  };
+
+  buildBatchLetterNav();
 
   // NEW: Edit Client Modal Elements
   const editClientModal = document.getElementById('edit-client-modal');
@@ -998,17 +1041,18 @@ document.addEventListener('DOMContentLoaded', () => {
           if (order.status === 'Cliente Registrado' || !order.clientName || !order.cedula) return;
 
           let key;
-          let beneficiaryData = {
-              name: order.clientName,
-              cedula: order.cedula,
-              type: order.type
-          };
+      let beneficiaryData = {
+          name: order.clientName,
+          cedula: order.cedula,
+          email: order.email || '',
+          type: order.type
+      };
 
           switch (order.type) {
               case 'transferencia':
                   if (!order.accountNumber) return;
                   key = `transferencia-${order.accountNumber}`;
-                  beneficiaryData = { ...beneficiaryData, bank: order.bank, accountType: order.accountType, accountNumber: order.accountNumber };
+              beneficiaryData = { ...beneficiaryData, bank: order.bank, accountType: order.accountType || '', accountNumber: order.accountNumber };
                   break;
               case 'pago-movil':
                   if (!order.phone) return;
@@ -1166,23 +1210,25 @@ document.addEventListener('DOMContentLoaded', () => {
       const destinationAmount = (order.destinationAmount || 0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
       const destinationCurrency = order.destinationCurrency || 'VES';
 
-      let details = '';
+      let details = `
+          <p class="text-sm"><span class="font-semibold">Correo:</span> ${order.email || 'N/A'}</p>
+      `;
       switch (order.type) {
           case 'transferencia':
-              details = `
+              details += `
                   <p class="text-sm"><span class="font-semibold">Banco:</span> ${order.bank || 'N/A'}</p>
-                  <p class="text-sm"><span class="font-semibold">Tipo:</span> ${order.accountType || 'N/A'}</p>
+                  ${order.accountType ? `<p class="text-sm"><span class="font-semibold">Tipo:</span> ${order.accountType}</p>` : ''}
                   <p class="text-sm truncate"><span class="font-semibold">Cuenta:</span> ${order.accountNumber || 'N/A'}</p>
               `;
               break;
           case 'pago-movil':
-              details = `
+              details += `
                   <p class="text-sm"><span class="font-semibold">Teléfono:</span> ${order.phone || 'N/A'}</p>
                   <p class="text-sm"><span class="font-semibold">Banco:</span> ${order.bank || 'N/A'}</p>
               `;
               break;
           case 'recarga-saldo':
-              details = `<p class="text-sm"><span class="font-semibold">Teléfono:</span> ${order.phone || 'N/A'}</p>`;
+              details += `<p class="text-sm"><span class="font-semibold">Teléfono:</span> ${order.phone || 'N/A'}</p>`;
               break;
       }
 
@@ -2160,12 +2206,15 @@ document.addEventListener('DOMContentLoaded', () => {
       // Fill common fields
       form.querySelector('input[id^="name-"]').value = beneficiary.name;
       form.querySelector('input[id^="cedula-"]').value = beneficiary.cedula;
+      const emailField = form.querySelector('input[id^="email-"]');
+      if (emailField) emailField.value = beneficiary.email || '';
 
       // Fill specific fields
       switch (beneficiary.type) {
           case 'transferencia':
               form.querySelector('#bank-transferencia').value = beneficiary.bank;
-              form.querySelector('#account-type-transferencia').value = beneficiary.accountType;
+              const accountTypeField = form.querySelector('#account-type-transferencia');
+              if (accountTypeField) accountTypeField.value = beneficiary.accountType || '';
               form.querySelector('#account-number-transferencia').value = beneficiary.accountNumber;
               break;
           case 'pago-movil':
@@ -2319,6 +2368,7 @@ document.addEventListener('DOMContentLoaded', () => {
               name: 'name-transferencia',
               cedula: 'cedula-transferencia',
               clp: 'clp-amount-transferencia',
+              email: 'email-transferencia',
               bank: 'bank-transferencia',
               accountType: 'account-type-transferencia',
               accountNumber: 'account-number-transferencia',
@@ -2327,6 +2377,7 @@ document.addEventListener('DOMContentLoaded', () => {
               name: 'name-pm',
               cedula: 'cedula-pm',
               clp: 'clp-amount-pm',
+              email: 'email-pm',
               bank: 'bank-pm',
               phone: 'phone-pm',
           },
@@ -2334,6 +2385,7 @@ document.addEventListener('DOMContentLoaded', () => {
               name: 'name-rs',
               cedula: 'cedula-rs',
               clp: 'clp-amount-rs',
+              email: 'email-rs',
               phone: 'phone-rs',
           },
       };
@@ -2362,8 +2414,9 @@ document.addEventListener('DOMContentLoaded', () => {
       const nameInput = getField(typeFields.name);
       const cedulaInput = getField(typeFields.cedula);
       const clpAmountInput = getField(typeFields.clp);
+      const emailInput = getField(typeFields.email);
 
-      if (!nameInput || !cedulaInput || !clpAmountInput) {
+      if (!nameInput || !cedulaInput || !clpAmountInput || !emailInput) {
           showMessage(messageElId, 'El formulario no está completo. Por favor, recarga la página e inténtalo nuevamente.', false);
           return;
       }
@@ -2376,6 +2429,7 @@ document.addEventListener('DOMContentLoaded', () => {
           country: userSelectedCountry,
           // createdAt will be added on final confirmation
           clientName: nameInput.value,
+          email: emailInput.value,
           cedula: cedulaInput.value.replace(/[^0-9]/g, ''),
           clpAmount: parseFloat(clpAmountInput.value),
           // New generalized fields
@@ -2393,22 +2447,23 @@ document.addEventListener('DOMContentLoaded', () => {
       let detailsHtml = `
         <p><span class="font-semibold">Nombre:</span> ${orderData.clientName}</p>
         <p><span class="font-semibold">Cédula:</span> ${orderData.cedula}</p>
+        <p><span class="font-semibold">Correo electrónico:</span> ${orderData.email}</p>
       `;
 
       // Add type-specific fields
       if (type === 'transferencia') {
           // Simplified for Venezuela
           const bankInput = getField(typeFields.bank);
-          const accountTypeInput = getField(typeFields.accountType);
+          const accountTypeInput = typeFields.accountType ? getField(typeFields.accountType) : null;
           const accountNumberInput = getField(typeFields.accountNumber);
 
-          if (!bankInput || !accountTypeInput || !accountNumberInput) {
+          if (!bankInput || !accountNumberInput) {
               showMessage(messageElId, 'Faltan campos necesarios para crear el pedido de transferencia.', false);
               return;
           }
 
           orderData.bank = bankInput.value;
-          orderData.accountType = accountTypeInput.value;
+          orderData.accountType = accountTypeInput ? accountTypeInput.value : '';
           orderData.accountNumber = accountNumberInput.value.replace(/[^0-9]/g, '');
 
           if (orderData.accountNumber.length !== 20) {
@@ -2418,7 +2473,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
           detailsHtml += `
             <p><span class="font-semibold">Banco:</span> ${orderData.bank}</p>
-            <p><span class="font-semibold">Tipo Cuenta:</span> ${orderData.accountType}</p>
+            ${orderData.accountType ? `<p><span class="font-semibold">Tipo Cuenta:</span> ${orderData.accountType}</p>` : ''}
             <p><span class="font-semibold">Nro. Cuenta:</span> ${orderData.accountNumber}</p>
           `;
       } else if (type === 'pago-movil') {
@@ -5216,22 +5271,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toggleBatchMode = (enable) => {
       if (enable) {
-          // Enter batch mode
           dailyOrdersHeader.classList.add('hidden');
           dailyOrdersContainer.classList.add('hidden');
           batchSelectionView.classList.remove('hidden');
           batchActionBar.classList.remove('hidden');
           batchActionBar.classList.add('flex');
-          
-          // Reset and render
-          batchProcessData = { selectedClients: new Map(), createdOrders: [], proofUrls: [] };
-          batchClientListPage = 1;
-          batchViewClientSearch.value = '';
-          renderBatchViewClientList(true);
-          updateBatchViewSelectionCount();
 
+          batchProcessData = { selectedClients: new Map(), createdOrders: [], proofUrls: [] };
+          if (batchViewClientSearch) batchViewClientSearch.value = '';
+          renderBatchViewClientList();
+          updateBatchViewSelectionCount();
       } else {
-          // Exit batch mode
           dailyOrdersHeader.classList.remove('hidden');
           dailyOrdersContainer.classList.remove('hidden');
           batchSelectionView.classList.add('hidden');
@@ -5240,40 +5290,52 @@ document.addEventListener('DOMContentLoaded', () => {
       }
   };
 
-  const renderBatchViewClientList = (isNewRender = false) => {
-      if (isNewRender) {
-          batchViewClientList.innerHTML = '';
-          batchClientListPage = 1;
-      }
+  const renderBatchViewClientList = () => {
+      if (!batchViewClientList) return;
+      batchViewClientList.innerHTML = '';
 
-      const existingLoadMoreBtn = document.getElementById('batch-view-load-more-btn');
-      if (existingLoadMoreBtn) existingLoadMoreBtn.remove();
+      const searchTerm = batchViewClientSearch ? batchViewClientSearch.value.toLowerCase() : '';
+      const filteredClients = fullClientList
+          .filter(client =>
+              client.clientName.toLowerCase().includes(searchTerm) ||
+              client.cedula.includes(searchTerm)
+          )
+          .sort((a, b) => a.clientName.localeCompare(b.clientName));
 
-      const searchTerm = batchViewClientSearch.value.toLowerCase();
-      const filteredClients = fullClientList.filter(client =>
-          client.clientName.toLowerCase().includes(searchTerm) ||
-          client.cedula.includes(searchTerm)
-      ).sort((a, b) => a.clientName.localeCompare(b.clientName));
-
-      const start = (batchClientListPage - 1) * CLIENTS_PER_PAGE_BATCH;
-      const end = start + CLIENTS_PER_PAGE_BATCH;
-      const clientsToRender = filteredClients.slice(start, end);
-
-      if (isNewRender && clientsToRender.length === 0) {
+      if (filteredClients.length === 0) {
           batchViewClientList.innerHTML = `<p class="text-gray-500 p-4 text-center">No se encontraron clientes.</p>`;
+          updateBatchLetterNavState(new Set());
           return;
       }
 
-      const clientsHtml = clientsToRender.map(client => {
+      const letterAnchors = new Set();
+      const availableLetters = new Set();
+
+      const clientsHtml = filteredClients.map(client => {
+          const letter = getClientInitial(client.clientName);
+          availableLetters.add(letter);
           const isSelected = batchProcessData.selectedClients.has(client.id);
           let paymentMethodInfo = '';
           switch (client.type) {
-              case 'transferencia': paymentMethodInfo = `Transferencia: ...${client.accountNumber.slice(-4)}`; break;
-              case 'pago-movil': paymentMethodInfo = `Pago Móvil: ...${client.phone.slice(-4)}`; break;
-              case 'recarga-saldo': paymentMethodInfo = `Recarga: ...${client.phone.slice(-4)}`; break;
+              case 'transferencia':
+                  paymentMethodInfo = client.accountNumber ? `Transferencia: ...${client.accountNumber.slice(-4)}` : 'Transferencia';
+                  break;
+              case 'pago-movil':
+                  paymentMethodInfo = client.phone ? `Pago Móvil: ...${client.phone.slice(-4)}` : 'Pago Móvil';
+                  break;
+              case 'recarga-saldo':
+                  paymentMethodInfo = client.phone ? `Recarga: ...${client.phone.slice(-4)}` : 'Recarga de Saldo';
+                  break;
+              default:
+                  paymentMethodInfo = client.type || 'Sin tipo';
+                  break;
           }
+          const isAnchor = !letterAnchors.has(letter);
+          if (isAnchor) letterAnchors.add(letter);
+          const anchorAttr = isAnchor ? `data-letter-anchor="${letter}"` : '';
+          const anchorId = isAnchor ? `id="letter-anchor-${letter === '#' ? 'otros' : letter}"` : '';
           return `
-              <label for="batch-view-client-${client.id}" class="flex items-center p-3 rounded-lg border cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50 border-blue-300' : 'border-gray-200'}">
+              <label ${anchorAttr} ${anchorId} data-letter="${letter}" for="batch-view-client-${client.id}" class="flex items-center p-3 rounded-lg border cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50 border-blue-300' : 'border-gray-200'}">
                   <input type="checkbox" id="batch-view-client-${client.id}" data-client-id="${client.id}" class="h-5 w-5 text-blue-600 focus:ring-blue-500 mr-3" ${isSelected ? 'checked' : ''}>
                   <div>
                       <p class="font-semibold">${client.clientName}</p>
@@ -5283,19 +5345,8 @@ document.addEventListener('DOMContentLoaded', () => {
           `;
       }).join('');
 
-      batchViewClientList.innerHTML += clientsHtml;
-
-      if (filteredClients.length > end) {
-          const loadMoreBtn = document.createElement('button');
-          loadMoreBtn.id = 'batch-view-load-more-btn';
-          loadMoreBtn.className = 'w-full text-center py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300';
-          loadMoreBtn.textContent = 'Cargar más clientes...';
-          loadMoreBtn.onclick = () => {
-              batchClientListPage++;
-              renderBatchViewClientList(false);
-          };
-          batchViewClientList.appendChild(loadMoreBtn);
-      }
+      batchViewClientList.innerHTML = clientsHtml;
+      updateBatchLetterNavState(availableLetters);
   };
 
   const updateBatchViewSelectionCount = () => {
@@ -5311,7 +5362,18 @@ document.addEventListener('DOMContentLoaded', () => {
     cancelBatchProcessBtn.addEventListener('click', () => toggleBatchMode(false));
   }
   if (batchViewClientSearch) {
-    batchViewClientSearch.addEventListener('input', () => renderBatchViewClientList(true));
+    batchViewClientSearch.addEventListener('input', () => renderBatchViewClientList());
+  }
+  if (batchViewLetterNav) {
+    batchViewLetterNav.addEventListener('click', (e) => {
+        const btn = e.target.closest('.letter-nav-btn');
+        if (!btn || btn.disabled) return;
+        const letter = btn.dataset.letter;
+        const anchor = batchViewClientList ? batchViewClientList.querySelector(`[data-letter-anchor="${letter}"]`) : null;
+        if (anchor) {
+            anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    });
   }
   batchViewClientList.addEventListener('change', (e) => {
       if (e.target.type === 'checkbox') {
