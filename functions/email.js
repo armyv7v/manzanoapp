@@ -40,6 +40,13 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
         const previousValue = change.before.data();
         const orderId = event.params.orderId;
 
+        // --- LOG DE DIAGNÓSTICO MEJORADO ---
+        console.log(`[${orderId}] Función 'sendPaymentConfirmationEmail' activada.
+        - Estado anterior: ${previousValue.status}
+        - Estado nuevo: ${newValue.status}
+        - ID de cliente: ${newValue.clientId}
+        - URL de comprobante: ${newValue.proofUrl || 'No disponible'}`);
+
         // Condición: Solo actuar si el estado cambia a 'Pagado'
         if (newValue.status !== "Pagado" || previousValue.status === "Pagado") {
             console.log(`[${orderId}] El estado no cambió a 'Pagado'. No se envía correo.`);
@@ -106,8 +113,7 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
                 </div>
                 <div class="content">
                     <p>Hola <strong>${newValue.clientName}</strong>,</p>
-                    <p>Te confirmamos que tu pedido por <strong>${newValue.destinationAmount.toLocaleString("es-VE", { style: "currency", currency: "VES" })}</strong> ha sido procesado y pagado con éxito.</p>
-                    <p>Te confirmamos que tu pedido por <strong>${destinationAmount.toLocaleString("es-VE", { style: "currency", currency: "VES" })}</strong> ha sido procesado y pagado con éxito.</p>
+                    <p>Te confirmamos que tu pedido por <strong>${destinationAmount.toLocaleString("es-VE", { style: "currency", currency: "VES" })}</strong> ha sido procesado y pagado con éxito. Adjunto encontrarás el comprobante de la operación.</p>
                     <p>Gracias por confiar en ${APP_NAME}.</p>
                 </div>
                 <div class="footer">
