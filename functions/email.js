@@ -129,7 +129,14 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
             await apiInstance.sendTransacEmail(sendSmtpEmail);
             console.log(`[${orderId}] Correo de confirmación enviado a ${recipientEmail} a través de Brevo.`);
         } catch (error) {
-            console.error(`[${orderId}] Hubo un error al enviar el correo con Brevo:`, error.response ? error.response.body : error.message);
+            // El objeto de error de la API de Brevo a menudo contiene detalles útiles en `error.response.body`.
+            // Registrar el objeto completo puede dar más contexto.
+            console.error(`[${orderId}] Fallo al enviar correo con Brevo a ${recipientEmail}.`);
+            if (error.response) {
+                console.error("Cuerpo de la respuesta de error de Brevo:", JSON.stringify(error.response.body, null, 2));
+            } else {
+                console.error("Error de Brevo:", error.message);
+            }
         }
     }
 );
