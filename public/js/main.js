@@ -1454,20 +1454,40 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /** Populates the seller dropdown for the commission history search. */
-  const populateSellerSelect = () => {
+  const populateSellerSelect = async () => {
       if (!sellerCommissionHistorySelect) return;
 
-      const sellerEmails = Object.entries(userTags)
-          .filter(([email, tag]) => tag.startsWith('V'))
-          .map(([email, tag]) => email);
+      const sellerEmails = new Set(
+          Object.entries(userTags)
+              .filter(([, tag]) => typeof tag === 'string' && tag.startsWith('V'))
+              .map(([email]) => email)
+      );
 
+      try {
+          const snapshot = await db.collection('seller_commissions').get();
+          snapshot.forEach(doc => {
+              const email = (doc.data().sellerEmail || '').trim();
+              if (email) sellerEmails.add(email);
+          });
+      } catch (error) {
+          console.error("Error fetching sellers for commission history:", error);
+      }
+
+      const sortedEmails = Array.from(sellerEmails).sort((a, b) => a.localeCompare(b));
       sellerCommissionHistorySelect.innerHTML = '<option value="">-- Elige un vendedor --</option>';
-      sellerEmails.sort().forEach(email => {
+      sortedEmails.forEach(email => {
           const option = document.createElement('option');
           option.value = email;
           option.textContent = email;
           sellerCommissionHistorySelect.appendChild(option);
       });
+
+      if (!sellerCommissionHistorySelect.dataset.initialized && sortedEmails.length > 0) {
+          sellerCommissionHistorySelect.value = sortedEmails[0];
+          const today = getChileanDateForPicker(new Date());
+          setSellerCommissionDateRangeAndSearch(today, today);
+          sellerCommissionHistorySelect.dataset.initialized = 'true';
+      }
   };
 
   const setSellerCommissionDateRangeAndSearch = (start, end) => {
@@ -2070,6 +2090,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       orderData.destinationAmount = orderData.clpAmount * rate;
+
+      if (isSeller) {
+          orderData.sellerId = currentUser.uid;
+          orderData.sellerEmail = currentUser.email || '';
+          orderData.sellerCommissionRate = typeof commissionRate === 'number' ? commissionRate : 0;
+      }
 
       let detailsHtml = `
         <p><span class="font-semibold">Nombre:</span> ${orderData.clientName}</p>
@@ -2702,19 +2728,28 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {object} sourceAccount - The source account data.
    * @returns {number} The calculated fee.
    */
+  const computeInterbankFee = (amount) => {
+      if (typeof amount !== 'number' || amount <= 0) return 0;
+      return amount < 700 ? 2 : Math.ceil(amount * 0.003 * 100) / 100;
+  };
+
+  const normalizeBankName = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
   const calculateFee = (order, sourceAccount) => {
-      const amount = order.destinationAmount;
+      const amount = (order && order.destinationAmount) || 0;
+      if (amount <= 0) return 0;
+
       switch (order.type) {
           case 'pago-movil':
-              if (amount > 47) return amount * 0.003; // 0.3%
-              if (amount > 46) return 0.13;
-              return 0;
-          case 'transferencia':
-              // Check for inter-bank transfer
-              if (sourceAccount.bank !== order.bank) {
-                  return amount * 0.003; // 0.3%
+              return computeInterbankFee(amount);
+          case 'transferencia': {
+              const sourceBankName = normalizeBankName((sourceAccount && (sourceAccount.bank || sourceAccount.bankName)) || '');
+              const destinationBankName = normalizeBankName(order.bank || '');
+              if (sourceBankName !== destinationBankName) {
+                  return computeInterbankFee(amount);
               }
               return 0;
+          }
           case 'recarga-saldo':
           default:
               return 0;
@@ -2831,6 +2866,10 @@ document.addEventListener('DOMContentLoaded', () => {
               if (!selectedAccount) {
                   throw new Error("La cuenta de origen seleccionada ya no es válida.");
               }
+              const sourceHolderRaw = typeof selectedAccount.holder === 'string' ? selectedAccount.holder.trim() : '';
+              const sourceHolder = sourceHolderRaw || 'Sin titular';
+              const sourceBankRaw = typeof selectedAccount.bank === 'string' ? selectedAccount.bank.trim() : (typeof selectedAccount.bankName === 'string' ? selectedAccount.bankName.trim() : '');
+              const sourceBank = sourceBankRaw || 'Sin banco';
 
               // Calculate 1% admin commission for VES orders
               adminCommissionVes = (orderData.destinationAmount || 0) * 0.01;
@@ -2852,8 +2891,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   type: 'subtract', 
                   note: `Pago pedido ${orderId.substring(0, 5)} (${orderData.destinationCurrency})`, 
                   timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                  holder: selectedAccount.holder,
-                  bank: selectedAccount.bank
+                  holder: sourceHolder,
+                  bank: sourceBank
               });
               
               // Create history for fee if it exists
@@ -2861,10 +2900,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   batch.set(feeHistoryRef, { 
                       amount: fee, 
                       type: 'fee', 
-                      note: `Comisión pedido ${orderId.substring(0, 5)}`, 
-                      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                      holder: selectedAccount.holder,
-                      bank: selectedAccount.bank
+                       note: `Comisión pedido ${orderId.substring(0, 5)}`, 
+                       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                       holder: sourceHolder,
+                       bank: sourceBank
                   });
               }
 
@@ -2873,11 +2912,11 @@ document.addEventListener('DOMContentLoaded', () => {
                   const adminCommissionHistoryRef = db.collection('balance_history').doc();
                   batch.set(adminCommissionHistoryRef, {
                       amount: adminCommissionVes,
-                      type: 'admin_commission',
-                      note: `Comisión Admin pedido ${orderId.substring(0, 5)}`,
-                      timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                      holder: selectedAccount.holder,
-                      bank: selectedAccount.bank,
+                       type: 'admin_commission',
+                       note: `Comisión Admin pedido ${orderId.substring(0, 5)}`,
+                       timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                       holder: sourceHolder,
+                       bank: sourceBank,
                   });
                   
                   // --- DEFINITIVE CORRECTION for CLP Balance ---
@@ -4158,7 +4197,9 @@ document.addEventListener('DOMContentLoaded', () => {
           const fromAccount = accountsData.find(acc => acc.id === fromId);
           const toAccount = accountsData.find(acc => acc.id === toId);
           if (fromAccount && toAccount) {
-              const fee = (fromAccount.bank !== toAccount.bank) ? amount * 0.003 : 0;
+              const fromBank = (typeof fromAccount.bank === 'string' ? fromAccount.bank.trim() : (typeof fromAccount.bankName === 'string' ? fromAccount.bankName.trim() : '')) || 'Sin banco';
+              const toBank = (typeof toAccount.bank === 'string' ? toAccount.bank.trim() : (typeof toAccount.bankName === 'string' ? toAccount.bankName.trim() : '')) || 'Sin banco';
+              const fee = normalizeBankName(fromBank) !== normalizeBankName(toBank) ? computeInterbankFee(amount) : 0;
               const totalDebit = amount + fee;
               transferFeeDetails.innerHTML = `Comisión por transferencia interbancaria: <b>${fee.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>. Total a debitar: <b>${totalDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>.`;
               transferFeeDetails.classList.remove('hidden');
@@ -4193,7 +4234,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const fromAccount = accountsData.find(acc => acc.id === fromAccountId);
       const toAccount = accountsData.find(acc => acc.id === toAccountId);
-      const fee = (fromAccount.bank !== toAccount.bank) ? amount * 0.003 : 0;
+      if (!fromAccount || !toAccount) {
+          showMessage('transfer-funds-message', 'No se encontraron las cuentas seleccionadas. Intenta recargar la página.', false);
+          loadingSpinner.classList.add('hidden'); return;
+      }
+      const fromBank = (typeof fromAccount.bank === 'string' ? fromAccount.bank.trim() : (typeof fromAccount.bankName === 'string' ? fromAccount.bankName.trim() : '')) || 'Sin banco';
+      const toBank = (typeof toAccount.bank === 'string' ? toAccount.bank.trim() : (typeof toAccount.bankName === 'string' ? toAccount.bankName.trim() : '')) || 'Sin banco';
+      const fromHolder = (typeof fromAccount.holder === 'string' ? fromAccount.holder.trim() : '') || 'Sin titular';
+      const toHolder = (typeof toAccount.holder === 'string' ? toAccount.holder.trim() : '') || 'Sin titular';
+      const fee = normalizeBankName(fromBank) !== normalizeBankName(toBank) ? computeInterbankFee(amount) : 0;
       const totalDebit = amount + fee;
 
       if (fromAccount.balance < totalDebit) {
@@ -4209,9 +4258,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
           batch.update(fromAccountRef, { balance: firebase.firestore.FieldValue.increment(-totalDebit) });
           batch.update(toAccountRef, { balance: firebase.firestore.FieldValue.increment(amount) });
-          batch.set(db.collection('balance_history').doc(), { amount, type: 'subtract', note: `Transferencia a ${toAccount.holder}`, timestamp: serverTimestamp, holder: fromAccount.holder, bank: fromAccount.bank });
-          if (fee > 0) batch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión por transferencia interna`, timestamp: serverTimestamp, holder: fromAccount.holder, bank: fromAccount.bank });
-          batch.set(db.collection('balance_history').doc(), { amount, type: 'add', note: `Transferencia desde ${fromAccount.holder}`, timestamp: serverTimestamp, holder: toAccount.holder, bank: toAccount.bank });
+          batch.set(db.collection('balance_history').doc(), { amount, type: 'subtract', note: `Transferencia a ${toHolder}`, timestamp: serverTimestamp, holder: fromHolder, bank: fromBank });
+          if (fee > 0) batch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión por transferencia interna`, timestamp: serverTimestamp, holder: fromHolder, bank: fromBank });
+          batch.set(db.collection('balance_history').doc(), { amount, type: 'add', note: `Transferencia desde ${fromHolder}`, timestamp: serverTimestamp, holder: toHolder, bank: toBank });
 
           await batch.commit();
           // The accountsListener will automatically refresh the payment modal.
@@ -4451,6 +4500,11 @@ document.addEventListener('DOMContentLoaded', () => {
               createdByTag: adminTag,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
+          if (isSeller) {
+              orderPayload.sellerId = currentUser.uid;
+              orderPayload.sellerEmail = currentUser.email || '';
+              orderPayload.sellerCommissionRate = typeof commissionRate === 'number' ? commissionRate : 0;
+          }
           ordersToCreate.push(orderPayload);
           firestoreBatch.set(newOrderRef, orderPayload);
       });
@@ -4523,6 +4577,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
           let totalDebitVes = 0;
           const sourceAccount = accountsData.find(acc => acc.id === sourceAccountId);
+          if (!sourceAccount) {
+              throw new Error('No se encontro la cuenta de origen seleccionada.');
+          }
+          const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp();
+          const historyHolderRaw = typeof sourceAccount.holder === 'string' ? sourceAccount.holder.trim() : '';
+          const historyBankRaw = typeof sourceAccount.bank === 'string' ? sourceAccount.bank.trim() : (typeof sourceAccount.bankName === 'string' ? sourceAccount.bankName.trim() : '');
+          const historyHolder = historyHolderRaw || 'Sin titular';
+          const historyBank = historyBankRaw || 'Sin banco';
 
           // 2. Prepare batch updates for Firestore
           batchProcessData.createdOrders.forEach((order, index) => {
@@ -4538,9 +4600,9 @@ document.addEventListener('DOMContentLoaded', () => {
               totalDebitVes += debit;
 
               // History records for each order
-              firestoreBatch.set(db.collection('balance_history').doc(), { amount: order.destinationAmount, type: 'subtract', note: `Pago lote ${order.id.slice(-5)}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (fee > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión lote ${order.id.slice(-5)}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (adminCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: adminCommission, type: 'admin_commission', note: `Comisión Admin lote ${order.id.slice(-5)}`, timestamp: firebase.firestore.FieldValue.serverTimestamp(), holder: sourceAccount.holder, bank: sourceAccount.bank });
+              firestoreBatch.set(db.collection('balance_history').doc(), { amount: order.destinationAmount, type: 'subtract', note: `Pago lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
+              if (fee > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
+              if (adminCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: adminCommission, type: 'admin_commission', note: `Comisión Admin lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
           });
 
           // 3. Decrement main account balance

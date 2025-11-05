@@ -1,4 +1,4 @@
-const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
+﻿const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {setGlobalOptions} = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const serviceAccount = require("./serviceAccountKey.json");
@@ -26,13 +26,13 @@ admin.initializeApp({
  * It sends a push notification to all registered admin devices.
  */
 
-// Define la regiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n y aumenta los recursos para diagnÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³stico.
-// El error de timeout durante la inicializaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n a veces se resuelve
-// especificando explÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­citamente mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s memoria y tiempo.
+// Define la regiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n y aumenta los recursos para diagnÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³stico.
+// El error de timeout durante la inicializaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n a veces se resuelve
+// especificando explÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­citamente mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s memoria y tiempo.
 setGlobalOptions({
   region: "us-central1",
-  timeoutSeconds: 60, // Aumentado de 10s (implÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­cito) a 60s
-  memory: "256MB",    // Aumentado de 128MB (implÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­cito)
+  timeoutSeconds: 60, // Aumentado de 10s (implÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­cito) a 60s
+  memory: "256MB",    // Aumentado de 128MB (implÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­cito)
 });
 
 exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (event) => {
@@ -42,7 +42,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     // Get the orderId from the event parameters
     const {orderId} = event.params;
 
-    // En la nueva versiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n, los datos del evento vienen en event.data
+    // En la nueva versiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n, los datos del evento vienen en event.data
     const snap = event.data;
     if (!snap) {
       console.log("No data associated with the event");
@@ -56,10 +56,10 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
       return null;
     }
 
-    // Validar que clpAmount sea un número válido para la notificación
+    // Validar que clpAmount sea un nÃºmero vÃ¡lido para la notificaciÃ³n
     const clpAmountForNotification = newOrder.clpAmount;
     if (typeof clpAmountForNotification !== 'number' || isNaN(clpAmountForNotification)) {
-        console.error(`[${orderId}] El campo 'clpAmount' no es un número válido (${clpAmountForNotification}) para la notificación. Saltando notificación.`);
+        console.error(`[${orderId}] El campo 'clpAmount' no es un nÃºmero vÃ¡lido (${clpAmountForNotification}) para la notificaciÃ³n. Saltando notificaciÃ³n.`);
         return null;
     }
 
@@ -99,7 +99,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     const amountCLP = newOrder.clpAmount.toLocaleString("es-CL", {
       style: "currency", currency: "CLP", // Using newOrder.clpAmount here, ensure it's validated above
     });
-    const notificationTitle = "ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡Nuevo Pedido Recibido! ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â°ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â";
+    const notificationTitle = "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡Nuevo Pedido Recibido! ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â";
     const notificationBody = `ID: ${orderId.slice(-5)} | ${newOrder.clientName} | ${amountCLP}`;
     const clickAction = `https://manzanoapp-2f775.web.app/?pay_order_id=${orderId}`;
 
@@ -122,7 +122,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
       },
     };
 
-    console.log(`Intentando enviar notificaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n a ${uniqueTokens.length} token(s).`);
+    console.log(`Intentando enviar notificaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n a ${uniqueTokens.length} token(s).`);
 
     // 5. Define options for high-priority delivery.
     const options = {
@@ -136,7 +136,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
       console.log("Notifications sent successfully.");
       // Log any failures for debugging
       if (response.failureCount > 0) {
-        console.warn(`FallÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ el envÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o a ${response.failureCount} tokens.`);
+        console.warn(`FallÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ el envÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o a ${response.failureCount} tokens.`);
       }
     } catch (error) {
       console.error("Error sending notifications:", error);
@@ -150,49 +150,64 @@ exports.calculateCommissionOnPaid = onDocumentUpdated("orders/{orderId}", async 
   const afterData = event.data.after.data();
   const orderId = event.params.orderId;
 
-  // Exit if status didn't change to "Pagado"
   if (beforeData.status === "Pagado" || afterData.status !== "Pagado") {
     return null;
   }
 
   console.log(`Order ${orderId} was marked as paid. Checking for seller commission.`);
 
-  // Validar que clpAmount sea un número válido para el cálculo de comisión
   const clpAmountForCommission = afterData.clpAmount;
-  if (typeof clpAmountForCommission !== 'number' || isNaN(clpAmountForCommission)) {
-      console.error(`[${orderId}] El campo 'clpAmount' no es un número válido (${clpAmountForCommission}) para el cálculo de comisión. Saltando cálculo.`);
-      return null;
+  if (typeof clpAmountForCommission !== "number" || isNaN(clpAmountForCommission)) {
+    console.error(`[${orderId}] El campo 'clpAmount' no es un número válido (${clpAmountForCommission}) para el cálculo de comisión. Saltando cálculo.`);
+    return null;
   }
 
-  // --- Seller Commission Logic ---
-  if (afterData.userId) {
-    try {
-      const user = await admin.auth().getUser(afterData.userId);
-      if (user.customClaims && user.customClaims.seller === true && user.customClaims.commissionRate > 0) {
-        const commissionRate = user.customClaims.commissionRate;
-        const commissionAmount = clpAmountForCommission * commissionRate;
+  const sellerIdFromDoc = typeof afterData.sellerId === "string" ? afterData.sellerId.trim() : "";
+  const sellerEmailFromDoc = typeof afterData.sellerEmail === "string" ? afterData.sellerEmail.trim() : "";
+  const fallbackSellerId = typeof afterData.userId === "string" ? afterData.userId.trim() : "";
+  let sellerCommissionRate = typeof afterData.sellerCommissionRate === "number" && !isNaN(afterData.sellerCommissionRate)
+    ? afterData.sellerCommissionRate
+    : null;
 
-        const commissionData = {
-          sellerId: user.uid,
-          sellerEmail: user.email,
-          orderId,
-          orderCLPAmount: afterData.clpAmount,
-          commissionRate,
-          commissionAmountCLP: commissionAmount, // Using clpAmountForCommission here
-          timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        };
+  const sellerId = sellerIdFromDoc || fallbackSellerId;
+  let sellerEmail = sellerEmailFromDoc;
 
-        await admin.firestore().collection("seller_commissions").add(commissionData);
-        console.log(`Commission of ${commissionAmount} CLP for seller ${user.email} created for order ${orderId}.`);
-      } else {
-        console.log(`Order creator ${user.email} is not a seller or has no commission rate.`);
-      }
-    } catch (error) {
-      console.error(`Error processing seller commission for user ${afterData.userId}:`, error);
-    }
-  } else {
-    console.log("Order has no associated userId, skipping commission check.");
+  if (!sellerId) {
+    console.log(`[${orderId}] El pedido pagado no tiene sellerId asociado. Se omite la generación de comisión.`);
+    return null;
   }
+
+  if (!sellerCommissionRate || sellerCommissionRate <= 0) {
+    console.log(`[${orderId}] No se encontró una tasa de comisión válida para el vendedor ${sellerId}. Se omite la comisión.`);
+    return null;
+  }
+
+  if (!sellerEmail) {
+    console.log(`[${orderId}] No se encontró un correo asociado al vendedor ${sellerId}. Se omite la comisión.`);
+    return null;
+  }
+
+  const commissionAmount = clpAmountForCommission * sellerCommissionRate;
+  const paidAt = afterData.paidAt && typeof afterData.paidAt.toDate === "function"
+    ? afterData.paidAt
+    : admin.firestore.Timestamp.now();
+
+  const commissionData = {
+    sellerId,
+    sellerEmail,
+    orderId,
+    orderCLPAmount: afterData.clpAmount,
+    commissionRate: sellerCommissionRate,
+    commissionAmountCLP: commissionAmount,
+    timestamp: paidAt,
+    paidAt,
+  };
+
+  await admin.firestore().collection("seller_commissions").add(commissionData);
+  console.log(`Commission of ${commissionAmount} CLP for seller ${sellerEmail} created for order ${orderId}.`);
 
   return null;
 });
+
+
+

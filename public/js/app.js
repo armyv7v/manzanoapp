@@ -1,4 +1,4 @@
-﻿﻿// Demo/hosting detection
+﻿// Demo/hosting detection
 (function(){
   try {
     const __proj = (firebase.app && firebase.app().options && firebase.app().options.projectId) || '';
@@ -639,6 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const clientsToRender = filteredClientList.slice(start, end);
 
       clientsToRender.forEach(client => {
+          const latestOrder = client.latestOverall || null;
           const clientEl = document.createElement('div');
           clientEl.className = 'p-3 hover:bg-gray-100 rounded-lg flex justify-between items-center border border-gray-200';
           clientEl.innerHTML = `
@@ -647,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   <p class="text-sm text-gray-600 font-mono">${client.cedula}</p>
               </div>
               <div class="flex items-center gap-2">
-                <button data-client-id="${client.id}" class="edit-client-btn bg-yellow-100 text-yellow-800 px-3 py-1 rounded-md text-xs font-semibold hover:bg-yellow-200">Editar</button>
+                <button data-client-id="${latestOrder ? latestOrder.id : ''}" data-cedula="${client.cedula}" class="edit-client-btn bg-yellow-100 text-yellow-800 px-3 py-1 rounded-md text-xs font-semibold hover:bg-yellow-200">Editar</button>
                 <button data-cedula="${client.cedula}" data-name="${client.clientName}" class="copy-client-btn bg-blue-100 text-blue-700 px-3 py-1 rounded-md text-xs font-semibold hover:bg-blue-200">Copiar</button>
               </div>
           `;
@@ -714,20 +715,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Fetches all orders to build a unique client list with their latest data. */
   const fetchAndRenderClients = async () => {
-      // Display a non-blocking loading message in the client list area.
       clientsList.innerHTML = `<p class="text-gray-500">Cargando lista de clientes en segundo plano...</p>`;
       clientsCountDisplay.textContent = '...';
 
       try {
-          // Order by createdAt to ensure we can get the latest data for each client.
           const snapshot = await db.collection('orders')
               .orderBy('createdAt', 'desc')
               .get();
           
-          const clientsMap = new Map();
+          const clientsMap = new Map(); // This will now store client profiles.
           const docs = snapshot.docs;
 
-          // Helper function to process a chunk and yield to the event loop, preventing UI freeze.
           const processChunk = (startIndex, chunkSize) => {
               return new Promise(resolve => {
                   setTimeout(() => {
@@ -735,9 +733,28 @@ document.addEventListener('DOMContentLoaded', () => {
                       for (let i = startIndex; i < endIndex; i++) {
                           const doc = docs[i];
                           const order = doc.data();
-                          // Since we are ordered by descending date, the first time we see a cedula, it's the latest one.
-                          if (order.cedula && order.clientName && !clientsMap.has(order.cedula)) {
-                              clientsMap.set(order.cedula, { ...order, id: doc.id }); // Store the whole last order data
+                          if (order.cedula && order.clientName) {
+                              let clientProfile = clientsMap.get(order.cedula) || {
+                                  cedula: order.cedula,
+                                  clientName: order.clientName,
+                                  email: order.email || '',
+                                  lastOrders: {},
+                                  latestOverall: null
+                              };
+
+                              clientProfile.clientName = order.clientName;
+                              clientProfile.email = order.email || clientProfile.email;
+
+                              if (order.type && !clientProfile.lastOrders[order.type]) {
+                                  clientProfile.lastOrders[order.type] = { ...order, id: doc.id };
+                              }
+                              
+                              if (!clientProfile.latestOverall) {
+                                  clientProfile.latestOverall = { ...order, id: doc.id };
+                                  clientProfile.id = doc.id;
+                              }
+
+                              clientsMap.set(order.cedula, clientProfile);
                           }
                       }
                       resolve();
@@ -745,14 +762,13 @@ document.addEventListener('DOMContentLoaded', () => {
               });
           };
 
-          // Process documents in chunks to keep the UI responsive.
           const CHUNK_SIZE = 500;
           for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
               await processChunk(i, CHUNK_SIZE);
           }
 
           fullClientList = Array.from(clientsMap.values());
-          updateClientView(); // This will replace the loading message with the actual list.
+          updateClientView(); 
 
       } catch (error) {
           console.error("Error fetching clients:", error);
@@ -783,14 +799,15 @@ document.addEventListener('DOMContentLoaded', () => {
    * Abre el modal de edición de cliente y lo puebla con los datos existentes.
    * @param {string} clientId - El ID del cliente a editar.
    */
-  const openEditClientModal = (clientId) => {
-    const client = fullClientList.find(c => c.id === clientId);
-    if (!client) {
+  const openEditClientModal = (cedula) => {
+    const clientProfile = fullClientList.find(c => c.cedula === cedula);
+    if (!clientProfile || !clientProfile.latestOverall) {
       console.error("No se pudo encontrar el cliente para editar.");
+      showCustomAlert("No se pudo encontrar el cliente para editar.");
       return;
     }
+    const client = clientProfile.latestOverall;
 
-    // Limpiar y poblar campos comunes
     editClientForm.reset();
     document.getElementById('edit-client-message').textContent = '';
     document.getElementById('edit-client-id').value = client.id;
@@ -798,13 +815,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('edit-client-name').value = client.clientName;
     document.getElementById('edit-client-cedula').value = client.cedula;
     document.getElementById('edit-client-email').value = client.email || '';
-
-    // Ocultar todos los bloques de campos específicos
     document.getElementById('edit-client-fields-transferencia').style.display = 'none';
     document.getElementById('edit-client-fields-pago-movil').style.display = 'none';
     document.getElementById('edit-client-fields-recarga').style.display = 'none';
-
-    // Mostrar y poblar campos según el tipo de cliente
     if (client.type === 'transferencia') {
       document.getElementById('edit-client-fields-transferencia').style.display = 'contents';
       document.getElementById('edit-client-bank-transferencia').value = client.bank;
@@ -842,6 +855,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (clientType === 'transferencia') {
       updatedData.bank = document.getElementById('edit-client-bank-transferencia').value;
+      updatedData.accountType = document.getElementById('edit-client-account-type-transferencia').value;
       updatedData.accountNumber = document.getElementById('edit-client-account-number-transferencia').value;
     } else if (clientType === 'pago-movil') {
       updatedData.phone = document.getElementById('edit-client-phone-pm').value;
@@ -851,13 +865,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     try {
-      await db.collection('clients').doc(clientId).update(updatedData);
+      // --- SOLUCIÓN DEFINITIVA ---
+      // Usamos .set() con { merge: true } para crear el documento si no existe (upsert).
+      // Esto soluciona el error "No document to update" porque el cliente
+      // podría no tener una entrada en la colección 'clients' todavía.
+      await db.collection('clients').doc(clientId).set(updatedData, { merge: true });
 
       // Actualizar la lista local para reflejar los cambios instantáneamente
-      const clientIndex = fullClientList.findIndex(c => c.id === clientId);
+      const clientIndex = fullClientList.findIndex(c => c.latestOverall && c.latestOverall.id === clientId);
       if (clientIndex !== -1) {
-        // Preserve the original ID while updating the rest of the data
-        fullClientList[clientIndex] = { ...fullClientList[clientIndex], ...updatedData };
+        const existingProfile = fullClientList[clientIndex];
+        const updatedProfile = {
+          ...existingProfile,
+          ...updatedData,
+          id: existingProfile.id || clientId,
+          latestOverall: existingProfile.latestOverall
+            ? { ...existingProfile.latestOverall, ...updatedData }
+            : { ...updatedData, id: clientId }
+        };
+        fullClientList[clientIndex] = updatedProfile;
       }
 
       editClientModal.classList.add('hidden');
@@ -906,7 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const birthdayMessage = '<span class="font-bold text-purple-700">Cambios Manzano, Tu Cambio a Tiempo!</span>';
       const tickerHtml = `<div class="ticker-content">${birthdayMessage}${ratesPartHtml}</div>`;
       // Duplicate the entire content div for a seamless loop
-      tickerWrap.innerHTML = tickerHtml + tickerHtml;
+      tickerWrap.innerHTML = tickerHtml + tickerHtml; // Re-added the duplication for seamless loop
   };
 
   /**
@@ -1406,10 +1432,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /** Attaches a real-time listener for today's orders. */
   const attachOrdersListener = () => {
-      // Definitive Timezone Fix: Create date strings with a fixed offset.
-      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
-      const startOfDay = new Date(`${todayString}T00:00:00-04:00`);
-      const endOfDay = new Date(`${todayString}T23:59:59-04:00`);
+      // CORRECCIÓN GLOBAL DE ZONA HORARIA: Usar lógica robusta para el día actual en Chile.
+      // Esto evita problemas con el cambio de horario de verano (UTC-3 vs UTC-4).
+      const nowInChile = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' }));
+      const startOfDay = new Date(new Date(nowInChile).setHours(0, 0, 0, 0));
+      const endOfDay = new Date(new Date(nowInChile).setHours(23, 59, 59, 999));
 
       const createdTodayQuery = db.collection('orders')
           .where('createdAt', '>=', startOfDay)
@@ -1588,9 +1615,11 @@ document.addEventListener('DOMContentLoaded', () => {
       if (adminCommissionListener) adminCommissionListener(); // Detach old one
       if (tilloCommissionListener) tilloCommissionListener();
 
-      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
-      const todayStart = new Date(`${todayString}T00:00:00-04:00`);
-      const todayEnd = new Date(`${todayString}T23:59:59-04:00`);
+      // CORRECCIÓN GLOBAL DE ZONA HORARIA: Usar lógica robusta para el día actual en Chile.
+      const nowInChile = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' }));
+      const todayStart = new Date(new Date(nowInChile).setHours(0, 0, 0, 0));
+      const todayEnd = new Date(new Date(nowInChile).setHours(23, 59, 59, 999));
+      const todayString = nowInChile.toLocaleDateString('en-CA'); // Para el commissionListenerDate
 
       // Store the full date string (YYYY-MM-DD) to check for midnight crossing.
       commissionListenerDate = todayString;
@@ -1644,9 +1673,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const attachBankFeeListener = () => {
       if (bankFeeListener) bankFeeListener(); // Detach old one
 
-      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
-      const todayStart = new Date(`${todayString}T00:00:00-04:00`);
-      const todayEnd = new Date(`${todayString}T23:59:59-04:00`);
+      // CORRECCIÓN GLOBAL DE ZONA HORARIA: Usar lógica robusta para el día actual en Chile.
+      const nowInChile = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' }));
+      const todayStart = new Date(new Date(nowInChile).setHours(0, 0, 0, 0));
+      const todayEnd = new Date(new Date(nowInChile).setHours(23, 59, 59, 999));
 
       const query = db.collection('balance_history')
           .where('type', '==', 'fee')
@@ -1674,14 +1704,18 @@ document.addEventListener('DOMContentLoaded', () => {
   const attachSellerCommissionListener = (userId) => {
       if (sellerCommissionListener) sellerCommissionListener();
 
-      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
-      const startOfDay = new Date(`${todayString}T00:00:00-04:00`);
-      const endOfDay = new Date(`${todayString}T23:59:59-04:00`);
+      // CORRECCIÓN GLOBAL DE ZONA HORARIA: Usar lógica robusta para el día actual en Chile.
+      const nowInChile = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' }));
+      const startOfDay = new Date(new Date(nowInChile).setHours(0, 0, 0, 0));
+      const endOfDay = new Date(new Date(nowInChile).setHours(23, 59, 59, 999));
+      const startTimestamp = firebase.firestore.Timestamp.fromDate(startOfDay);
+      const endTimestamp = firebase.firestore.Timestamp.fromDate(endOfDay);
 
       const query = db.collection('seller_commissions')
           .where('sellerId', '==', userId)
-          .where('timestamp', '>=', startOfDay)
-          .where('timestamp', '<=', endOfDay);
+          .where('timestamp', '>=', startTimestamp)
+          .where('timestamp', '<=', endTimestamp)
+          .orderBy('timestamp', 'desc');
 
       sellerCommissionListener = query.onSnapshot(snapshot => {
           let totalCommission = 0;
@@ -1723,13 +1757,19 @@ document.addEventListener('DOMContentLoaded', () => {
   const attachAdminSellerCommissionsListener = () => {
       if (adminSellerCommissionsListener) adminSellerCommissionsListener();
 
-      const todayString = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' });
-      const startOfDay = new Date(`${todayString}T00:00:00-04:00`);
-      const endOfDay = new Date(`${todayString}T23:59:59-04:00`);
+      // CORRECCIÓN: Se elimina el offset UTC fijo (-04:00) para que la consulta
+      // sea robusta ante los cambios de horario de verano en Chile (UTC-3 / UTC-4).
+      // Se obtienen el inicio y fin del día en la zona horaria de Santiago. (Ya aplicado en el commit anterior, se mantiene)
+      const nowInChile = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Santiago' }));
+      const startOfDay = new Date(new Date(nowInChile).setHours(0, 0, 0, 0));
+      const endOfDay = new Date(new Date(nowInChile).setHours(23, 59, 59, 999));
+      const startTimestamp = firebase.firestore.Timestamp.fromDate(startOfDay);
+      const endTimestamp = firebase.firestore.Timestamp.fromDate(endOfDay);
 
       const query = db.collection('seller_commissions')
-          .where('timestamp', '>=', startOfDay)
-          .where('timestamp', '<=', endOfDay);
+          .where('timestamp', '>=', startTimestamp)
+          .where('timestamp', '<=', endTimestamp)
+          .orderBy('timestamp', 'desc'); // Se añade un orden para consistencia.
 
       adminSellerCommissionsListener = query.onSnapshot(snapshot => {
           const commissionsBySeller = {};
@@ -1760,20 +1800,40 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   /** Populates the seller dropdown for the commission history search. */
-  const populateSellerSelect = () => {
+  const populateSellerSelect = async () => {
       if (!sellerCommissionHistorySelect) return;
 
-      const sellerEmails = Object.entries(userTags)
-          .filter(([email, tag]) => tag.startsWith('V'))
-          .map(([email, tag]) => email);
+      const sellerEmails = new Set(
+          Object.entries(userTags)
+              .filter(([, tag]) => typeof tag === 'string' && tag.startsWith('V'))
+              .map(([email]) => email)
+      );
 
+      try {
+          const snapshot = await db.collection('seller_commissions').get();
+          snapshot.forEach(doc => {
+              const email = (doc.data().sellerEmail || '').trim();
+              if (email) sellerEmails.add(email);
+          });
+      } catch (error) {
+          console.error("Error fetching sellers for commission history:", error);
+      }
+
+      const sortedEmails = Array.from(sellerEmails).sort((a, b) => a.localeCompare(b));
       sellerCommissionHistorySelect.innerHTML = '<option value="">-- Elige un vendedor --</option>';
-      sellerEmails.sort().forEach(email => {
+      sortedEmails.forEach(email => {
           const option = document.createElement('option');
           option.value = email;
           option.textContent = email;
           sellerCommissionHistorySelect.appendChild(option);
       });
+
+      if (!sellerCommissionHistorySelect.dataset.initialized && sortedEmails.length > 0) {
+          sellerCommissionHistorySelect.value = sortedEmails[0];
+          const today = getChileanDateForPicker(new Date());
+          setSellerCommissionDateRangeAndSearch(today, today);
+          sellerCommissionHistorySelect.dataset.initialized = 'true';
+      }
   };
 
   const setSellerCommissionDateRangeAndSearch = (start, end) => {
@@ -2443,6 +2503,12 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       orderData.destinationAmount = orderData.clpAmount * rate;
+
+      if (isSeller) {
+          orderData.sellerId = currentUser.uid;
+          orderData.sellerEmail = currentUser.email || '';
+          orderData.sellerCommissionRate = typeof commissionRate === 'number' ? commissionRate : 0;
+      }
 
       let detailsHtml = `
         <p><span class="font-semibold">Nombre:</span> ${orderData.clientName}</p>
@@ -3185,19 +3251,28 @@ document.addEventListener('DOMContentLoaded', () => {
    * @param {object} sourceAccount - The source account data.
    * @returns {number} The calculated fee.
    */
+  const computeInterbankFee = (amount) => {
+      if (typeof amount !== 'number' || amount <= 0) return 0;
+      return roundUpToTwoDecimals(amount < 700 ? 2 : amount * 0.003);
+  };
+
+  const normalizeBankName = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
   const calculateFee = (order, sourceAccount) => {
-      const amount = order.destinationAmount;
+      const amount = order.destinationAmount || 0;
+      if (amount <= 0 || !order) return 0;
+
       switch (order.type) {
           case 'pago-movil':
-              if (amount > 47) return roundUpToTwoDecimals(amount * 0.003); // 0.3%
-              if (amount > 46) return 0.13;
-              return 0;
-          case 'transferencia':
-              // Check for inter-bank transfer
-              if (sourceAccount.bank !== order.bank) {
-                  return roundUpToTwoDecimals(amount * 0.003); // 0.3%
+              return computeInterbankFee(amount);
+          case 'transferencia': {
+              const sourceBankName = normalizeBankName(sourceAccount?.bank || sourceAccount?.bankName || '');
+              const destinationBankName = normalizeBankName(order.bank || '');
+              if (sourceBankName !== destinationBankName) {
+                  return computeInterbankFee(amount);
               }
               return 0;
+          }
           case 'recarga-saldo':
           default:
               return 0;
@@ -3307,6 +3382,10 @@ document.addEventListener('DOMContentLoaded', () => {
       let totalDebit = 0; // Declare totalDebit here to be available in the whole scope
       let adminCommissionVes = 0; // Initialize commission to 0
       let tilloCommissionVes = 0;
+      let totalCommissionVes = 0;
+
+      // CORRECCIÓN: Definir baseAmount fuera del if para que siempre exista.
+      const baseAmount = orderData.destinationAmount || 0;
 
       try {
           // --- HISTORICAL PAYMENT LOGIC ---
@@ -3351,11 +3430,14 @@ document.addEventListener('DOMContentLoaded', () => {
               if (!selectedAccount) {
                   throw new Error("La cuenta de origen seleccionada ya no es válida.");
               }
+              const sourceHolderRaw = typeof selectedAccount.holder === 'string' ? selectedAccount.holder.trim() : '';
+              const sourceHolder = sourceHolderRaw || 'Sin titular';
+              const destinationBankRaw = typeof orderData.bank === 'string' ? orderData.bank.trim() : '';
+              const destinationBank = destinationBankRaw || 'Sin banco';
 
-              const baseAmount = orderData.destinationAmount || 0;
               adminCommissionVes = roundUpToTwoDecimals(baseAmount * ADMIN_BASE_COMMISSION_RATE);
               tilloCommissionVes = roundUpToTwoDecimals(baseAmount * TILLO_COMMISSION_RATE);
-              const totalCommissionVes = adminCommissionVes + tilloCommissionVes;
+              totalCommissionVes = adminCommissionVes + tilloCommissionVes;
               totalDebit = baseAmount + fee + totalCommissionVes; // Assign value here
 
               // --- NEW: Calculate CLP equivalent for the payment ---
@@ -3374,8 +3456,8 @@ document.addEventListener('DOMContentLoaded', () => {
                   type: 'subtract', 
                   note: `Pago pedido ${orderId.slice(-5)} (${orderData.destinationCurrency})`, 
                   timestamp: paymentTimestamp,
-                  holder: selectedAccount.holder, // Origen del pago
-                  bank: orderData.bank // CRITICAL: Banco de DESTINO del pedido
+                  holder: sourceHolder, // Origen del pago
+                  bank: destinationBank // CRITICAL: Banco de DESTINO del pedido
               });
               
               // Create history for fee if it exists
@@ -3383,10 +3465,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   batch.set(feeHistoryRef, { 
                       amount: fee, 
                       type: 'fee', 
-                      note: `Comisión pedido ${orderId.slice(-5)}`, 
-                      timestamp: paymentTimestamp,
-                      holder: selectedAccount.holder, // Origen del pago
-                      bank: orderData.bank // CRITICAL: Banco de DESTINO del pedido
+                       note: `Comisión pedido ${orderId.slice(-5)}`, 
+                       timestamp: paymentTimestamp,
+                       holder: sourceHolder, // Origen del pago
+                       bank: destinationBank // CRITICAL: Banco de DESTINO del pedido
                   });
               }
 
@@ -3395,11 +3477,11 @@ document.addEventListener('DOMContentLoaded', () => {
                   const adminCommissionHistoryRef = db.collection('balance_history').doc();
                   batch.set(adminCommissionHistoryRef, {
                       amount: adminCommissionVes,
-                      type: 'admin_commission',
-                      note: `Comisión Admin pedido ${orderId.slice(-5)}`,
-                      timestamp: paymentTimestamp,
-                      holder: selectedAccount.holder, // Origen del pago
-                      bank: orderData.bank, // CRITICAL: Banco de DESTINO del pedido
+                       type: 'admin_commission',
+                       note: `Comisión Admin pedido ${orderId.slice(-5)}`,
+                       timestamp: paymentTimestamp,
+                       holder: sourceHolder, // Origen del pago
+                       bank: destinationBank, // CRITICAL: Banco de DESTINO del pedido
                   });
               }
               if (tilloCommissionVes > 0) {
@@ -3407,10 +3489,10 @@ document.addEventListener('DOMContentLoaded', () => {
                   batch.set(tilloCommissionHistoryRef, {
                       amount: tilloCommissionVes,
                       type: 'tillo_commission',
-                      note: `Mano Tillo pedido ${orderId.slice(-5)}`,
-                      timestamp: paymentTimestamp,
-                      holder: selectedAccount.holder,
-                      bank: orderData.bank,
+                       note: `Mano Tillo pedido ${orderId.slice(-5)}`,
+                       timestamp: paymentTimestamp,
+                       holder: sourceHolder,
+                       bank: destinationBank,
                   });
               }
 
@@ -4452,40 +4534,57 @@ document.addEventListener('DOMContentLoaded', () => {
       if (input) {
           input.addEventListener('blur', (e) => {
               const cedulaValue = e.target.value.replace(/[^0-9]/g, '');
-              
-              // Determine which list to use for autocomplete
-              const sourceList = (isAdmin || isSeller) ? fullClientList : userOwnOrders;
+            const form = e.target.closest('form');
+            if (!form || !cedulaValue) return;
 
-              if (!cedulaValue || sourceList.length === 0) return;
+            let formType;
+            if (form.id.includes('transferencia')) formType = 'transferencia';
+            else if (form.id.includes('pago-movil')) formType = 'pago-movil';
+            else if (form.id.includes('recarga-saldo')) formType = 'recarga-saldo';
+            else return;
 
-              // Find the most recent order for that cedula in the relevant list.
-              // Since both lists are sorted by date descending, the first match is the latest.
-              const clientLastOrder = sourceList.find(c => c.cedula === cedulaValue);
-              
-              if (clientLastOrder) {
-                  const form = e.target.closest('form');
-                  if (!form) return;
+            const messageElId = form.querySelector('p[id^="user-message-"]').id;
+            let dataToFill = null;
+            let clientName = '';
+            let clientEmail = '';
 
-                  const formId = form.id;
-                  const messageElId = form.querySelector('p[id^="user-message-"]').id;
+            if (isAdmin || isSeller) {
+                const clientProfile = fullClientList.find(c => c.cedula === cedulaValue);
+                if (!clientProfile) return;
+                dataToFill = clientProfile.lastOrders[formType] || clientProfile.latestOverall;
+                clientName = clientProfile.clientName;
+                clientEmail = clientProfile.email;
+            } else {
+                const userClientOrders = userOwnOrders.filter(o => o.cedula === cedulaValue);
+                if (userClientOrders.length === 0) return;
+                const lastOrderForType = userClientOrders.find(o => o.type === formType);
+                dataToFill = lastOrderForType || userClientOrders[0];
+                clientName = userClientOrders[0].clientName;
+                clientEmail = userClientOrders[0].email || '';
+            }
 
-                  // Autocomplete common field: Name
-                  form.querySelector('input[id^="name-"]').value = clientLastOrder.clientName;
+            if (!dataToFill) return;
 
-                  // Autocomplete specific fields if the form type matches the client's last order type
-                  if (formId === 'remittance-form-transferencia' && clientLastOrder.type === 'transferencia') {
-                      form.querySelector('#bank-transferencia').value = clientLastOrder.bank || '';
-                      form.querySelector('#account-type-transferencia').value = clientLastOrder.accountType || 'ahorro';
-                      form.querySelector('#account-number-transferencia').value = clientLastOrder.accountNumber || '';
-                  } else if (formId === 'remittance-form-pago-movil' && clientLastOrder.type === 'pago-movil') {
-                      form.querySelector('#phone-pm').value = clientLastOrder.phone || '';
-                      form.querySelector('#bank-pm').value = clientLastOrder.bank || '';
-                  } else if (formId === 'remittance-form-recarga-saldo' && clientLastOrder.type === 'recarga-saldo') {
-                      form.querySelector('#phone-rs').value = clientLastOrder.phone || '';
-                  }
-                  
-                  showMessage(messageElId, `Datos de ${clientLastOrder.clientName} autocompletados.`, true);
-              }
+            form.querySelector(`input[id^="name-"]`).value = clientName;
+            const emailField = form.querySelector(`input[id^="email-"]`);
+            if (emailField) emailField.value = clientEmail;
+
+            if (dataToFill.type === formType) {
+                if (formType === 'transferencia') {
+                    form.querySelector('#bank-transferencia').value = dataToFill.bank || '';
+                    const accountTypeField = form.querySelector('#account-type-transferencia');
+                    if (accountTypeField) accountTypeField.value = dataToFill.accountType || 'ahorro';
+                    form.querySelector('#account-number-transferencia').value = dataToFill.accountNumber || '';
+                } else if (formType === 'pago-movil') {
+                    form.querySelector('#phone-pm').value = dataToFill.phone || '';
+                    form.querySelector('#bank-pm').value = dataToFill.bank || '';
+                } else if (formType === 'recarga-saldo') {
+                    form.querySelector('#phone-rs').value = dataToFill.phone || '';
+                }
+                showMessage(messageElId, `Datos de ${clientName} autocompletados.`, true);
+            } else {
+                showMessage(messageElId, `Nombre de ${clientName} autocompletado. Ingrese los nuevos datos de pago.`, true);
+            }
           });
       }
   });
@@ -4494,22 +4593,22 @@ document.addEventListener('DOMContentLoaded', () => {
   clientsList.addEventListener('click', (e) => {
       const editBtn = e.target.closest('.edit-client-btn');
       if (editBtn) {
-        const clientId = editBtn.dataset.clientId;
-        openEditClientModal(clientId);
+        const cedula = editBtn.dataset.cedula;
+        openEditClientModal(cedula);
         return; // Stop further execution
       }
 
-      const target = e.target.closest('.copy-client-btn');
-      if (!target) return;
+      const copyBtn = e.target.closest('.copy-client-btn');
+      if (!copyBtn) return;
 
-      const cedula = target.dataset.cedula;
-      const clientData = fullClientList.find(c => c.cedula === cedula);
+      const cedula = copyBtn.dataset.cedula;
+      const clientProfile = fullClientList.find(c => c.cedula === cedula);
 
-      if (!clientData) {
+      if (!clientProfile || !clientProfile.latestOverall) {
           showCustomAlert('Error: No se encontraron los datos completos del cliente.');
           return;
       }
-
+      const clientData = clientProfile.latestOverall;
       let dataToCopy = [];
       let formTypeMessage = '';
 
@@ -4836,7 +4935,9 @@ document.addEventListener('DOMContentLoaded', () => {
           const fromAccount = accountsData.find(acc => acc.id === fromId);
           const toAccount = accountsData.find(acc => acc.id === toId);
           if (fromAccount && toAccount) {
-              const fee = (fromAccount.bank !== toAccount.bank) ? amount * 0.003 : 0;
+              const fromBankName = normalizeBankName(fromAccount.bank || fromAccount.bankName || '');
+              const toBankName = normalizeBankName(toAccount.bank || toAccount.bankName || '');
+              const fee = fromBankName !== toBankName ? computeInterbankFee(amount) : 0;
               const totalDebit = amount + fee;
               transferFeeDetails.innerHTML = `Comisión por transferencia interbancaria: <b>${fee.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>. Total a debitar: <b>${totalDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>.`;
               transferFeeDetails.classList.remove('hidden');
@@ -4871,7 +4972,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const fromAccount = accountsData.find(acc => acc.id === fromAccountId);
       const toAccount = accountsData.find(acc => acc.id === toAccountId);
-      const fee = (fromAccount.bank !== toAccount.bank) ? amount * 0.003 : 0;
+      if (!fromAccount || !toAccount) {
+          showMessage('transfer-funds-message', 'No se encontraron las cuentas seleccionadas. Intenta recargar la página.', false);
+          loadingSpinner.classList.add('hidden'); return;
+      }
+      const fromBank = (typeof fromAccount.bank === 'string' ? fromAccount.bank.trim() : (typeof fromAccount.bankName === 'string' ? fromAccount.bankName.trim() : '')) || 'Sin banco';
+      const toBank = (typeof toAccount.bank === 'string' ? toAccount.bank.trim() : (typeof toAccount.bankName === 'string' ? toAccount.bankName.trim() : '')) || 'Sin banco';
+      const fromHolder = (typeof fromAccount.holder === 'string' ? fromAccount.holder.trim() : '') || 'Sin titular';
+      const toHolder = (typeof toAccount.holder === 'string' ? toAccount.holder.trim() : '') || 'Sin titular';
+      const fee = normalizeBankName(fromBank) !== normalizeBankName(toBank) ? computeInterbankFee(amount) : 0;
       const totalDebit = amount + fee;
 
       if (fromAccount.balance < totalDebit) {
@@ -4887,9 +4996,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
           batch.update(fromAccountRef, { balance: firebase.firestore.FieldValue.increment(-totalDebit) });
           batch.update(toAccountRef, { balance: firebase.firestore.FieldValue.increment(amount) });
-          batch.set(db.collection('balance_history').doc(), { amount, type: 'subtract', note: `Transferencia a ${toAccount.holder}`, timestamp: serverTimestamp, holder: fromAccount.holder, bank: fromAccount.bank });
-          if (fee > 0) batch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión por transferencia interna`, timestamp: serverTimestamp, holder: fromAccount.holder, bank: fromAccount.bank });
-          batch.set(db.collection('balance_history').doc(), { amount, type: 'add', note: `Transferencia desde ${fromAccount.holder}`, timestamp: serverTimestamp, holder: toAccount.holder, bank: toAccount.bank });
+          batch.set(db.collection('balance_history').doc(), { amount, type: 'subtract', note: `Transferencia a ${toHolder}`, timestamp: serverTimestamp, holder: fromHolder, bank: fromBank });
+          if (fee > 0) batch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión por transferencia interna`, timestamp: serverTimestamp, holder: fromHolder, bank: fromBank });
+          batch.set(db.collection('balance_history').doc(), { amount, type: 'add', note: `Transferencia desde ${fromHolder}`, timestamp: serverTimestamp, holder: toHolder, bank: toBank });
 
           await batch.commit();
           // The accountsListener will automatically refresh the payment modal.
@@ -5101,16 +5210,26 @@ document.addEventListener('DOMContentLoaded', () => {
       const ordersToCreate = [];
 
       batchAmountList.querySelectorAll('tr[data-client-id]').forEach(row => {
-          const clientId = row.dataset.clientId;
-          const clientData = batchProcessData.selectedClients.get(clientId);
+          const clientIdFromRow = (row.dataset.clientId || '').trim();
+          const clientData = batchProcessData.selectedClients.get(clientIdFromRow) || {};
+          const clientDetails = { ...clientData };
+          const derivedClientId = typeof clientDetails.id === 'string' && clientDetails.id.trim()
+              ? clientDetails.id.trim()
+              : (typeof clientDetails.clientId === 'string' && clientDetails.clientId.trim()
+                  ? clientDetails.clientId.trim()
+                  : clientIdFromRow);
+          delete clientDetails.id;
+          delete clientDetails.clientId;
+
           const clpAmount = parseFloat(row.querySelector('.batch-clp-amount').value);
           const vesRate = parseFloat(row.querySelector('.batch-ves-amount').dataset.rate);
           const destinationAmount = roundUpToTwoDecimals(clpAmount * vesRate);
 
           const newOrderRef = db.collection('orders').doc();
           const orderPayload = {
-              ...clientData, // This includes name, cedula, type, bank, etc.
+              ...clientDetails, // This includes name, cedula, type, bank, etc.
               id: newOrderRef.id, // We need the ID later
+              ...(derivedClientId ? { clientId: derivedClientId } : {}),
               clpAmount,
               destinationAmount,
               destinationCurrency: 'VES',
@@ -5119,6 +5238,11 @@ document.addEventListener('DOMContentLoaded', () => {
               createdByTag: adminTag,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           };
+          if (isSeller) {
+              orderPayload.sellerId = currentUser.uid;
+              orderPayload.sellerEmail = currentUser.email || '';
+              orderPayload.sellerCommissionRate = typeof commissionRate === 'number' ? commissionRate : 0;
+          }
           ordersToCreate.push(orderPayload);
           firestoreBatch.set(newOrderRef, orderPayload);
       });
@@ -5194,6 +5318,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
           let totalDebitVes = 0;
           const sourceAccount = accountsData.find(acc => acc.id === sourceAccountId);
+          if (!sourceAccount) {
+              throw new Error('No se encontro la cuenta de origen seleccionada.');
+          }
+          const historyHolderRaw = typeof sourceAccount.holder === 'string' ? sourceAccount.holder.trim() : '';
+          const historyBankRaw = typeof sourceAccount.bank === 'string' ? sourceAccount.bank.trim() : (typeof sourceAccount.bankName === 'string' ? sourceAccount.bankName.trim() : '');
+          const historyHolder = historyHolderRaw || 'Sin titular';
+          const historyBank = historyBankRaw || 'Sin banco';
 
           // 2. Prepare batch updates for Firestore
           batchProcessData.createdOrders.forEach((order, index) => {
@@ -5211,10 +5342,10 @@ document.addEventListener('DOMContentLoaded', () => {
               totalDebitVes += debit;
 
               // History records for each order
-              firestoreBatch.set(db.collection('balance_history').doc(), { amount: order.destinationAmount, type: 'subtract', note: `Pago lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (fee > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (adminCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: adminCommission, type: 'admin_commission', note: `Comisión Admin lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
-              if (tilloCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: tilloCommission, type: 'tillo_commission', note: `Mano Tillo lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: sourceAccount.holder, bank: sourceAccount.bank });
+              firestoreBatch.set(db.collection('balance_history').doc(), { amount: order.destinationAmount, type: 'subtract', note: `Pago lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
+              if (fee > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: fee, type: 'fee', note: `Comisión lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
+              if (adminCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: adminCommission, type: 'admin_commission', note: `Comisión Admin lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
+              if (tilloCommission > 0) firestoreBatch.set(db.collection('balance_history').doc(), { amount: tilloCommission, type: 'tillo_commission', note: `Mano Tillo lote ${order.id.slice(-5)}`, timestamp: serverTimestamp, holder: historyHolder, bank: historyBank });
           });
 
           // 3. Decrement main account balance
