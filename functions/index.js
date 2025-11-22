@@ -1,4 +1,4 @@
-﻿const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
+const {onDocumentCreated, onDocumentUpdated} = require("firebase-functions/v2/firestore");
 const {setGlobalOptions} = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const serviceAccount = require("./serviceAccountKey.json");
@@ -26,13 +26,13 @@ admin.initializeApp({
  * It sends a push notification to all registered admin devices.
  */
 
-// Define la regiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n y aumenta los recursos para diagnÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³stico.
-// El error de timeout durante la inicializaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n a veces se resuelve
-// especificando explÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­citamente mÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡s memoria y tiempo.
+// Define region and resource limits to aid diagnostics.
+// Increasing timeout and memory helps avoid cold-start timeouts during initialization.
+// This mirrors the previous implicit defaults but makes them explicit for clarity.
 setGlobalOptions({
   region: "us-central1",
-  timeoutSeconds: 60, // Aumentado de 10s (implÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­cito) a 60s
-  memory: "256MB",    // Aumentado de 128MB (implÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­cito)
+  timeoutSeconds: 60, // Increased from implicit 10s to give enough startup time.
+  memory: "256MB",    // Increased from 128MB to handle heavier workloads.
 });
 
 exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (event) => {
@@ -42,7 +42,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     // Get the orderId from the event parameters
     const {orderId} = event.params;
 
-    // En la nueva versiÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n, los datos del evento vienen en event.data
+    // In the current SDK the order payload lives inside event.data
     const snap = event.data;
     if (!snap) {
       console.log("No data associated with the event");
@@ -56,10 +56,10 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
       return null;
     }
 
-    // Validar que clpAmount sea un nÃºmero vÃ¡lido para la notificaciÃ³n
+    // Validar que clpAmount sea un numero valido para la notificacion
     const clpAmountForNotification = newOrder.clpAmount;
     if (typeof clpAmountForNotification !== 'number' || isNaN(clpAmountForNotification)) {
-        console.error(`[${orderId}] El campo 'clpAmount' no es un nÃºmero vÃ¡lido (${clpAmountForNotification}) para la notificaciÃ³n. Saltando notificaciÃ³n.`);
+        console.error(`[${orderId}] El campo 'clpAmount' no es un numero valido (${clpAmountForNotification}) para la notificacion. Saltando notificacion.`);
         return null;
     }
 
@@ -99,7 +99,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     const amountCLP = newOrder.clpAmount.toLocaleString("es-CL", {
       style: "currency", currency: "CLP", // Using newOrder.clpAmount here, ensure it's validated above
     });
-    const notificationTitle = "ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡Nuevo Pedido Recibido! ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â°ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¸ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚ÂÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â";
+    const notificationTitle = "Nuevo Pedido Recibido!";
     const notificationBody = `ID: ${orderId.slice(-5)} | ${newOrder.clientName} | ${amountCLP}`;
     const clickAction = `https://manzanoapp-2f775.web.app/?pay_order_id=${orderId}`;
 
@@ -122,7 +122,7 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
       },
     };
 
-    console.log(`Intentando enviar notificaciÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³n a ${uniqueTokens.length} token(s).`);
+    console.log(`Intentando enviar notificacion a ${uniqueTokens.length} token(s).`);
 
     // 5. Define options for high-priority delivery.
     const options = {
@@ -133,13 +133,23 @@ exports.sendNewOrderNotification = onDocumentCreated("orders/{orderId}", async (
     // 6. Send the notification to all collected tokens with high priority.
     try {
       const response = await admin.messaging().sendToDevice(uniqueTokens, payload, options);
-      console.log("Notifications sent successfully.");
-      // Log any failures for debugging
-      if (response.failureCount > 0) {
-        console.warn(`FallÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â³ el envÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â­o a ${response.failureCount} tokens.`);
+      console.log(`[Notifications] successCount=${response.successCount}, failureCount=${response.failureCount}`);
+      if (response.failureCount > 0 && Array.isArray(response.results)) {
+        response.results.forEach((result, idx) => {
+          if (result.error) {
+            console.warn(`[Notifications] token index ${idx} failed`, {
+              code: result.error.code,
+              message: result.error.message,
+            });
+          }
+        });
       }
     } catch (error) {
-      console.error("Error sending notifications:", error);
+      console.error('[Notifications] Error sending notifications', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
     }
 
     return null;
@@ -158,7 +168,7 @@ exports.calculateCommissionOnPaid = onDocumentUpdated("orders/{orderId}", async 
 
   const clpAmountForCommission = afterData.clpAmount;
   if (typeof clpAmountForCommission !== "number" || isNaN(clpAmountForCommission)) {
-    console.error(`[${orderId}] El campo 'clpAmount' no es un número válido (${clpAmountForCommission}) para el cálculo de comisión. Saltando cálculo.`);
+    console.error(`[${orderId}] El campo 'clpAmount' no es un numero valido (${clpAmountForCommission}) para el calculo de comision. Saltando calculo.`);
     return null;
   }
 
@@ -173,17 +183,17 @@ exports.calculateCommissionOnPaid = onDocumentUpdated("orders/{orderId}", async 
   let sellerEmail = sellerEmailFromDoc;
 
   if (!sellerId) {
-    console.log(`[${orderId}] El pedido pagado no tiene sellerId asociado. Se omite la generación de comisión.`);
+    console.log(`[${orderId}] El pedido pagado no tiene sellerId asociado. Se omite la generacion de comision.`);
     return null;
   }
 
   if (!sellerCommissionRate || sellerCommissionRate <= 0) {
-    console.log(`[${orderId}] No se encontró una tasa de comisión válida para el vendedor ${sellerId}. Se omite la comisión.`);
+    console.log(`[${orderId}] No se encontro una tasa de comision valida para el vendedor ${sellerId}. Se omite la comision.`);
     return null;
   }
 
   if (!sellerEmail) {
-    console.log(`[${orderId}] No se encontró un correo asociado al vendedor ${sellerId}. Se omite la comisión.`);
+    console.log(`[${orderId}] No se encontro un correo asociado al vendedor ${sellerId}. Se omite la comision.`);
     return null;
   }
 

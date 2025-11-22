@@ -1,10 +1,6 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { setGlobalOptions } = require("firebase-functions/v2");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('sib-api-v3-sdk');
-
-// Define la región para tus funciones
-setGlobalOptions({ region: "us-central1" });
 
 // 1. Configuración del cliente de Brevo
 const defaultClient = SibApiV3Sdk.ApiClient.instance;
