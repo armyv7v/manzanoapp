@@ -1369,7 +1369,7 @@ document.addEventListener('DOMContentLoaded', () => {
                   <div class="flex items-center gap-2">
                       <p class="font-medium ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-600'}">Comisión Admin (Hoy)</p>
                   </div>
-                  <p class="font-semibold ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-700'}">${totalAdminCommissionToday.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
+                  <p class="font-semibold ${totalAdminCommissionToday > 0 ? 'text-purple-800' : 'text-gray-700'}">${totalAdminCommissionToday.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>
               </div>
           `;
             }
@@ -1403,7 +1403,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 bankFeeSummaryEl.innerHTML = `
                   <div class="flex justify-between items-center p-2 rounded-lg bg-orange-100">
                       <span class="text-gray-600">Comisión Banco (Hoy):</span>
-                      <span class="font-semibold text-orange-700">${totalBankFeeToday.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+                      <span class="font-semibold text-orange-700">${totalBankFeeToday.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</span>
                   </div>
               `;
             }
@@ -1868,7 +1868,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.className = 'flex justify-between items-center p-2 bg-blue-50 rounded-lg';
             el.innerHTML = `
             <p class="font-medium text-gray-700">${account.holder} - ${account.bank}</p>
-            <p class="font-semibold text-blue-700">${(account.balance || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
+            <p class="font-semibold text-blue-700">${(account.balance || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</p>
         `;
             accountsListEl.appendChild(el);
         });
@@ -4213,7 +4213,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const populateTransferAccountSelects = () => {
         const optionsHtml = accountsData.map(acc =>
-            `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${(acc.balance || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES)</option>`
+            `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${(acc.balance || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES)</option>`
         ).join('');
         transferFromAccountSelect.innerHTML = `<option value="">Seleccione origen...</option>${optionsHtml}`;
         transferToAccountSelect.innerHTML = `<option value="">Seleccione destino...</option>${optionsHtml}`;
@@ -4250,7 +4250,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const toBank = (typeof toAccount.bank === 'string' ? toAccount.bank.trim() : (typeof toAccount.bankName === 'string' ? toAccount.bankName.trim() : '')) || 'Sin banco';
                 const fee = normalizeBankName(fromBank) !== normalizeBankName(toBank) ? computeInterbankFee(amount) : 0;
                 const totalDebit = amount + fee;
-                transferFeeDetails.innerHTML = `Comisión por transferencia interbancaria: <b>${fee.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>. Total a debitar: <b>${totalDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>.`;
+                transferFeeDetails.innerHTML = `Comisión por transferencia interbancaria: <b>${fee.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</b>. Total a debitar: <b>${totalDebit.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</b>.`;
                 transferFeeDetails.classList.remove('hidden');
             }
         } else {
@@ -4577,13 +4577,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('batch-payment-summary').innerHTML = `
           <p>Total de Pedidos: <strong>${totalOrders}</strong></p>
-          <p>Monto Total a Pagar: <strong class="text-green-600">${totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</strong></p>
+          <p>Monto Total a Pagar: <strong class="text-green-600">${totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</strong></p>
       `;
 
         const sourceSelect = document.getElementById('batch-payment-source-select');
         sourceSelect.innerHTML = accountsData
             .filter(acc => acc.balance >= totalVes)
-            .map(acc => `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${acc.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES)</option>`)
+            .map(acc => `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${acc.balance.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES)</option>`)
             .join('');
 
         document.getElementById('batch-proof-upload-input').value = '';
@@ -4709,7 +4709,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const vesDisplay = row.querySelector('.batch-ves-amount');
             const rate = parseFloat(vesDisplay.dataset.rate);
             const vesAmount = clpAmount * rate;
-            vesDisplay.textContent = `${vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+            vesDisplay.textContent = `${vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES`;
             updateBatchAmountConfirmButton();
         }
     });
