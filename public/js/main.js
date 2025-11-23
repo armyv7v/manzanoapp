@@ -655,7 +655,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             const order = doc.data();
                             // Since we are ordered by descending date, the first time we see a cedula, it's the latest one.
                             if (order.cedula && order.clientName && !clientsMap.has(order.cedula)) {
-                                clientsMap.set(order.cedula, { ...order, id: doc.id }); // Store the whole last order data
+                                // Infer type if missing
+                                let orderType = order.type;
+                                if (!orderType) {
+                                    if (order.accountNumber) {
+                                        orderType = 'transferencia';
+                                    } else if (order.phone && order.bank) {
+                                        orderType = 'pago-movil';
+                                    } else if (order.phone) {
+                                        orderType = 'recarga-saldo';
+                                    }
+                                }
+                                clientsMap.set(order.cedula, { ...order, type: orderType, id: doc.id }); // Store the whole last order data
                             }
                         }
                         resolve();
