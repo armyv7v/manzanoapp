@@ -4585,9 +4585,44 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(acc => `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${formatCurrency(acc.balance, 'es-VE')} VES)</option>`)
             .join('');
 
+        // Populate individual order details
+        const orderListContainer = document.getElementById('batch-payment-order-list');
+        orderListContainer.innerHTML = '';
+
+        batchProcessData.createdOrders.forEach((order, index) => {
+            let paymentDetails = '';
+            if (order.type === 'transferencia') {
+                paymentDetails = `Cuenta: ${order.accountNumber}`;
+            } else if (order.type === 'pago-movil') {
+                paymentDetails = `Teléfono: ${order.phone}`;
+            } else if (order.type === 'recarga-saldo') {
+                paymentDetails = `Teléfono: ${order.phone}`;
+            }
+
+            const orderRow = document.createElement('div');
+            orderRow.className = 'p-3 border-b border-gray-200 space-y-2';
+            orderRow.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <p class="font-semibold text-gray-800">${order.clientName}</p>
+                        <p class="text-sm text-gray-600">Cédula: ${order.cedula}</p>
+                        <p class="text-sm text-gray-600">${paymentDetails}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-green-600">${formatCurrency(order.destinationAmount, 'es-VE')} VES</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-600">Comprobante de pago:</label>
+                    <input type="file" accept="image/*" class="batch-order-proof-input w-full text-sm p-1 border border-gray-300 rounded" data-order-index="${index}" />
+                </div>
+            `;
+            orderListContainer.appendChild(orderRow);
+        });
+
         document.getElementById('batch-proof-upload-input').value = '';
         document.getElementById('batch-payment-message').textContent = '';
-        document.getElementById('batch-payment-confirm-btn').disabled = true;
+        document.getElementById('batch-payment-confirm-btn').disabled = false;
 
         batchAmountEntryModal.classList.add('hidden');
         batchPaymentModal.classList.remove('hidden');
