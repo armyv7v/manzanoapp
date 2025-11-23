@@ -665,6 +665,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                     } else if (order.phone) {
                                         orderType = 'recarga-saldo';
                                     }
+
+                                    if (!orderType) {
+                                        console.warn("Could not infer type for order:", order);
+                                    }
                                 }
                                 clientsMap.set(order.cedula, { ...order, type: orderType, id: doc.id }); // Store the whole last order data
                             }
