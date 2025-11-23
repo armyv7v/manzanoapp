@@ -5462,8 +5462,21 @@ document.addEventListener('DOMContentLoaded', () => {
             const letter = getClientInitial(client.clientName);
             availableLetters.add(letter);
             const isSelected = batchProcessData.selectedClients.has(client.id);
+
+            // Infer type if missing
+            let clientType = client.type;
+            if (!clientType) {
+                if (client.accountNumber) {
+                    clientType = 'transferencia';
+                } else if (client.phone && client.bank) {
+                    clientType = 'pago-movil';
+                } else if (client.phone) {
+                    clientType = 'recarga-saldo';
+                }
+            }
+
             let paymentMethodInfo = '';
-            switch (client.type) {
+            switch (clientType) {
                 case 'transferencia':
                     paymentMethodInfo = client.accountNumber ? `Transferencia: ...${client.accountNumber.slice(-4)}` : 'Transferencia';
                     break;
