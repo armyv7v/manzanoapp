@@ -2270,7 +2270,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (permission === 'granted') {
                     showMessage('notifications-message', 'Permiso concedido. Obteniendo token...', true);
 
-                    const fcmToken = await messaging.getToken();
+                    const fcmToken = await messaging.getToken({
+                        vapidKey: 'BEju_FPmIxL_aiCOSspYuyoi4iLOJwMyHCrXCkGuXfUGRdOT9HGqPyFXnGb_Vc1tCGRzIzlragLH7j3N12c00E8'
+                    });
 
                     if (fcmToken) {
                         const userTokensRef = db.collection('fcm_tokens').doc(currentUser.uid);

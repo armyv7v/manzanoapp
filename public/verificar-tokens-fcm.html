@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificar Tokens FCM en Firestore</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .result {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .result:last-child {
+            margin-bottom: 0;
+        }
+
+        .label {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+        }
+
+        .value {
+            font-family: 'Courier New', monospace;
+            background: #f1f3f5;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .warning {
+            color: #856404;
+            background: #fff3cd;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 10px;
+            border-radius: 6px;
+        }
+
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Verificar Tokens FCM en Firestore</h1>
+
+        <div class="section">
+            <h2>Estado de Autenticación</h2>
+            <div id="auth-status" class="info">Verificando...</div>
+        </div>
+
+        <div class="section">
+            <h2>Tokens en Firestore</h2>
+            <button id="check-tokens-btn">Verificar Tokens en Firestore</button>
+            <div id="tokens-result"></div>
+        </div>
+
+        <div class="section">
+            <h2>Instrucciones de Solución</h2>
+            <div id="instructions"></div>
+        </div>
+    </div>
+
+    <script>
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        let currentUser = null;
+
+        // Verificar autenticación
+        auth.onAuthStateChanged((user) => {
+            const authStatus = document.getElementById('auth-status');
+            if (user) {
+                currentUser = user;
+                authStatus.className = 'success';
+                authStatus.innerHTML = `
+                    ✅ <strong>Autenticado como:</strong><br>
+                    Email: ${user.email}<br>
+                    UID: ${user.uid}
+                `;
+            } else {
+                authStatus.className = 'warning';
+                authStatus.innerHTML = '⚠️ No estás autenticado. Por favor, inicia sesión primero.';
+            }
+        });
+
+        // Verificar tokens en Firestore
+        document.getElementById('check-tokens-btn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('tokens-result');
+            const instructionsDiv = document.getElementById('instructions');
+
+            resultDiv.innerHTML = '<div class="info">Verificando...</div>';
+            instructionsDiv.innerHTML = '';
+
+            try {
+                // Obtener todos los documentos de fcm_tokens
+                const tokensSnapshot = await db.collection('fcm_tokens').get();
+
+                if (tokensSnapshot.empty) {
+                    resultDiv.innerHTML = `
+                        <div class="error">
+                            <strong>❌ Problema Encontrado:</strong><br>
+                            La colección <code>fcm_tokens</code> está vacía o no existe.
+                        </div>
+                    `;
+
+                    instructionsDiv.innerHTML = `
+                        <div class="warning">
+                            <strong>🔧 Solución:</strong><br><br>
+                            <ol>
+                                <li>Asegúrate de estar autenticado como admin</li>
+                                <li>Ve al panel de administrador</li>
+                                <li>Haz clic en el botón de notificaciones (🔔)</li>
+                                <li>Concede los permisos cuando se solicite</li>
+                                <li>Verifica que aparezca el mensaje "¡Notificaciones activadas!"</li>
+                                <li>Vuelve a ejecutar esta verificación</li>
+                            </ol>
+                        </div>
+                    `;
+                    return;
+                }
+
+                // Mostrar todos los tokens encontrados
+                let html = `<div class="success">
+                    <strong>✅ Colección encontrada:</strong> ${tokensSnapshot.size} documento(s)
+                </div>`;
+
+                let totalTokens = 0;
+                const allTokensData = [];
+
+                tokensSnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const tokens = data.tokens || [];
+                    totalTokens += tokens.length;
+
+                    allTokensData.push({
+                        userId: doc.id,
+                        tokenCount: tokens.length,
+                        tokens: tokens
+                    });
+
+                    html += `
+                        <div class="result">
+                            <div class="label">Usuario ID:</div>
+                            <div class="value">${doc.id}</div>
+                            <div class="label" style="margin-top: 10px;">Tokens (${tokens.length}):</div>
+                            ${tokens.length > 0 ?
+                            tokens.map((token, idx) => `
+                                    <div class="value" style="margin-top: 5px;">
+                                        Token ${idx + 1}: ${token.substring(0, 50)}...
+                                    </div>
+                                `).join('') :
+                            '<div class="error">Sin tokens</div>'
+                        }
+                        </div>
+                    `;
+                });
+
+                html += `
+                    <div class="info" style="margin-top: 15px;">
+                        <strong>Total de tokens:</strong> ${totalTokens}
+                    </div>
+                `;
+
+                resultDiv.innerHTML = html;
+
+                // Instrucciones basadas en el resultado
+                if (totalTokens === 0) {
+                    instructionsDiv.innerHTML = `
+                        <div class="warning">
+                            <strong>⚠️ Tokens vacíos</strong><br><br>
+                            Los documentos existen pero no tienen tokens. Esto significa que el proceso de registro de tokens no se completó.<br><br>
+                            <strong>Solución:</strong><br>
+                            1. Ve a <a href="/diagnostico-notificaciones.html">/diagnostico-notificaciones.html</a><br>
+                            2. Haz clic en "Eliminar Token"<br>
+                            3. Haz clic en "Obtener Token FCM"<br>
+                            4. Verifica que se obtenga correctamente<br>
+                            5. Ve al panel de admin y activa las notificaciones nuevamente
+                        </div>
+                    `;
+                } else {
+                    instructionsDiv.innerHTML = `
+                        <div class="success">
+                            <strong>✅ Tokens encontrados correctamente</strong><br><br>
+                            Hay ${totalTokens} token(s) registrado(s). Las notificaciones deberían funcionar.<br><br>
+                            <strong>Próximo paso:</strong><br>
+                            1. Crea un pedido de prueba<br>
+                            2. Verifica que el estado sea "Pendiente de pago"<br>
+                            3. La notificación debería llegar automáticamente<br><br>
+                            <strong>Si no llega la notificación:</strong><br>
+                            - Revisa los logs de Cloud Functions en Firebase Console<br>
+                            - Verifica que el navegador tenga permisos de notificación<br>
+                            - Asegúrate de que el Service Worker esté activo
+                        </div>
+                        <div class="info" style="margin-top: 15px;">
+                            <strong>📋 Datos completos:</strong>
+                            <pre>${JSON.stringify(allTokensData, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error:</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+
+                instructionsDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Error de permisos:</strong><br><br>
+                        Si ves un error de permisos, verifica las reglas de Firestore.<br>
+                        Las reglas deben permitir leer la colección <code>fcm_tokens</code> para usuarios autenticados.
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+
+</html>

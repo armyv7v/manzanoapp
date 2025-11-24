@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crear Pedido de Prueba - Notificaciones</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .success {
+            color: #155724;
+            background: #d4edda;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .info {
+            color: #0c5460;
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .warning {
+            color: #856404;
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🧪 Crear Pedido de Prueba</h1>
+
+        <div class="section">
+            <h2>Estado</h2>
+            <div id="auth-status" class="info">Verificando autenticación...</div>
+        </div>
+
+        <div class="section">
+            <h2>Crear Pedido de Prueba</h2>
+            <p style="margin-bottom: 15px;">Este pedido disparará la Cloud Function que envía notificaciones.</p>
+            <button id="create-order-btn" disabled>Crear Pedido de Prueba</button>
+            <div id="result"></div>
+        </div>
+
+        <div class="section">
+            <h2>📋 Instrucciones</h2>
+            <div class="info">
+                <strong>Después de crear el pedido:</strong><br><br>
+                1. Espera 5-10 segundos<br>
+                2. Deberías recibir una notificación push<br>
+                3. Si no llega, ve a Firebase Console → Functions → Logs<br>
+                4. Busca logs de <code>sendNewOrderNotification</code><br>
+                5. Revisa si hay errores
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+        let currentUser = null;
+
+        auth.onAuthStateChanged((user) => {
+            const authStatus = document.getElementById('auth-status');
+            const createBtn = document.getElementById('create-order-btn');
+
+            if (user) {
+                currentUser = user;
+                authStatus.className = 'success';
+                authStatus.innerHTML = `✅ Autenticado como: ${user.email}`;
+                createBtn.disabled = false;
+            } else {
+                authStatus.className = 'error';
+                authStatus.innerHTML = '❌ No estás autenticado. Por favor, inicia sesión primero.';
+                createBtn.disabled = true;
+            }
+        });
+
+        document.getElementById('create-order-btn').addEventListener('click', async () => {
+            const resultDiv = document.getElementById('result');
+            const createBtn = document.getElementById('create-order-btn');
+
+            createBtn.disabled = true;
+            resultDiv.innerHTML = '<div class="info">Creando pedido de prueba...</div>';
+
+            try {
+                // Crear un pedido de prueba con todos los campos necesarios
+                const testOrder = {
+                    clientName: 'PRUEBA NOTIFICACIÓN',
+                    cedula: '12345678',
+                    email: 'prueba@test.com',
+                    phone: '04141234567',
+                    bank: 'Banesco',
+                    clpAmount: 10000,
+                    destinationAmount: 500,
+                    destinationCurrency: 'VES',
+                    type: 'pago-movil',
+                    status: 'Pendiente de pago',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    userId: currentUser.uid,
+                    userEmail: currentUser.email
+                };
+
+                // Crear el pedido en Firestore
+                const docRef = await db.collection('orders').add(testOrder);
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✅ Pedido creado exitosamente!</strong><br><br>
+                        <strong>ID del pedido:</strong> ${docRef.id}<br>
+                        <strong>Últimos 5 dígitos:</strong> ${docRef.id.slice(-5)}<br><br>
+                        <strong>⏱️ Esperando notificación...</strong><br><br>
+                        La notificación debería llegar en 5-10 segundos.<br><br>
+                        <strong>Si no llega:</strong><br>
+                        1. Ve a <a href="https://console.firebase.google.com/project/manzanoapp-2f775/functions/logs" target="_blank">Firebase Console → Logs</a><br>
+                        2. Busca el ID del pedido: <code>${docRef.id.slice(-5)}</code><br>
+                        3. Revisa si hay errores en la función <code>sendNewOrderNotification</code>
+                    </div>
+                `;
+
+                // Esperar 15 segundos y mostrar recordatorio
+                setTimeout(() => {
+                    resultDiv.innerHTML += `
+                        <div class="warning" style="margin-top: 15px;">
+                            <strong>⏰ Han pasado 15 segundos</strong><br><br>
+                            ¿Recibiste la notificación?<br><br>
+                            <strong>Si NO:</strong> Revisa los logs de Firebase Console<br>
+                            <strong>Si SÍ:</strong> ¡Las notificaciones funcionan correctamente! 🎉
+                        </div>
+                    `;
+                }, 15000);
+
+                createBtn.disabled = false;
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Error al crear el pedido:</strong><br>
+                        ${error.message}
+                    </div>
+                `;
+                createBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -29,6 +29,7 @@ self.addEventListener('push', (event) => {
     badge: '/images/apple-touch-icon.png',
     vibrate: [200, 100, 200],
     tag: payload.notification?.tag || payload.data?.tag || 'new-order',
+    renotify: true, // Permite que suene de nuevo aunque tenga el mismo tag
     requireInteraction: true, // Mantiene la notificación visible
     data: {
       click_action: payload.data.click_action // Usamos el click_action de 'data'

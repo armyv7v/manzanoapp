@@ -1,0 +1,560 @@
+<!DOCTYPE HTML>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diagnóstico de Notificaciones - Remesas App</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-messaging-compat.js"></script>
+    <script src="/__/firebase/init.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .test-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .test-section h2 {
+            font-size: 18px;
+            margin-bottom: 15px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: auto;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .test-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .test-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .test-label {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .test-value {
+            font-family: 'Courier New', monospace;
+            background: #f1f3f5;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+            word-break: break-all;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin: 5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .log {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 4px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .timestamp {
+            color: #858585;
+            margin-right: 10px;
+        }
+
+        .log-success {
+            color: #4ec9b0;
+        }
+
+        .log-error {
+            color: #f48771;
+        }
+
+        .log-warning {
+            color: #dcdcaa;
+        }
+
+        .log-info {
+            color: #9cdcfe;
+        }
+
+        .icon {
+            font-size: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔔 Diagnóstico de Notificaciones Push</h1>
+            <p>Herramienta de diagnóstico para Firebase Cloud Messaging</p>
+        </div>
+
+        <div class="content">
+            <!-- Estado del Navegador -->
+            <div class="test-section" id="browser-section">
+                <h2>
+                    <span class="icon">🌐</span>
+                    Compatibilidad del Navegador
+                    <span class="status info" id="browser-status">Verificando...</span>
+                </h2>
+                <div id="browser-tests"></div>
+            </div>
+
+            <!-- Permisos -->
+            <div class="test-section" id="permissions-section">
+                <h2>
+                    <span class="icon">🔐</span>
+                    Permisos de Notificaciones
+                    <span class="status info" id="permissions-status">Verificando...</span>
+                </h2>
+                <div id="permissions-tests"></div>
+                <div class="actions">
+                    <button id="request-permission-btn">Solicitar Permiso</button>
+                    <button id="test-notification-btn">Probar Notificación Local</button>
+                </div>
+            </div>
+
+            <!-- Service Worker -->
+            <div class="test-section" id="sw-section">
+                <h2>
+                    <span class="icon">⚙️</span>
+                    Service Worker
+                    <span class="status info" id="sw-status">Verificando...</span>
+                </h2>
+                <div id="sw-tests"></div>
+                <div class="actions">
+                    <button id="register-sw-btn">Registrar Service Worker</button>
+                    <button id="unregister-sw-btn">Desregistrar Service Worker</button>
+                </div>
+            </div>
+
+            <!-- Firebase Messaging -->
+            <div class="test-section" id="fcm-section">
+                <h2>
+                    <span class="icon">🔥</span>
+                    Firebase Cloud Messaging
+                    <span class="status info" id="fcm-status">Verificando...</span>
+                </h2>
+                <div id="fcm-tests"></div>
+                <div class="actions">
+                    <button id="get-token-btn">Obtener Token FCM</button>
+                    <button id="delete-token-btn">Eliminar Token</button>
+                </div>
+            </div>
+
+            <!-- Log de Eventos -->
+            <div class="test-section">
+                <h2>
+                    <span class="icon">📋</span>
+                    Registro de Eventos
+                </h2>
+                <div class="log" id="event-log"></div>
+                <div class="actions">
+                    <button id="clear-log-btn">Limpiar Log</button>
+                    <button id="export-log-btn">Exportar Log</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const eventLog = [];
+        const VAPID_KEY = 'BEju_FPmIxL_aiCOSspYuyoi4iLOJwMyHCrXCkGuXfUGRdOT9HGqPyFXnGb_Vc1tCGRzIzlragLH7j3N12c00E8';
+
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString('es-CL');
+            eventLog.push({ timestamp, message, type });
+
+            const logEl = document.getElementById('event-log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.innerHTML = `<span class="timestamp">[${timestamp}]</span>${message}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function updateStatus(sectionId, status, text) {
+            const statusEl = document.getElementById(`${sectionId}-status`);
+            statusEl.className = `status ${status}`;
+            statusEl.textContent = text;
+        }
+
+        function addTestResult(containerId, label, value, isGood = null) {
+            const container = document.getElementById(containerId);
+            const item = document.createElement('div');
+            item.className = 'test-item';
+
+            let statusIcon = '';
+            if (isGood === true) statusIcon = '✅ ';
+            else if (isGood === false) statusIcon = '❌ ';
+
+            item.innerHTML = `
+                <span class="test-label">${statusIcon}${label}</span>
+                <div class="test-value">${value}</div>
+            `;
+            container.appendChild(item);
+        }
+
+        // 1. Verificar compatibilidad del navegador
+        async function checkBrowserCompatibility() {
+            log('Iniciando verificación de compatibilidad del navegador...', 'info');
+
+            const tests = {
+                'Notification API': 'Notification' in window,
+                'Service Worker API': 'serviceWorker' in navigator,
+                'Push API': 'PushManager' in window,
+                'Firebase Messaging': firebase.messaging.isSupported()
+            };
+
+            let allPassed = true;
+            for (const [test, result] of Object.entries(tests)) {
+                addTestResult('browser-tests', test, result ? 'Soportado' : 'No soportado', result);
+                if (!result) {
+                    allPassed = false;
+                    log(`❌ ${test}: No soportado`, 'error');
+                } else {
+                    log(`✅ ${test}: Soportado`, 'success');
+                }
+            }
+
+            // Info del navegador
+            addTestResult('browser-tests', 'Navegador', navigator.userAgent);
+            addTestResult('browser-tests', 'HTTPS', location.protocol === 'https:' || location.hostname === 'localhost', location.protocol === 'https:' || location.hostname === 'localhost');
+
+            updateStatus('browser', allPassed ? 'success' : 'error', allPassed ? 'Compatible' : 'Incompatible');
+            return allPassed;
+        }
+
+        // 2. Verificar permisos
+        async function checkPermissions() {
+            log('Verificando permisos de notificaciones...', 'info');
+
+            if (!('Notification' in window)) {
+                updateStatus('permissions', 'error', 'No disponible');
+                return false;
+            }
+
+            const permission = Notification.permission;
+            addTestResult('permissions-tests', 'Estado del Permiso', permission, permission === 'granted');
+
+            log(`Permiso de notificaciones: ${permission}`, permission === 'granted' ? 'success' : 'warning');
+
+            if (permission === 'granted') {
+                updateStatus('permissions', 'success', 'Concedido');
+                return true;
+            } else if (permission === 'denied') {
+                updateStatus('permissions', 'error', 'Denegado');
+                log('⚠️ Las notificaciones están bloqueadas. Debes habilitarlas en la configuración del navegador.', 'error');
+                return false;
+            } else {
+                updateStatus('permissions', 'warning', 'No solicitado');
+                return false;
+            }
+        }
+
+        // 3. Verificar Service Worker
+        async function checkServiceWorker() {
+            log('Verificando Service Worker...', 'info');
+
+            if (!('serviceWorker' in navigator)) {
+                updateStatus('sw', 'error', 'No soportado');
+                return null;
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.getRegistration();
+
+                if (registration) {
+                    addTestResult('sw-tests', 'Estado', 'Registrado', true);
+                    addTestResult('sw-tests', 'Scope', registration.scope);
+                    addTestResult('sw-tests', 'Estado del Worker', registration.active ? 'Activo' : 'Inactivo', !!registration.active);
+
+                    if (registration.active) {
+                        addTestResult('sw-tests', 'Script URL', registration.active.scriptURL);
+                    }
+
+                    log('✅ Service Worker registrado y activo', 'success');
+                    updateStatus('sw', 'success', 'Activo');
+                    return registration;
+                } else {
+                    addTestResult('sw-tests', 'Estado', 'No registrado', false);
+                    log('⚠️ Service Worker no está registrado', 'warning');
+                    updateStatus('sw', 'warning', 'No registrado');
+                    return null;
+                }
+            } catch (error) {
+                log(`❌ Error al verificar Service Worker: ${error.message}`, 'error');
+                updateStatus('sw', 'error', 'Error');
+                return null;
+            }
+        }
+
+        // 4. Verificar Firebase Messaging
+        async function checkFirebaseMessaging() {
+            log('Verificando Firebase Cloud Messaging...', 'info');
+
+            if (!firebase.messaging.isSupported()) {
+                updateStatus('fcm', 'error', 'No soportado');
+                log('❌ Firebase Messaging no es soportado en este navegador', 'error');
+                return;
+            }
+
+            try {
+                const messaging = firebase.messaging();
+                addTestResult('fcm-tests', 'Firebase Messaging', 'Inicializado', true);
+
+                // Verificar si hay un token guardado
+                const currentToken = await messaging.getToken({ vapidKey: VAPID_KEY });
+
+                if (currentToken) {
+                    addTestResult('fcm-tests', 'Token FCM', currentToken.substring(0, 50) + '...', true);
+                    log('✅ Token FCM obtenido correctamente', 'success');
+                    updateStatus('fcm', 'success', 'Configurado');
+                } else {
+                    addTestResult('fcm-tests', 'Token FCM', 'No disponible', false);
+                    log('⚠️ No se pudo obtener el token FCM', 'warning');
+                    updateStatus('fcm', 'warning', 'Sin token');
+                }
+            } catch (error) {
+                log(`❌ Error con Firebase Messaging: ${error.message}`, 'error');
+                addTestResult('fcm-tests', 'Error', error.message, false);
+                updateStatus('fcm', 'error', 'Error');
+            }
+        }
+
+        // Acciones
+        document.getElementById('request-permission-btn').addEventListener('click', async () => {
+            log('Solicitando permiso de notificaciones...', 'info');
+            try {
+                const permission = await Notification.requestPermission();
+                log(`Permiso ${permission === 'granted' ? 'concedido' : 'denegado'}`, permission === 'granted' ? 'success' : 'error');
+                await checkPermissions();
+            } catch (error) {
+                log(`Error al solicitar permiso: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('test-notification-btn').addEventListener('click', () => {
+            if (Notification.permission === 'granted') {
+                new Notification('Prueba de Notificación', {
+                    body: 'Esta es una notificación de prueba local',
+                    icon: '/images/apple-touch-icon.png',
+                    badge: '/images/apple-touch-icon.png'
+                });
+                log('✅ Notificación de prueba enviada', 'success');
+            } else {
+                log('❌ No hay permiso para mostrar notificaciones', 'error');
+            }
+        });
+
+        document.getElementById('register-sw-btn').addEventListener('click', async () => {
+            log('Registrando Service Worker...', 'info');
+            try {
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+                log('✅ Service Worker registrado correctamente', 'success');
+                await checkServiceWorker();
+            } catch (error) {
+                log(`❌ Error al registrar Service Worker: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('unregister-sw-btn').addEventListener('click', async () => {
+            log('Desregistrando Service Worker...', 'info');
+            try {
+                const registration = await navigator.serviceWorker.getRegistration();
+                if (registration) {
+                    await registration.unregister();
+                    log('✅ Service Worker desregistrado', 'success');
+                    await checkServiceWorker();
+                } else {
+                    log('⚠️ No hay Service Worker registrado', 'warning');
+                }
+            } catch (error) {
+                log(`❌ Error al desregistrar Service Worker: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('get-token-btn').addEventListener('click', async () => {
+            log('Obteniendo token FCM...', 'info');
+            try {
+                const messaging = firebase.messaging();
+                const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+
+                if (token) {
+                    log(`✅ Token obtenido: ${token}`, 'success');
+                    navigator.clipboard.writeText(token);
+                    alert('Token copiado al portapapeles');
+                } else {
+                    log('❌ No se pudo obtener el token', 'error');
+                }
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('delete-token-btn').addEventListener('click', async () => {
+            log('Eliminando token FCM...', 'info');
+            try {
+                const messaging = firebase.messaging();
+                await messaging.deleteToken();
+                log('✅ Token eliminado correctamente', 'success');
+                await checkFirebaseMessaging();
+            } catch (error) {
+                log(`❌ Error al eliminar token: ${error.message}`, 'error');
+            }
+        });
+
+        document.getElementById('clear-log-btn').addEventListener('click', () => {
+            document.getElementById('event-log').innerHTML = '';
+            eventLog.length = 0;
+        });
+
+        document.getElementById('export-log-btn').addEventListener('click', () => {
+            const logText = eventLog.map(e => `[${e.timestamp}] [${e.type.toUpperCase()}] ${e.message}`).join('\n');
+            const blob = new Blob([logText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `diagnostico-notificaciones-${new Date().toISOString()}.txt`;
+            a.click();
+        });
+
+        // Ejecutar diagnóstico al cargar
+        window.addEventListener('load', async () => {
+            log('=== Iniciando diagnóstico completo ===', 'info');
+            await checkBrowserCompatibility();
+            await checkPermissions();
+            await checkServiceWorker();
+            await checkFirebaseMessaging();
+            log('=== Diagnóstico completado ===', 'success');
+        });
+    </script>
+</body>
+
+</html>

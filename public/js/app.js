@@ -281,6 +281,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const batchSuccessShareAllBtn = document.getElementById('batch-success-share-all-btn');
     const batchSuccessCloseBtn = document.getElementById('batch-success-close-btn');
 
+    // Batch Payment from Existing Orders (NEW)
+    let selectedOrdersForBatchPay = new Set();
+    const batchPayButton = document.getElementById('open-batch-payment-btn');
+
     const buildBatchLetterNav = () => {
         if (!batchViewLetterNav) return;
         batchViewLetterNav.innerHTML = LETTER_NAV_KEYS.map(letter => {
@@ -750,23 +754,62 @@ document.addEventListener('DOMContentLoaded', () => {
                             const doc = docs[i];
                             const order = doc.data();
                             if (order.cedula && order.clientName) {
+                                // Merge with latestOverall if available to fill missing gaps (like type, phone, bank)
+                                // This handles cases where the root order document is a summary or incomplete but contains the full details in latestOverall
+                                const effectiveOrder = {
+                                    ...(order.latestOverall || {}),
+                                    ...order
+                                };
+
+                                // Infer type if missing
+                                let orderType = effectiveOrder.type;
+
+                                // Fallback: Check lastOrders if type is still missing
+                                if (!orderType && effectiveOrder.lastOrders) {
+                                    const possibleTypes = ['transferencia', 'pago-movil', 'recarga-saldo'];
+                                    for (const type of possibleTypes) {
+                                        if (effectiveOrder.lastOrders[type]) {
+                                            orderType = type;
+                                            // Merge the details from the last order of this type to ensure we have phone/bank/account
+                                            Object.assign(effectiveOrder, effectiveOrder.lastOrders[type]);
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                if (!orderType) {
+                                    if (effectiveOrder.accountNumber) {
+                                        orderType = 'transferencia';
+                                    } else if (effectiveOrder.phone && effectiveOrder.bank) {
+                                        orderType = 'pago-movil';
+                                    } else if (effectiveOrder.phone) {
+                                        orderType = 'recarga-saldo';
+                                    }
+                                }
+
                                 let clientProfile = clientsMap.get(order.cedula) || {
                                     cedula: order.cedula,
                                     clientName: order.clientName,
                                     email: order.email || '',
                                     lastOrders: {},
-                                    latestOverall: null
+                                    latestOverall: null,
+                                    // Flattened fields for batch processing
+                                    type: orderType,
+                                    accountNumber: effectiveOrder.accountNumber,
+                                    phone: effectiveOrder.phone,
+                                    bank: effectiveOrder.bank,
+                                    accountType: effectiveOrder.accountType
                                 };
 
                                 clientProfile.clientName = order.clientName;
                                 clientProfile.email = order.email || clientProfile.email;
 
-                                if (order.type && !clientProfile.lastOrders[order.type]) {
-                                    clientProfile.lastOrders[order.type] = { ...order, id: doc.id };
+                                if (effectiveOrder.type && !clientProfile.lastOrders[effectiveOrder.type]) {
+                                    clientProfile.lastOrders[effectiveOrder.type] = { ...effectiveOrder, id: doc.id };
                                 }
 
                                 if (!clientProfile.latestOverall) {
-                                    clientProfile.latestOverall = { ...order, id: doc.id };
+                                    clientProfile.latestOverall = { ...effectiveOrder, id: doc.id };
                                     clientProfile.id = doc.id;
                                 }
 
@@ -1347,11 +1390,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const paidByTagHtml = order.paidByTag ? `<span class="font-mono text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded" title="Pagado por">P:${order.paidByTag}</span>` : '';
 
         return `
-          <div class="p-4 rounded-lg shadow-md bg-white border-2 ${order.isDuplicate ? 'border-red-400 bg-red-50' : (order.isDebtor ? 'border-orange-400' : 'border-transparent')}" data-status="${order.status}">
+          <div class="p-4 rounded-lg shadow-md bg-white border-2 ${order.isDuplicate ? 'border-red-400 bg-red-50' : (order.isDebtor ? 'border-orange-400' : 'border-transparent')}" data-status="${order.status}" data-order-id="${orderId}">
               <div class="flex justify-between items-start mb-2">
-                  <div>
-                      <p class="font-bold text-gray-800">${order.clientName}</p>
-                      <p class="text-sm text-gray-500">CI: ${order.cedula}</p>
+                  <div class="flex items-start gap-2">
+                      ${order.status === 'Pendiente de pago' ? `
+                      <div class="mt-1">
+                          <input type="checkbox" class="batch-pay-checkbox h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" data-order-id="${orderId}">
+                      </div>` : ''}
+                      <div>
+                          <p class="font-bold text-gray-800">${order.clientName}</p>
+                          <p class="text-sm text-gray-500">CI: ${order.cedula}</p>
+                      </div>
                   </div>
                   <div class="flex flex-col items-end gap-2 text-right">
                     <div class="flex items-center gap-1">${createdByTagHtml}<span class="font-mono text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">ID: ${orderIdTag}</span></div>
@@ -2671,7 +2720,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (permission === 'granted') {
                     showMessage('notifications-message', 'Permiso concedido. Obteniendo token...', true);
 
-                    const fcmToken = await messaging.getToken();
+                    const fcmToken = await messaging.getToken({
+                        vapidKey: 'BEju_FPmIxL_aiCOSspYuyoi4iLOJwMyHCrXCkGuXfUGRdOT9HGqPyFXnGb_Vc1tCGRzIzlragLH7j3N12c00E8'
+                    });
 
                     if (fcmToken) {
                         const userTokensRef = db.collection('fcm_tokens').doc(currentUser.uid);
@@ -3113,6 +3164,71 @@ document.addEventListener('DOMContentLoaded', () => {
     // Listen for order filter changes
     orderFilter.addEventListener('change', applyOrderFilter);
 
+    // Event delegation for batch payment checkboxes
+    document.addEventListener('change', (e) => {
+        if (e.target.classList.contains('batch-pay-checkbox')) {
+            console.log('Checkbox changed!', e.target);
+            const orderId = e.target.getAttribute('data-order-id');
+            console.log('Order ID:', orderId);
+            if (e.target.checked) {
+                selectedOrdersForBatchPay.add(orderId);
+                console.log('Added to selection. Total:', selectedOrdersForBatchPay.size);
+            } else {
+                selectedOrdersForBatchPay.delete(orderId);
+                console.log('Removed from selection. Total:', selectedOrdersForBatchPay.size);
+            }
+            updateBatchPayButton();
+        }
+    });
+
+    // Update batch pay button visibility and count
+    const updateBatchPayButton = () => {
+        const count = selectedOrdersForBatchPay.size;
+        console.log('updateBatchPayButton called. Count:', count);
+
+        if (!batchPayButton) {
+            console.log('Button not found!');
+            return;
+        }
+
+        if (count > 0) {
+            console.log('Showing button with count:', count);
+            batchPayButton.textContent = `Pagar Lote (${count})`;
+            batchPayButton.classList.remove('hidden');
+            batchPayButton.disabled = false;
+        } else {
+            console.log('Hiding button...');
+            batchPayButton.textContent = 'Pagar Lote';
+            batchPayButton.classList.add('hidden');
+            batchPayButton.disabled = true;
+        }
+    };
+
+    // Handle batch pay button click
+    batchPayButton.addEventListener('click', async () => {
+        if (selectedOrdersForBatchPay.size === 0) return;
+
+        loadingSpinner.classList.remove('hidden');
+        loadingSpinner.classList.add('flex');
+
+        try {
+            const orderPromises = Array.from(selectedOrdersForBatchPay).map(orderId =>
+                db.collection('orders').doc(orderId).get()
+            );
+            const orderDocs = await Promise.all(orderPromises);
+            const orders = orderDocs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+            batchProcessData.createdOrders = orders;
+            openBatchPaymentModal();
+        } catch (error) {
+            console.error("Error loading selected orders:", error);
+            showCustomAlert(`Error al cargar los pedidos: ${error.message}`);
+        } finally {
+            loadingSpinner.classList.add('hidden');
+            loadingSpinner.classList.remove('flex');
+        }
+    });
+
     // Use event delegation for order action buttons
     ordersListPending.addEventListener('click', async (e) => {
         const target = e.target;
@@ -3156,6 +3272,13 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await db.collection('orders').doc(orderId).update({ status: 'Cancelado' });
                 showMessage('rate-message', 'Pedido cancelado.', true);
+
+                // Remove from batch selection if it was selected
+                if (selectedOrdersForBatchPay.has(orderId)) {
+                    selectedOrdersForBatchPay.delete(orderId);
+                    updateBatchPayButton();
+                    console.log('Removed cancelled order from selection. New total:', selectedOrdersForBatchPay.size);
+                }
             } catch (error) {
                 console.error("Error updating order status:", error);
                 showMessage('rate-message', `Error: ${error.message}`, false);
@@ -5139,11 +5262,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const clientsHtml = clientsToRender.map(client => {
             const isSelected = batchProcessData.selectedClients.has(client.id);
-            let paymentMethodInfo = '';
-            switch (client.type) {
-                case 'transferencia': paymentMethodInfo = `Transferencia: ...${client.accountNumber.slice(-4)}`; break;
-                case 'pago-movil': paymentMethodInfo = `Pago Móvil: ...${client.phone.slice(-4)}`; break;
-                case 'recarga-saldo': paymentMethodInfo = `Recarga: ...${client.phone.slice(-4)}`; break;
+            let paymentMethodInfo = 'Sin tipo';
+            if (client.type === 'transferencia') {
+                const accNum = client.accountNumber ? client.accountNumber.slice(-4) : '????';
+                paymentMethodInfo = `Transferencia: ...${accNum}`;
+            } else if (client.type === 'pago-movil') {
+                const phone = client.phone ? client.phone.slice(-4) : '????';
+                paymentMethodInfo = `Pago Móvil: ...${phone}`;
+            } else if (client.type === 'recarga-saldo') {
+                const phone = client.phone ? client.phone.slice(-4) : '????';
+                paymentMethodInfo = `Recarga: ...${phone}`;
             }
             return `
               <label for="batch-client-${client.id}" class="flex items-center p-3 rounded-lg border cursor-pointer hover:bg-gray-100 ${isSelected ? 'bg-blue-50 border-blue-300' : 'border-gray-200'}">
@@ -5243,8 +5371,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const newOrderRef = db.collection('orders').doc();
             const orderPayload = {
-                ...clientDetails, // This includes name, cedula, type, bank, etc.
-                id: newOrderRef.id, // We need the ID later
+                ...clientDetails,
+                id: newOrderRef.id,
                 ...(derivedClientId ? { clientId: derivedClientId } : {}),
                 clpAmount,
                 destinationAmount,
@@ -5254,6 +5382,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 createdByTag: adminTag,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             };
+
+            // Sanitize payload: Replace undefined with null or empty string
+            Object.keys(orderPayload).forEach(key => {
+                if (orderPayload[key] === undefined) {
+                    orderPayload[key] = null;
+                }
+            });
+
             if (isSeller) {
                 orderPayload.sellerId = currentUser.uid;
                 orderPayload.sellerEmail = currentUser.email || '';
@@ -5291,9 +5427,66 @@ document.addEventListener('DOMContentLoaded', () => {
             .map(acc => `<option value="${acc.id}">${acc.holder} - ${acc.bank} (${acc.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES)</option>`)
             .join('');
 
-        document.getElementById('batch-proof-upload-input').value = '';
+        // Populate individual order details
+        const orderListContainer = document.getElementById('batch-payment-order-list');
+        orderListContainer.innerHTML = '';
+
+        batchProcessData.createdOrders.forEach((order, index) => {
+            let paymentDetailsHtml = '';
+            let copyText = '';
+
+            if (order.type === 'transferencia') {
+                paymentDetailsHtml = `
+                    <p class="text-sm text-gray-600"><strong>Banco:</strong> ${order.bank || 'N/A'}</p>
+                    <p class="text-sm text-gray-600"><strong>Cuenta:</strong> ${order.accountNumber}</p>
+                `;
+                copyText = `Banco: ${order.bank || 'N/A'}\nCuenta: ${order.accountNumber}\nCédula: ${order.cedula}\nBeneficiario: ${order.clientName}\nMonto: ${order.destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+            } else if (order.type === 'pago-movil') {
+                paymentDetailsHtml = `
+                    <p class="text-sm text-gray-600"><strong>Banco:</strong> ${order.bank || 'N/A'}</p>
+                    <p class="text-sm text-gray-600"><strong>Teléfono:</strong> ${order.phone}</p>
+                `;
+                copyText = `Banco: ${order.bank || 'N/A'}\nTeléfono: ${order.phone}\nCédula: ${order.cedula}\nBeneficiario: ${order.clientName}\nMonto: ${order.destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+            } else if (order.type === 'recarga-saldo') {
+                paymentDetailsHtml = `
+                    <p class="text-sm text-gray-600"><strong>Operadora:</strong> ${order.bank || 'N/A'}</p>
+                    <p class="text-sm text-gray-600"><strong>Teléfono:</strong> ${order.phone}</p>
+                `;
+                copyText = `Operadora: ${order.bank || 'N/A'}\nTeléfono: ${order.phone}\nMonto: ${order.destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES`;
+            }
+
+            const orderRow = document.createElement('div');
+            orderRow.className = 'p-3 border-b border-gray-200 space-y-2';
+            orderRow.innerHTML = `
+                <div class="flex justify-between items-start">
+                    <div class="flex-1">
+                        <p class="font-semibold text-gray-800">${order.clientName}</p>
+                        <p class="text-sm text-gray-600">Cédula: ${order.cedula}</p>
+                        <div class="mt-1 space-y-0.5">
+                            ${paymentDetailsHtml}
+                        </div>
+                        <button class="mt-2 text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded flex items-center gap-1" onclick="navigator.clipboard.writeText(\`${copyText}\`).then(() => showToastNotification('Datos copiados'))">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                            Copiar Datos
+                        </button>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-bold text-green-600">${order.destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</p>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs text-gray-600">Comprobante de pago:</label>
+                    <input type="file" accept="image/*" class="batch-order-proof-input w-full text-sm p-1 border border-gray-300 rounded" data-order-index="${index}" />
+                </div>
+            `;
+            orderListContainer.appendChild(orderRow);
+        });
+
+
         document.getElementById('batch-payment-message').textContent = '';
-        document.getElementById('batch-payment-confirm-btn').disabled = true;
+        document.getElementById('batch-payment-confirm-btn').disabled = false;
 
         batchAmountEntryModal.classList.add('hidden');
         batchPaymentModal.classList.remove('hidden');
@@ -5303,13 +5496,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmBatchPayment = async () => {
         const confirmBtn = document.getElementById('batch-payment-confirm-btn');
         const sourceAccountId = document.getElementById('batch-payment-source-select').value;
-        const files = document.getElementById('batch-proof-upload-input').files;
+
+        // Collect files from individual inputs
+        const fileInputs = document.querySelectorAll('.batch-order-proof-input');
+        const files = Array.from(fileInputs).map(input => input.files[0]);
 
         if (!sourceAccountId) {
             return showMessage('batch-payment-message', 'Selecciona una cuenta de origen.', false);
         }
-        if (files.length !== batchProcessData.createdOrders.length) {
-            return showMessage('batch-payment-message', `Debes seleccionar exactamente ${batchProcessData.createdOrders.length} archivos (uno por pedido).`, false);
+
+        // Check if all orders have a file selected
+        const missingFiles = files.some(file => !file);
+        if (missingFiles) {
+            return showMessage('batch-payment-message', 'Debes adjuntar un comprobante para cada pedido.', false);
         }
 
         confirmBtn.disabled = true; // Disable button to prevent double-clicks
@@ -5324,7 +5523,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp(); // Use a single timestamp
 
             // 1. Upload all files in parallel
-            const uploadPromises = Array.from(files).map((file, index) => {
+            const uploadPromises = files.map((file, index) => {
                 const order = batchProcessData.createdOrders[index];
                 const filePath = `proofs/${order.id}/${file.name}`;
                 return storage.ref(filePath).put(file).then(task => task.ref.getDownloadURL());
@@ -5373,6 +5572,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 5. Show the new success modal with sharing options
             openBatchSuccessModal(uploadedUrls);
+
+            // 6. Clear checkbox selections
+            selectedOrdersForBatchPay.clear();
+            document.querySelectorAll('.batch-pay-checkbox').forEach(cb => cb.checked = false);
+            updateBatchPayButton();
 
         } catch (error) {
             console.error("Error confirming batch payment:", error);
