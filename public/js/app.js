@@ -1532,6 +1532,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     return;
                 }
 
+                // Skip canceled orders - they should not appear in any list
+                if (order.status === 'Cancelado') {
+                    return;
+                }
+
                 const existingCard = document.querySelector(`[data-order-id="${doc.id}"]`);
                 if (existingCard) existingCard.remove(); // Remove old card to re-render
 
@@ -1541,13 +1546,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     ordersListPaid.innerHTML += orderHtml;
                     paidCount++;
                     paidDestTotal += order.destinationAmount || 0;
-                } else { // 'Pendiente de pago' or 'Cancelado' (for orders created today)
+                } else if (order.status === 'Pendiente de pago') {
+                    // Only render pending orders, canceled orders are skipped above
                     ordersListPending.innerHTML += orderHtml;
-                    // Only count orders with "Pendiente de pago" status for the summary
-                    if (order.status === 'Pendiente de pago') {
-                        pendingOrdersCount++;
-                        pendingDestTotal += order.destinationAmount || 0;
-                    }
+                    pendingOrdersCount++;
+                    pendingDestTotal += order.destinationAmount || 0;
                 }
             });
 
