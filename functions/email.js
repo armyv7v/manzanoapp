@@ -2,18 +2,22 @@ const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const SibApiV3Sdk = require('sib-api-v3-sdk');
 
-// 1. Configuración del cliente de Brevo
-const defaultClient = SibApiV3Sdk.ApiClient.instance;
-const apiKey = defaultClient.authentications['api-key'];
-apiKey.apiKey = process.env.BREVO_KEY; // Accede al secreto
-
-const apiInstance = new SibApiV3Sdk.TransactionalEmailsApi();
-
-// 2. Constantes de la aplicación
+// Constantes de la aplicación
 const APP_NAME = "Cambios Manzano";
 // IMPORTANTE: Usa un email que hayas verificado como remitente en tu cuenta de Brevo.
 const SENDER_EMAIL = "cmanzanospa@gmail.com";
 const SENDER_NAME = APP_NAME;
+
+/**
+ * Inicializa el cliente de Brevo (lazy initialization)
+ * Se ejecuta solo cuando la función se invoca
+ */
+function initializeBrevoClient() {
+    const defaultClient = SibApiV3Sdk.ApiClient.instance;
+    const apiKey = defaultClient.authentications['api-key'];
+    apiKey.apiKey = process.env.BREVO_KEY;
+    return new SibApiV3Sdk.TransactionalEmailsApi();
+}
 
 /**
  * Se activa cuando un pedido es actualizado.
@@ -41,6 +45,7 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
         - Estado anterior: ${previousValue.status}
         - Estado nuevo: ${newValue.status}
         - ID de cliente: ${newValue.clientId}
+        - Tipo de clientId: ${typeof newValue.clientId}
         - URL de comprobante: ${newValue.proofUrl || 'No disponible'}`);
 
         // Condición: Solo actuar si el estado cambia a 'Pagado'
@@ -49,8 +54,15 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
             return;
         }
 
+        // Validar que clientId exista y sea un string válido
+        const clientId = newValue.clientId;
+        if (!clientId || typeof clientId !== 'string' || clientId.trim() === '') {
+            console.error(`[${orderId}] El campo 'clientId' está vacío, es undefined, o no es válido. Valor recibido: "${clientId}" (tipo: ${typeof clientId}). No se puede enviar correo.`);
+            return;
+        }
+
         // Obtener el email del cliente desde la colección 'clients'
-        const clientRef = admin.firestore().collection("clients").doc(newValue.clientId);
+        const clientRef = admin.firestore().collection("clients").doc(clientId);
         const clientSnap = await clientRef.get();
 
         if (!clientSnap.exists) {
@@ -76,7 +88,7 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
         const destinationAmount = newValue.destinationAmount;
         if (typeof destinationAmount !== 'number' || isNaN(destinationAmount)) {
             console.error(`[${orderId}] El campo 'destinationAmount' no es un número válido (${destinationAmount}). No se puede generar el correo de confirmación.`);
-            return; 
+            return;
         }
 
         // 3. Preparar el correo transaccional para Brevo
@@ -120,8 +132,10 @@ exports.sendPaymentConfirmationEmail = onDocumentUpdated(
         </html>
       `;
 
+
         // 4. Enviar el correo
         try {
+            const apiInstance = initializeBrevoClient();
             await apiInstance.sendTransacEmail(sendSmtpEmail);
             console.log(`[${orderId}] Correo de confirmación enviado a ${recipientEmail} a través de Brevo.`);
         } catch (error) {

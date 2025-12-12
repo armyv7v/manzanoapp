@@ -183,6 +183,45 @@ function showCustomAlert(message) {
 }
 
 /**
+ * Configura validación automática para campos de email
+ * - Convierte automáticamente a minúsculas
+ * - Valida formato con @ obligatorio
+ * @param {HTMLInputElement} emailInput - El elemento input de email
+ */
+function setupEmailValidation(emailInput) {
+    if (!emailInput) return;
+
+    // Asegurar que el input sea de tipo email
+    emailInput.type = 'email';
+    emailInput.required = true;
+
+    // Convertir a minúsculas mientras se escribe
+    emailInput.addEventListener('input', function () {
+        this.value = this.value.toLowerCase().trim();
+    });
+
+    // Validación adicional al perder el foco
+    emailInput.addEventListener('blur', function () {
+        const value = this.value.trim();
+        if (value && !value.includes('@')) {
+            this.setCustomValidity('El correo debe contener el símbolo @');
+            this.reportValidity();
+        } else if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+            this.setCustomValidity('Por favor ingresa un correo electrónico válido');
+            this.reportValidity();
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+
+    // Limpiar errores personalizados al empezar a escribir
+    emailInput.addEventListener('input', function () {
+        this.setCustomValidity('');
+    });
+}
+
+
+/**
  * Shows a toast notification at the bottom-right of the screen.
  * @param {string} message The message to display in the toast.
  */
@@ -352,9 +391,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Admin Upload Modal Elements
     const adminUploadModal = document.getElementById('admin-upload-modal');
-    const adminScreenshotInput = document.getElementById('admin-screenshot-input');
+    const adminScreenshotInput = document.getElementById('admin-screenshot-input'); // Initial input
     const adminUploadBtn = document.getElementById('admin-upload-btn');
     const adminCancelUploadBtn = document.getElementById('admin-cancel-upload-btn');
+    const addMoreFilesBtn = document.getElementById('add-more-files-btn'); // NEW
 
     // Client Upload Modal Elements
     const clientUploadModal = document.getElementById('client-upload-modal');
@@ -3232,7 +3272,106 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Use event delegation for order action buttons
+    // --- Upload Proof Logic (Admin) ---
+
+    // NEW: Listener for "Add another file" button
+    if (addMoreFilesBtn) {
+        addMoreFilesBtn.addEventListener('click', () => {
+            const container = document.getElementById('admin-screenshot-inputs-container');
+            const newWrapper = document.createElement('div');
+            newWrapper.className = 'file-input-wrapper flex items-center gap-2 mt-2';
+            newWrapper.innerHTML = `
+                <input accept="image/*" class="w-full admin-screenshot-input p-2 border border-gray-300 rounded" type="file" />
+                <button type="button" class="remove-file-btn text-red-500 hover:text-red-700 font-bold px-2">X</button>
+            `;
+            container.appendChild(newWrapper);
+
+            // Add listener to remove button
+            newWrapper.querySelector('.remove-file-btn').addEventListener('click', () => {
+                newWrapper.remove();
+            });
+        });
+    }
+
+    /* 
+     * Handles the upload of payment proofs by the administrator.
+     * Supports multiple files.
+     */
+    const handleAdminUpload = async () => {
+        // Collect all file inputs
+        const fileInputs = document.querySelectorAll('.admin-screenshot-input');
+        const files = Array.from(fileInputs).map(input => input.files[0]).filter(file => file);
+
+        if (files.length === 0) {
+            showMessage('admin-upload-message', 'Por favor, selecciona al menos un archivo.', false);
+            return;
+        }
+
+        loadingSpinner.classList.remove('hidden');
+        loadingSpinner.classList.add('flex');
+        showMessage('admin-upload-message', 'Subiendo comprobantes...', true);
+
+        try {
+            const orderId = currentUploadOrderId;
+            const uploadPromises = files.map(file => {
+                const filePath = `proofs/${orderId}/${file.name}`;
+                const fileRef = storage.ref(filePath);
+                return fileRef.put(file).then(task => task.ref.getDownloadURL());
+            });
+
+            const downloadURLs = await Promise.all(uploadPromises);
+
+            // For backward compatibility, if there's only one file, store it in proofUrl
+            // If multiple, store the first one in proofUrl and all of them in proofUrls array
+            const mainProofUrl = downloadURLs[0];
+
+            await db.collection('orders').doc(orderId).update({
+                status: 'Pagado',
+                proofUrl: mainProofUrl, // Main proof
+                proofUrls: downloadURLs, // All proofs
+                paidByTag: userTags[currentUser.email] || 'ADMIN',
+                paidAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            showMessage('admin-upload-message', '¡Comprobantes subidos con éxito!', true);
+            setTimeout(() => {
+                adminUploadModal.classList.add('hidden');
+                adminUploadModal.classList.remove('flex');
+                // Reset inputs
+                const container = document.getElementById('admin-screenshot-inputs-container');
+                container.innerHTML = `
+                    <div class="file-input-wrapper">
+                        <input accept="image/*" class="w-full admin-screenshot-input" id="admin-screenshot-input" type="file" />
+                    </div>
+                `;
+            }, 1000);
+
+        } catch (error) {
+            console.error("Error al subir comprobantes:", error);
+            showMessage('admin-upload-message', `Error: ${error.message}`, false);
+        } finally {
+            loadingSpinner.classList.add('hidden');
+            loadingSpinner.classList.remove('flex');
+        }
+    };
+
+    if (adminUploadBtn) {
+        adminUploadBtn.addEventListener('click', handleAdminUpload);
+    }
+
+    if (adminCancelUploadBtn) {
+        adminCancelUploadBtn.addEventListener('click', () => {
+            adminUploadModal.classList.add('hidden');
+            adminUploadModal.classList.remove('flex');
+            // Reset inputs
+            const container = document.getElementById('admin-screenshot-inputs-container');
+            container.innerHTML = `
+                 <div class="file-input-wrapper">
+                      <input accept="image/*" class="w-full admin-screenshot-input" id="admin-screenshot-input" type="file" />
+                 </div>
+             `;
+        });
+    }    // Use event delegation for order action buttons
     ordersListPending.addEventListener('click', async (e) => {
         const target = e.target;
         const orderId = target.dataset.id;
@@ -3553,7 +3692,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Upload file to Storage
             const filePath = `proofs/${orderId}/${file.name}`;
             const fileRef = storage.ref(filePath);
-            const uploadTask = await fileRef.put(file);
+            const metadata = {
+                contentType: file.type || 'image/jpeg'
+            };
+            const uploadTask = await fileRef.put(file, metadata);
             const proofUrl = await uploadTask.ref.getDownloadURL();
 
             // 2. Prepare batch write
@@ -5372,11 +5514,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const vesRate = parseFloat(row.querySelector('.batch-ves-amount').dataset.rate);
             const destinationAmount = roundUpToTwoDecimals(clpAmount * vesRate);
 
+            // Validar que tengamos un clientId válido antes de crear el pedido
+            if (!derivedClientId || derivedClientId.trim() === '') {
+                const clientName = clientDetails.clientName || 'Desconocido';
+                console.error(`Error: No se pudo determinar el clientId para el cliente "${clientName}". clientIdFromRow: "${clientIdFromRow}", clientData.id: "${clientData.id}"`);
+                throw new Error(`No se pudo determinar el clientId para el cliente "${clientName}". Por favor, verifica que el cliente tenga un ID válido en la base de datos.`);
+            }
+
             const newOrderRef = db.collection('orders').doc();
             const orderPayload = {
                 ...clientDetails,
                 id: newOrderRef.id,
-                ...(derivedClientId ? { clientId: derivedClientId } : {}),
+                clientId: derivedClientId, // Siempre requerido
                 clpAmount,
                 destinationAmount,
                 destinationCurrency: 'VES',
@@ -5834,5 +5983,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         editClientForm.addEventListener('submit', handleSaveClientChanges);
     }
+
+    // --- Configurar validación automática de emails ---
+    // Aplicar a todos los campos de email en la aplicación
+    const emailInputs = [
+        'email-transferencia',
+        'email-pm',
+        'email-rs',
+        'admin-email',
+        'customer-login-email',
+        'customer-register-email',
+        'add-client-email-transferencia',
+        'add-client-email-pm',
+        'add-client-email-recarga',
+        'edit-client-email'
+    ];
+
+    emailInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            setupEmailValidation(input);
+        }
+    });
 
 });
