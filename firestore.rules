@@ -1,0 +1,137 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isSuperAdmin() {
+      return isAdmin() && request.auth.token.email == 'enderjpinar@gmail.com';
+    }
+
+    function isSeller() {
+      return signedIn() && request.auth.token.seller == true;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function validOwnUserDoc(userId) {
+      return isOwner(userId) &&
+        (!('email' in request.resource.data) || request.resource.data.email == request.auth.token.email) &&
+        (!('isAdmin' in request.resource.data) || request.resource.data.isAdmin == isAdmin()) &&
+        (!('isSeller' in request.resource.data) || request.resource.data.isSeller == isSeller());
+    }
+
+    function validUserOrderCreate() {
+      return signedIn() &&
+        request.resource.data.status == 'Pendiente de pago' &&
+        (
+          isSeller()
+            ? request.resource.data.sellerId == request.auth.uid &&
+              (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid) &&
+              (!('sellerEmail' in request.resource.data) || request.resource.data.sellerEmail == request.auth.token.email)
+            : request.resource.data.userId == request.auth.uid &&
+              !('sellerId' in request.resource.data)
+        );
+    }
+
+    match /orders/{orderId} {
+      allow read: if isAdmin() ||
+        (signedIn() && (
+          resource.data.userId == request.auth.uid ||
+          resource.data.sellerId == request.auth.uid
+        ));
+      allow create: if isAdmin() || validUserOrderCreate();
+      allow update, delete: if isAdmin();
+    }
+
+    match /clients/{clientId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || isOwner(userId);
+      allow create, update: if isAdmin() || validOwnUserDoc(userId);
+      allow delete: if isAdmin() || isOwner(userId);
+    }
+
+    match /fcm_tokens/{userId} {
+      allow read, write: if isAdmin() || isOwner(userId);
+    }
+
+    match /seller_commissions/{commissionId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.sellerId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /accounts/{accountId} {
+      allow read: if isAdmin() || isSeller();
+      allow write: if isAdmin();
+    }
+
+    match /balance_history/{historyId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /clp_balance_history/{historyId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /bank_sync_runs/{runId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /bank_sync_requests/{requestId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /binance_p2p_runtime/{docId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    match /binance_p2p_actions/{actionId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+
+    match /payout_orders/{orderId} {
+      allow read, create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /wholesale_purchases/{purchaseId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /settings/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // Publicly readable exchange rate for landing/user UI.
+    match /config/rate {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Remaining config docs are admin-only.
+    match /config/{docId} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

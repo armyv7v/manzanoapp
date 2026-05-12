@@ -1,0 +1,10 @@
+{"at":"2026-05-10T18:01:09.137Z","kind":"credential","payload":{"chatWssUrl":"wss://im.binance.com:443/chat","hasListenKey":true,"hasListenToken":true}}
+{"at":"2026-05-10T18:01:10.687Z","kind":"error","payload":{"message":"[object ErrorEvent]"}}
+{"at":"2026-05-10T18:01:10.723Z","kind":"socket_close","payload":{"code":1006,"reason":"","wasClean":false,"authSent":false,"messageCount":0}}
+{"at":"2026-05-10T18:13:07.746Z","kind":"credential","payload":{"chatWssUrl":"wss://im.binance.com:443/chat","hasListenKey":true,"hasListenToken":true}}
+{"at":"2026-05-10T18:13:09.551Z","kind":"error","payload":{"message":"[object ErrorEvent]"}}
+{"at":"2026-05-10T18:13:09.606Z","kind":"socket_close","payload":{"code":1006,"reason":"","wasClean":false,"authSent":false,"messageCount":0}}
+{"at":"2026-05-10T18:23:47.885Z","kind":"credential","payload":{"chatWssUrl":"wss://im.binance.com:443/chat","hasListenKey":true,"hasListenToken":true}}
+{"at":"2026-05-10T18:23:49.231Z","kind":"unexpected_response","payload":{"statusCode":404,"headers":{"content-type":"text/plain; charset=utf-8","content-length":"4","connection":"close","server":"awselb/2.0","date":"Sun, 10 May 2026 18:23:58 GMT","x-cache":"Error from cloudfront","via":"1.1 10127636245bf7fd86362340b3fba236.cloudfront.net (CloudFront)","x-amz-cf-pop":"SCL51-P5","x-amz-cf-id":"D7WXq-5ij1eLJ8e-uOX3K7RcxJZl17EphEObPVF5C1JH6zYuOdUrbg=="}}}
+{"at":"2026-05-10T18:25:18.206Z","kind":"info","payload":{"message":"listener_timeout_reached","listenSeconds":90,"messageCount":0,"opened":false}}
+{"at":"2026-05-10T18:25:18.215Z","kind":"error","payload":{"message":"WebSocket was closed before the connection was established","opened":false,"authSent":false}}

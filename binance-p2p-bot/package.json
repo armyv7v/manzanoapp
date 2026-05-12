@@ -1,0 +1,27 @@
+{
+  "name": "binance-p2p-bot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts inspect",
+    "login": "tsx src/index.ts login",
+    "inspect": "tsx src/index.ts inspect",
+    "attach": "tsx src/index.ts attach",
+    "attach-cdp": "tsx src/index.ts attach-cdp",
+    "watch-cdp": "tsx src/index.ts watch-cdp",
+    "inspect-p2p": "tsx src/index.ts inspect-p2p",
+    "inspect-cdp": "tsx src/index.ts inspect-cdp",
+    "prepare-order": "tsx src/index.ts prepare-order",
+    "prepare-order-cdp": "tsx src/index.ts prepare-order-cdp"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "playwright": "^1.55.1",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

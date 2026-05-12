@@ -1,0 +1,5 @@
+2026/05/10-16:41:02.708 1d14 Creating DB C:\Users\EnderJavier\Documents\Proyectos WEB\manzanoapp\binance-p2p-bot\.auth\binance-p2p-chrome-profile\Default\IndexedDB\https_accounts.binance.com_0.indexeddb.leveldb since it was missing.
+2026/05/10-16:41:03.410 1d14 Reusing MANIFEST C:\Users\EnderJavier\Documents\Proyectos WEB\manzanoapp\binance-p2p-bot\.auth\binance-p2p-chrome-profile\Default\IndexedDB\https_accounts.binance.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/05/10-16:41:07.489 3ba8 Level-0 table #5: started
+2026/05/10-16:41:08.313 3ba8 Level-0 table #5: 2638051 bytes OK
+2026/05/10-16:41:08.648 3ba8 Delete type=0 #3
