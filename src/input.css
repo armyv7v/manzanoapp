@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Existing Logic */
+  .historical-status-btn { @apply border-2 border-transparent transition-all duration-200 ease-in-out; }
+  .historical-status-btn:not(.active)[data-status="Todos"] { @apply bg-gray-200 text-gray-700; }
+  .historical-status-btn:not(.active)[data-status="Pendiente de pago"] { @apply bg-amber-100 text-amber-800 border-amber-400; }
+  .historical-status-btn:not(.active)[data-status="Pagado"] { @apply bg-green-100 text-green-800 border-green-400; }
+  .historical-status-btn:not(.active)[data-status="Cancelado"] { @apply bg-red-100 text-red-800 border-red-400; }
+  .historical-status-btn[data-status].active { @apply bg-blue-500 text-white border-blue-500 scale-105 shadow-md; }
+
+  /* --- NEW PHASE 2: EXCHANGE STYLES --- */
+  
+  /* Compact Inputs */
+  .exchange-input-group {
+    @apply relative bg-gray-50 rounded-lg border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all;
+  }
+  
+  .exchange-label {
+    @apply absolute top-1 left-3 text-[10px] uppercase font-bold text-gray-400 tracking-wider pointer-events-none;
+  }
+  
+  .exchange-input {
+    @apply w-full bg-transparent border-none p-3 pt-5 text-sm font-semibold text-gray-800 focus:ring-0 placeholder-gray-300;
+  }
+
+  .exchange-select {
+     @apply w-full bg-transparent border-none p-3 pt-5 text-sm font-semibold text-gray-800 focus:ring-0 appearance-none;
+  }
+
+  /* Segmented Control Tabs */
+  .segmented-control {
+    @apply flex bg-gray-100 p-1 rounded-lg;
+  }
+  
+  .segmented-tab {
+    @apply flex-1 text-xs font-semibold py-2 rounded-md text-center text-gray-500 transition-all;
+  }
+  
+  .segmented-tab.active {
+    @apply bg-white text-blue-600 shadow-sm;
+  }
+
+  /* Action Buttons */
+  .btn-action-primary {
+    @apply w-full py-3.5 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold rounded-lg shadow-sm active:scale-[0.98] transition-all uppercase tracking-wide text-sm;
+  }
+
+  /* Ticker */
+  .market-ticker {
+    @apply flex items-center justify-between bg-black text-white px-4 py-3 rounded-lg shadow-md mb-6;
+  }
+}

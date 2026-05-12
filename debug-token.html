@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Debug Token Claims</title>
+</head>
+
+<body>
+    <h1>Firebase Token Debug</h1>
+    <button id="checkToken">Check Token Claims</button>
+    <pre id="output"></pre>
+
+    <script type="module">
+        import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+
+        // Your Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyDR4eT0gKZO5gHQU48RnANr6Y9tAVfJ0nE",
+            authDomain: "manzanoapp-2f775.firebaseapp.com",
+            projectId: "manzanoapp-2f775",
+            storageBucket: "manzanoapp-2f775.firebasestorage.app",
+            messagingSenderId: "619677506691",
+            appId: "1:619677506691:web:7bbb0f92dbbd6f4eaa3937"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        document.getElementById('checkToken').addEventListener('click', async () => {
+            const output = document.getElementById('output');
+
+            try {
+                const user = auth.currentUser;
+
+                if (!user) {
+                    output.textContent = 'No user logged in. Please login first.';
+                    return;
+                }
+
+                output.textContent = 'Fetching token claims...\n\n';
+
+                // Force refresh to get latest claims
+                const idTokenResult = await user.getIdTokenResult(true);
+
+                output.textContent += '=== USER INFO ===\n';
+                output.textContent += `Email: ${user.email}\n`;
+                output.textContent += `UID: ${user.uid}\n\n`;
+
+                output.textContent += '=== CUSTOM CLAIMS ===\n';
+                output.textContent += JSON.stringify(idTokenResult.claims, null, 2);
+                output.textContent += '\n\n';
+
+                output.textContent += '=== ADMIN CHECK ===\n';
+                output.textContent += `Has 'admin' claim: ${!!idTokenResult.claims.admin}\n`;
+                output.textContent += `Admin value: ${idTokenResult.claims.admin}\n`;
+
+            } catch (error) {
+                output.textContent = 'Error: ' + error.message;
+            }
+        });
+
+        // Auto-check on load if user is logged in
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                document.getElementById('output').textContent = `Logged in as: ${user.email}\nClick button to check claims.`;
+            } else {
+                document.getElementById('output').textContent = 'Not logged in. Please login at your app first.';
+            }
+        });
+    </script>
+</body>
+
+</html>

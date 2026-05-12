@@ -1,0 +1,2258 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Cambios Manzano</title>
+    <link href="/images/icon-192x192.png" rel="icon" type="image/png" />
+    <!-- Tailwind CSS con cache-busting -->
+    <link href="/css/styles.css?v=10.0" rel="stylesheet" />
+    <!-- SheetJS (xlsx) para exportar a Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- PWA Manifest -->
+    <!-- Custom Styles for Rate Carousel -->
+    <style>
+        /* --- CRITICAL: PREMIUM UI STYLES INJECTED MANUALLY --- */
+        .btn-premium {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-premium:active {
+            transform: scale(0.95);
+        }
+
+        .btn-premium-primary {
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-premium-primary:hover {
+            filter: brightness(1.05);
+        }
+
+        .ticker-carousel {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ticker-carousel-item {
+            position: absolute;
+            width: 100%;
+            opacity: 0;
+            transition: opacity 0.5s ease-in-out;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .ticker-carousel-item.active {
+            opacity: 1;
+            position: relative;
+        }
+
+        /* --- PREMIUM UI STYLES --- */
+        .btn-premium {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            /* rounded-xl */
+            font-weight: 600;
+            font-size: 0.875rem;
+            /* text-sm */
+            transition: all 0.2s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-premium:active {
+            transform: scale(0.95);
+        }
+
+        .btn-premium:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Variants */
+        .btn-premium-primary {
+            background: linear-gradient(135deg, #2563eb, #4f46e5);
+            /* blue-600 to indigo-600 */
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(37, 99, 235, 0.3);
+        }
+
+        .btn-premium-primary:hover {
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
+            filter: brightness(1.05);
+        }
+
+        .btn-premium-secondary {
+            background: white;
+            color: #374151;
+            /* gray-700 */
+            border: 1px solid #e5e7eb;
+            /* gray-200 */
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+        .btn-premium-secondary:hover {
+            background-color: #f9fafb;
+            /* gray-50 */
+        }
+
+        .btn-premium-success {
+            background: linear-gradient(135deg, #22c55e, #10b981);
+            /* green-500 to emerald-500 */
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(34, 197, 94, 0.3);
+        }
+
+        .btn-premium-success:hover {
+            box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4);
+            filter: brightness(1.05);
+        }
+
+        .btn-premium-danger {
+            background: linear-gradient(135deg, #ef4444, #e11d48);
+            /* red-500 to rose-600 */
+            color: white;
+            box-shadow: 0 4px 14px 0 rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-premium-danger:hover {
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+            filter: brightness(1.05);
+        }
+
+        /* Mobile Table Optimizations */
+        @media (max-width: 640px) {
+
+            .table-compact th,
+            .table-compact td {
+                padding: 0.25rem 0.5rem;
+                /* px-2 py-1 */
+                font-size: 0.75rem;
+                /* text-xs */
+            }
+
+            .table-compact th {
+                white-space: nowrap;
+            }
+        }
+
+        /* Form Modernization */
+        .form-control {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            border-radius: 0.75rem;
+            /* rounded-xl */
+            border: 1px solid #e5e7eb;
+            /* border-gray-200 */
+            background-color: #f9fafb;
+            /* bg-gray-50 */
+            color: #1f2937;
+            /* text-gray-800 */
+            transition: all 0.2s;
+            outline: none;
+        }
+
+        .form-control:focus {
+            background-color: #ffffff;
+            border-color: #3b82f6;
+            /* blue-500 */
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            /* ring-blue-100 */
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            /* text-xs */
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #6b7280;
+            /* text-gray-500 */
+            margin-bottom: 0.25rem;
+            margin-left: 0.25rem;
+        }
+
+        .bank-select {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+        }
+
+        /* Custom Scrollbar for the form */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+</head>
+
+<body class="bg-gray-100 min-h-screen text-gray-800 p-4 pb-20 sm:p-4">
+    <div class="fixed inset-0 bg-gray-200 bg-opacity-75 items-center justify-center z-[60] hidden" id="loading-spinner">
+        <div class="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+    </div>
+    <div class="relative mx-auto w-full max-w-6xl rounded-2xl bg-white p-4 sm:p-8 shadow-xl" id="main-app-container">
+        <!-- Encabezado Compacto Tipo Exchange -->
+        <div class="mb-4">
+            <!-- Top Bar: Logo & Status Simple -->
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2">
+                    <h1 class="text-xl font-bold text-gray-900 tracking-tight">Cambios Manzano <span
+                            class="text-sm font-normal text-gray-500 ml-1">CLP/VES</span></h1>
+                </div>
+                <!-- Status Pill -->
+                <div
+                    class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Abierto
+                </div>
+            </div>
+
+            <!-- Market Ticker Card -->
+            <div class="market-ticker text-white">
+                <div>
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Tasa Actual</p>
+                    <div class="flex items-baseline gap-2">
+                        <span class="text-2xl font-bold tracking-tight ticker-wrap" id="rate-display">Cargando...</span>
+                        <span class="text-xs text-green-400 font-medium">+0.5%</span>
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Tu ID</p>
+                    <p class="text-sm font-mono text-gray-200" id="user-id-display">--</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Botón de Interfaz Principal (Login/Logout Cliente) -->
+        <div class="justify-center mb-6 hidden" id="main-action-btn-container">
+            <button class="btn-premium btn-premium-primary text-lg px-8 py-3 rounded-full" id="main-action-btn">
+                Hacer Pedido
+            </button>
+        </div>
+        <!-- Mensaje de Tienda Cerrada -->
+        <div class="hidden text-center bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-lg my-6 max-w-2xl mx-auto"
+            id="store-closed-message">
+            <p class="font-bold">Toma de Pedidos Cerrada por Hoy</p>
+            <p>Volveremos mañana. ¡Gracias por tu paciencia!</p>
+        </div>
+        <!-- Admin Access Button - Relocated -->
+        <button class="absolute top-4 right-4 text-gray-300 hover:text-gray-500 transition" id="show-admin-login-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd"
+                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0010 11z"
+                    clip-rule="evenodd" />
+            </svg>
+        </button>
+        <span class="absolute bottom-2 right-3 text-[10px] text-gray-300" id="app-version"></span>
+        <!-- Contenedor principal de la aplicación -->
+        <div class="space-y-6" id="main-content">
+            <!-- Interfaz de Usuario: Formulario para crear un pedido -->
+            <div class="hidden" id="user-interface">
+
+                <!-- Admin-only Backdating Feature -->
+                <div class="hidden mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg"
+                    id="admin-backdate-section">
+                    <label class="block text-xs font-bold text-yellow-800 uppercase mb-1"
+                        for="admin-order-date-input">Fecha del Pedido (Admin)</label>
+                    <input class="w-full bg-white border border-yellow-300 rounded p-2 text-sm"
+                        id="admin-order-date-input" type="date" />
+                </div>
+
+                <!-- Tabs: Segmented Control -->
+                <div class="segmented-control mb-6">
+                    <button class="segmented-tab active" id="tab-transferencia">Transferencia</button>
+                    <button class="segmented-tab" id="tab-pago-movil">Pago Móvil</button>
+                    <button class="segmented-tab" id="tab-recarga-saldo">Recarga</button>
+                </div>
+                <!-- Contenido de las pestañas -->
+                <div class="space-y-4" id="tab-content">
+                    <!-- Contenido de Transferencia -->
+                    <div class="tab-pane" id="content-transferencia">
+                        <form class="space-y-3" id="remittance-form-transferencia">
+                            <!-- Helper: Saved Accounts -->
+                            <div class="mb-2">
+                                <button
+                                    class="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors hidden items-center gap-1"
+                                    id="toggle-saved-accounts-transferencia" type="button">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
+                                        </path>
+                                    </svg>
+                                    Usar Favorito
+                                </button>
+                                <div class="hidden mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-100 p-1 rounded-lg bg-white shadow-sm"
+                                    id="saved-accounts-list-transferencia">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Nombre -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="name-transferencia">Nombre Titular</label>
+                                    <input class="exchange-input" id="name-transferencia" required="" type="text"
+                                        placeholder="Ej. Juan Pérez" />
+                                </div>
+
+                                <!-- Documento -->
+                                <div class="exchange-input-group flex">
+                                    <div class="relative w-24 border-r border-gray-200">
+                                        <label class="exchange-label" for="doc-type-transferencia">Tipo</label>
+                                        <select class="exchange-select h-full pt-5 pb-1" id="doc-type-transferencia">
+                                            <option value="V">V</option>
+                                            <option value="E">E</option>
+                                            <option value="J">J</option>
+                                            <option value="P">P</option>
+                                        </select>
+                                    </div>
+                                    <div class="relative flex-1">
+                                        <label class="exchange-label" id="doc-number-label-transferencia"
+                                            for="cedula-transferencia">Documento</label>
+                                        <input class="exchange-input" id="cedula-transferencia" required="" type="text"
+                                            inputmode="numeric" placeholder="12345678" />
+                                    </div>
+                                </div>
+
+                                <div id="bank-details-transferencia" style="display: contents;">
+                                    <!-- Banco -->
+                                    <div class="col-span-1 md:col-span-2 exchange-input-group">
+                                        <label class="exchange-label" for="bank-transferencia">Banco Destino</label>
+                                        <select class="exchange-select" id="bank-transferencia">
+                                            <!-- Populated via JS -->
+                                        </select>
+                                    </div>
+
+                                    <!-- Cuenta (Full Width for mobile ease) -->
+                                    <div class="col-span-1 md:col-span-2 exchange-input-group">
+                                        <label class="exchange-label" for="account-number-transferencia">Número de
+                                            Cuenta
+                                            (20 dígitos)</label>
+                                        <input class="exchange-input font-mono tracking-wide"
+                                            id="account-number-transferencia" required="" type="text"
+                                            inputmode="numeric" placeholder="0102 0000 0000 0000 0000" maxlength="23" />
+                                    </div>
+                                </div>
+
+                                <!-- Amount Input -->
+                                <div class="col-span-1 md:col-span-2 exchange-input-group border-l-4 border-l-blue-500">
+                                    <label class="exchange-label text-blue-600" for="clp-amount-transferencia">Monto a
+                                        Enviar (CLP)</label>
+                                    <input class="exchange-input text-lg font-bold text-blue-600"
+                                        id="clp-amount-transferencia" required="" step="1000" type="number"
+                                        placeholder="5000" />
+                                </div>
+                            </div>
+
+                            <!-- Conversion Result Card -->
+                            <div
+                                class="bg-gray-50 rounded-lg p-3 border border-gray-200 flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Reciben
+                                    (Estimado)</span>
+                                <span class="text-xl font-bold text-emerald-600 font-mono"
+                                    id="destination-amount-transferencia">0.00 VES</span>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="pt-2 flex flex-col gap-3">
+                                <button class="btn-action-primary" type="submit">
+                                    Enviar Pedido
+                                </button>
+
+                                <div class="flex justify-between items-center px-1">
+                                    <button
+                                        class="text-[10px] text-gray-400 font-bold uppercase hover:text-blue-500 transition-colors flex items-center gap-1"
+                                        id="paste-btn-transferencia" type="button">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
+                                            </path>
+                                        </svg>
+                                        Pegar Datos
+                                    </button>
+                                    <a class="text-[10px] text-gray-400 font-bold uppercase hover:text-blue-500 transition-colors"
+                                        href="#" id="show-example-transferencia">
+                                        Ver Ejemplo
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Hidden Example (Kept for compatibility logic) -->
+                            <div class="hidden bg-gray-100 p-3 rounded-lg text-xs text-gray-600"
+                                id="example-transferencia">
+                                <p class="font-bold mb-1">Formato:</p>
+                                <pre class="font-mono whitespace-pre-wrap">Nombre: ...
+Cédula: ...
+Banco: ...
+Cuenta: ...
+Monto: ...</pre>
+                            </div>
+
+                            <p class="text-xs text-center font-bold text-red-500 min-h-[20px]"
+                                id="user-message-transferencia"></p>
+                        </form>
+                    </div>
+                    <!-- Contenido de Pago Móvil -->
+                    <div class="tab-pane hidden" id="content-pago-movil">
+                        <div class="mb-4">
+                            <button
+                                class="text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors hidden"
+                                id="toggle-saved-accounts-pago-movil" type="button">
+                                <span class="inline-flex items-center gap-1">⭐ Seleccionar Favorito</span>
+                            </button>
+                            <div class="hidden mt-2 space-y-2 max-h-48 overflow-y-auto border p-2 rounded-lg"
+                                id="saved-accounts-list-pago-movil">
+                                <!-- Saved accounts will be rendered here -->
+                            </div>
+                        </div>
+                        <form class="space-y-3" id="remittance-form-pago-movil">
+                            <!-- Helper: Saved Accounts -->
+                            <div class="mb-2">
+                                <button
+                                    class="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors hidden items-center gap-1"
+                                    id="toggle-saved-accounts-pago-movil" type="button">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
+                                        </path>
+                                    </svg>
+                                    Usar Favorito
+                                </button>
+                                <div class="hidden mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-100 p-1 rounded-lg bg-white shadow-sm"
+                                    id="saved-accounts-list-pago-movil">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Nombre -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="name-pm">Nombre Titular</label>
+                                    <input class="exchange-input" id="name-pm" required="" type="text"
+                                        placeholder="Ej. Carlos Pérez" />
+                                </div>
+
+                                <!-- Cédula (Simplified for PM) -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="cedula-pm">Cédula</label>
+                                    <input class="exchange-input" id="cedula-pm" required="" type="text"
+                                        inputmode="numeric" placeholder="V12345678" />
+                                </div>
+
+                                <!-- Teléfono -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="phone-pm">Teléfono (04xx)</label>
+                                    <input class="exchange-input" id="phone-pm" required="" type="tel"
+                                        placeholder="0414 123 4567" />
+                                </div>
+
+                                <!-- Banco -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="bank-pm">Banco</label>
+                                    <select class="exchange-select" id="bank-pm" required="">
+                                        <!-- Options will be populated by JS -->
+                                    </select>
+                                </div>
+
+                                <!-- Email (Full Width) -->
+                                <div class="col-span-1 md:col-span-2 exchange-input-group hidden">
+                                    <!-- Hidden to save space on PM, optional restore -->
+                                    <label class="exchange-label" for="email-pm">Correo (Opcional)</label>
+                                    <input class="exchange-input" id="email-pm" type="email"
+                                        placeholder="correo@ejemplo.com" />
+                                </div>
+                                <div class="col-span-1 md:col-span-2 exchange-input-group">
+                                    <label class="exchange-label" for="email-pm">Correo Electrónico</label>
+                                    <input class="exchange-input" id="email-pm" required="" type="email"
+                                        placeholder="correo@ejemplo.com" />
+                                </div>
+
+                                <!-- Amount Input -->
+                                <div class="col-span-1 md:col-span-2 exchange-input-group border-l-4 border-l-blue-500">
+                                    <label class="exchange-label text-blue-600" for="clp-amount-pm">Monto a Enviar
+                                        (CLP)</label>
+                                    <input class="exchange-input text-lg font-bold text-blue-600" id="clp-amount-pm"
+                                        required="" step="1000" type="number" placeholder="5000" />
+                                </div>
+                            </div>
+
+                            <!-- Conversion Result Card -->
+                            <div
+                                class="bg-gray-50 rounded-lg p-3 border border-gray-200 flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Reciben
+                                    (Estimado)</span>
+                                <span class="text-xl font-bold text-emerald-600 font-mono"
+                                    id="destination-amount-pm">0.00 VES</span>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="pt-2 flex flex-col gap-3">
+                                <button class="btn-action-primary" type="submit">
+                                    Enviar Pedido
+                                </button>
+
+                                <div class="flex justify-between items-center px-1">
+                                    <button
+                                        class="text-[10px] text-gray-400 font-bold uppercase hover:text-blue-500 transition-colors flex items-center gap-1"
+                                        id="paste-btn-pago-movil" type="button">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
+                                            </path>
+                                        </svg>
+                                        Pegar Datos
+                                    </button>
+                                    <a class="text-[10px] text-gray-400 font-bold uppercase hover:text-blue-500 transition-colors"
+                                        href="#" id="show-example-pago-movil">
+                                        Ver Ejemplo
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Hidden Example -->
+                            <div class="hidden bg-gray-100 p-3 rounded-lg text-xs text-gray-600"
+                                id="example-pago-movil">
+                                <p class="font-bold mb-1">Formato:</p>
+                                <pre class="font-mono whitespace-pre-wrap">Nombre: ...
+Cédula: ...
+Banco: ...
+Teléfono: ...
+Monto: ...</pre>
+                            </div>
+
+                            <p class="text-xs text-center font-bold text-red-500 min-h-[20px]" id="user-message-pm"></p>
+                        </form>
+                    </div>
+                    <!-- Contenido de Recarga de Saldo -->
+                    <div class="tab-pane hidden" id="content-recarga-saldo">
+                        <div class="mb-4">
+                            <button
+                                class="text-xs font-semibold px-3 py-1.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors hidden"
+                                id="toggle-saved-accounts-recarga-saldo" type="button">
+                                <span class="inline-flex items-center gap-1">⭐ Seleccionar Favorito</span>
+                            </button>
+                            <div class="hidden mt-2 space-y-2 max-h-48 overflow-y-auto border p-2 rounded-lg"
+                                id="saved-accounts-list-recarga-saldo">
+                                <!-- Saved accounts will be rendered here -->
+                            </div>
+                        </div>
+                        <form class="space-y-3" id="remittance-form-recarga-saldo">
+                            <!-- Helper: Saved Accounts -->
+                            <div class="mb-2">
+                                <button
+                                    class="text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors hidden items-center gap-1"
+                                    id="toggle-saved-accounts-recarga-saldo" type="button">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z">
+                                        </path>
+                                    </svg>
+                                    Usar Favorito
+                                </button>
+                                <div class="hidden mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-100 p-1 rounded-lg bg-white shadow-sm"
+                                    id="saved-accounts-list-recarga-saldo">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <!-- Nombre -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="name-rs">Nombre Titular</label>
+                                    <input class="exchange-input" id="name-rs" required="" type="text"
+                                        placeholder="Ej. Luisa Fernández" />
+                                </div>
+
+                                <!-- Cédula (Simplified for RS) -->
+                                <div class="exchange-input-group">
+                                    <label class="exchange-label" for="cedula-rs">Cédula</label>
+                                    <input class="exchange-input" id="cedula-rs" required="" type="text"
+                                        inputmode="numeric" placeholder="V9876543" />
+                                </div>
+
+                                <!-- Teléfono a Recargar -->
+                                <div
+                                    class="col-span-1 md:col-span-2 exchange-input-group bg-purple-50 border-purple-200 focus-within:ring-purple-500">
+                                    <label class="exchange-label text-purple-600" for="phone-rs">Número a
+                                        Recargar</label>
+                                    <input class="exchange-input font-mono text-purple-900 font-bold" id="phone-rs"
+                                        required="" type="tel" placeholder="0412 987 6543" />
+                                </div>
+
+                                <!-- Email (Full Width) -->
+                                <div class="col-span-1 md:col-span-2 exchange-input-group hidden">
+                                    <!-- Hidden to save space on RS, optional restore -->
+                                    <label class="exchange-label" for="email-rs">Correo (Opcional)</label>
+                                    <input class="exchange-input" id="email-rs" type="email"
+                                        placeholder="correo@ejemplo.com" />
+                                </div>
+                                <div class="col-span-1 md:col-span-2 exchange-input-group">
+                                    <label class="exchange-label" for="email-rs">Correo Electrónico</label>
+                                    <input class="exchange-input" id="email-rs" required="" type="email"
+                                        placeholder="correo@ejemplo.com" />
+                                </div>
+
+                                <!-- Amount Input -->
+                                <div class="col-span-1 md:col-span-2 exchange-input-group border-l-4 border-l-blue-500">
+                                    <label class="exchange-label text-blue-600" for="clp-amount-rs">Monto a Enviar
+                                        (CLP)</label>
+                                    <input class="exchange-input text-lg font-bold text-blue-600" id="clp-amount-rs"
+                                        required="" step="1000" type="number" placeholder="5000" />
+                                </div>
+                            </div>
+
+                            <!-- Conversion Result Card -->
+                            <div
+                                class="bg-gray-50 rounded-lg p-3 border border-gray-200 flex justify-between items-center">
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Reciben
+                                    (Estimado)</span>
+                                <span class="text-xl font-bold text-emerald-600 font-mono"
+                                    id="destination-amount-rs">0.00 VES</span>
+                            </div>
+
+                            <!-- Actions -->
+                            <div class="pt-2 flex flex-col gap-3">
+                                <button class="btn-action-primary" type="submit">
+                                    Enviar Pedido
+                                </button>
+
+                                <div class="flex justify-between items-center px-1">
+                                    <button
+                                        class="text-[10px] text-gray-400 font-bold uppercase hover:text-blue-500 transition-colors flex items-center gap-1"
+                                        id="paste-btn-recarga-saldo" type="button">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4">
+                                            </path>
+                                        </svg>
+                                        Pegar Datos
+                                    </button>
+                                    <a class="text-[10px] text-gray-400 font-bold uppercase hover:text-blue-500 transition-colors"
+                                        href="#" id="show-example-recarga-saldo">
+                                        Ver Ejemplo
+                                    </a>
+                                </div>
+                            </div>
+
+                            <!-- Hidden Example -->
+                            <div class="hidden bg-gray-100 p-3 rounded-lg text-xs text-gray-600"
+                                id="example-recarga-saldo">
+                                <p class="font-bold mb-1">Formato:</p>
+                                <pre class="font-mono whitespace-pre-wrap">Nombre: ...
+Cédula: ...
+Teléfono a Recargar: ...
+Monto: ...</pre>
+                            </div>
+
+                            <p class="text-xs text-center font-bold text-red-500 min-h-[20px]" id="user-message-rs"></p>
+                        </form>
+                    </div>
+                </div>
+                <!-- Historial de Pedidos del Cliente -->
+                <div class="mt-8 pt-6 border-t border-gray-300 hidden" id="user-orders-section">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4">Mis Pedidos Recientes</h3>
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+                        id="user-orders-list">
+                        <!-- User orders will be rendered here by JS -->
+                    </div>
+                    <p class="text-gray-500 text-center mt-4 hidden" id="no-user-orders-message">No tienes pedidos
+                        recientes.</p>
+                </div>
+                <!-- Seller Commission Summary -->
+                <div class="hidden mt-8 pt-6 border-t border-gray-300" id="seller-commission-section">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4">Mis Comisiones (Hoy)</h3>
+                    <div class="p-4 bg-purple-100 rounded-lg text-center">
+                        <p class="text-sm text-purple-800">Comisión Total del Día (CLP)</p>
+                        <p class="text-3xl font-bold text-purple-800" id="seller-commission-total">Cargando...</p>
+                        <p class="text-xs text-purple-700 mt-1" id="seller-commission-details"></p>
+                    </div>
+                </div>
+                <!-- Seller Global Balance -->
+                <div class="hidden mt-8 pt-6 border-t border-gray-300" id="seller-global-balance-section">
+                    <h3 class="text-xl font-semibold text-gray-700 mb-4">Saldo Global Disponible</h3>
+                    <div class="p-4 bg-blue-100 rounded-lg text-center">
+                        <p class="text-sm text-blue-800">Saldo Total en Cuentas (VES)</p>
+                        <p class="text-3xl font-bold text-blue-800" id="seller-global-ves-balance">Cargando...</p>
+                    </div>
+                </div>
+            </div>
+            <!-- Modal de Confirmación de Pedido -->
+            <div class="fixed inset-0 bg-gray-800 bg-opacity-75 z-50 hidden overflow-y-auto" id="order-confirm-modal">
+                <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg text-left m-auto my-10 relative">
+                    <h3 class="text-2xl font-bold mb-4 text-gray-800">Confirmar Datos del Pedido</h3>
+                    <p class="mb-6 text-gray-600">Por favor, revisa que todos los datos sean correctos antes de enviar.
+                    </p>
+                    <div class="space-y-2 text-gray-700 border-t border-b py-4 mb-6" id="order-confirm-details">
+                        <!-- Los detalles del pedido se inyectarán aquí -->
+                    </div>
+                    <div class="flex justify-center space-x-4">
+                        <button class="btn-premium btn-premium-success rounded-full px-6 py-3"
+                            id="order-final-confirm-btn">
+                            Confirmar y Enviar
+                        </button>
+                        <button class="btn-premium btn-premium-danger rounded-full px-6 py-3"
+                            id="order-final-cancel-btn">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Interfaz de Administrador: Panel de gestión -->
+            <!-- End of User Interface -->
+        </div>
+    </div>
+    <!-- Interfaz de Administrador: Panel de gestión (Full Screen) -->
+    <div class="hidden fixed inset-0 z-50 w-full h-full bg-white" id="admin-interface">
+        <!-- Panel de Admin - Nuevo Layout con Sidebar -->
+        <div class="flex flex-col md:flex-row h-full w-full bg-gray-50 from-gray-50 to-gray-100 relative overflow-hidden"
+            id="admin-panel">
+
+            <!-- Mobile Backdrop -->
+            <div id="sidebar-backdrop" class="fixed inset-0 bg-black/50 z-40 hidden transition-opacity opacity-0"
+                onclick="toggleSidebar()"></div>
+
+            <!-- Sidebar Navigation -->
+            <aside
+                class="w-64 bg-white shadow-xl hidden md:flex flex-col z-50 border-r border-gray-200 transition-transform transform duration-300">
+                <div class="h-16 flex items-center justify-between px-4 border-b border-gray-200 bg-blue-600">
+                    <h1 class="text-xl font-bold text-white tracking-wide">ADMIN</h1>
+                    <!-- Mobile Close Button -->
+                    <button onclick="toggleSidebar()"
+                        class="md:hidden text-white hover:text-gray-200 focus:outline-none">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <nav class="flex-1 overflow-y-auto py-4">
+                    <ul class="space-y-1">
+                        <li>
+                            <button onclick="switchAdminView('dashboard')"
+                                class="w-full flex items-center px-6 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors border-r-4 border-transparent hover:border-blue-600 focus:outline-none admin-nav-btn active"
+                                data-view="dashboard">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z">
+                                    </path>
+                                </svg>
+                                <span class="font-medium">Dashboard</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button onclick="switchAdminView('orders')"
+                                class="w-full flex items-center px-6 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors border-r-4 border-transparent hover:border-blue-600 focus:outline-none admin-nav-btn"
+                                data-view="orders">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01">
+                                    </path>
+                                </svg>
+                                <span class="font-medium">Pedidos</span>
+                                <span
+                                    class="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full hidden"
+                                    id="nav-pending-count">0</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button onclick="switchAdminView('accounts')"
+                                class="w-full flex items-center px-6 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors border-r-4 border-transparent hover:border-blue-600 focus:outline-none admin-nav-btn"
+                                data-view="accounts">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                                    </path>
+                                </svg>
+                                <span class="font-medium">Cuentas y Saldos</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button onclick="switchAdminView('clients')"
+                                class="w-full flex items-center px-6 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors border-r-4 border-transparent hover:border-blue-600 focus:outline-none admin-nav-btn"
+                                data-view="clients">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z">
+                                    </path>
+                                </svg>
+                                <span class="font-medium">Clientes</span>
+                            </button>
+                        </li>
+                        <li>
+                            <button onclick="switchAdminView('reports')"
+                                class="w-full flex items-center px-6 py-3 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors border-r-4 border-transparent hover:border-blue-600 focus:outline-none admin-nav-btn"
+                                data-view="reports">
+                                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z">
+                                    </path>
+                                </svg>
+                                <span class="font-medium">Reportes e Historial</span>
+                            </button>
+                        </li>
+                    </ul>
+                </nav>
+
+                <div class="p-4 border-t border-gray-200">
+                    <div class="flex items-center mb-4 px-2">
+                        <div
+                            class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold mr-3">
+                            A
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-700">Administrador</p>
+                            <p class="text-xs text-green-500 flex items-center"><span
+                                    class="w-2 h-2 rounded-full bg-green-500 mr-1"></span> Online</p>
+                        </div>
+                    </div>
+                    <button id="admin-logout-btn"
+                        class="w-full bg-red-50 text-red-600 py-2 rounded-lg text-sm font-semibold hover:bg-red-100 transition duration-300 flex items-center justify-center">
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1">
+                            </path>
+                        </svg>
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="flex-1 min-h-0 overflow-y-auto bg-gray-50 relative custom-scrollbar section-content">
+                <!-- Top Header (Mobile Toggle + Status) -->
+                <div
+                    class="bg-gray-900 shadow-lg h-16 flex items-center justify-between px-6 sticky top-0 z-30 border-b border-gray-800">
+                    <!-- Left Section: Mobile Toggle & Title -->
+                    <div class="flex items-center gap-4">
+                        <!-- Mobile Toggle -->
+                        <button class="md:hidden text-gray-400 hover:text-white focus:outline-none"
+                            onclick="toggleSidebar()"> <!-- Changed to dedicated function -->
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                    d="M4 6h16M4 12h16M4 18h16"></path>
+                            </svg>
+                        </button>
+
+                        <!-- Page Title -->
+                        <h2 class="text-xl font-bold text-white hidden md:block tracking-wide" id="admin-page-title">
+                            Dashboard
+                        </h2>
+
+                        <!-- Create Order Button -->
+                        <button class="hidden lg:block btn-premium btn-premium-primary py-1.5 px-3 text-xs"
+                            id="admin-create-order-toggle-btn">
+                            + Pedido
+                        </button>
+                    </div>
+
+                    <!-- Right: Status Actions -->
+                    <div class="flex items-center space-x-4">
+                        <!-- Notification Section -->
+                        <div id="notifications-section" class="flex relative">
+                            <button
+                                class="p-2 rounded-full hover:bg-gray-800 transition-colors duration-200 focus:outline-none"
+                                id="enable-notifications-btn" title="Activar notificaciones">
+                                <svg class="w-6 h-6 text-gray-400 group-hover:text-white" fill="none"
+                                    id="notification-bell-icon" stroke="currentColor" viewbox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9">
+                                    </path>
+                                </svg>
+                                <span
+                                    class="absolute top-0 right-0 items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-red-100 transform translate-x-1/4 -translate-y-1/4 bg-red-600 rounded-full hidden"
+                                    id="admin-notification-badge">0</span>
+                            </button>
+                        </div>
+
+                        <!-- Logout Button -->
+                        <button id="admin-logout-btn"
+                            class="text-gray-400 hover:text-red-400 font-medium text-sm border border-gray-700 rounded-lg px-3 py-1 bg-gray-800 hover:bg-gray-700 transition shadow-sm">
+                            Salir
+                        </button>
+
+                        <!-- Store Status Toggle -->
+                        <button id="admin-toggle-store-btn"
+                            class="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-800 border border-gray-700 text-gray-300 transition-colors hover:bg-gray-750">
+                            <span class="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"
+                                id="admin-store-status-indicator"></span>
+                            <span class="text-sm font-semibold" id="admin-store-status-text">Tienda Abierta</span>
+                        </button>
+                    </div>
+
+                    <!-- Global Admin Order Form Modal Placeholder (Hidden) -->
+                    <div id="admin-order-form-placeholder"
+                        class="fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur-sm hidden flex-col items-center justify-start pt-6 sm:pt-20 pb-6 px-4">
+                        <div
+                            class="bg-white w-full max-w-4xl rounded-3xl shadow-2xl relative flex flex-col overflow-hidden border border-gray-100">
+                            <button id="close-admin-form-btn"
+                                class="absolute top-4 right-4 p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors z-10 shadow-sm">
+                                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
+                            <div class="px-2 py-6 sm:px-10 sm:py-8 overflow-y-auto max-h-[85vh] custom-scrollbar focus:outline-none"
+                                id="admin-form-scroll-container">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Views Container -->
+                <div class="p-6 pb-20 space-y-6" id="admin-views-container">
+
+                    <!-- VIEW: Dashboard -->
+                    <div id="view-dashboard" class="admin-view space-y-6">
+                        <!-- PREMIUM: Market Ticker for Admin -->
+                        <div class="market-ticker text-white rounded-2xl shadow-lg mb-6 p-6 bg-black">
+                            <div>
+                                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">Tasa
+                                    Actual</p>
+                                <div class="flex items-baseline gap-2">
+                                    <span class="text-3xl font-bold tracking-tight ticker-wrap"
+                                        id="admin-rate-display">Cargando...</span>
+                                    <span class="text-xs text-green-400 font-medium">+0.5%</span>
+                                </div>
+                            </div>
+                            <div class="text-right mt-2">
+                                <p class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-0.5">ADMIN ID
+                                </p>
+                                <p class="text-sm font-mono text-gray-200" id="admin-id-display">--</p>
+                            </div>
+                        </div>
+
+                        <!-- KPI Cards Row (Compact Mobile) -->
+                        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                            <!-- Card 1: Pending Orders -->
+                            <div
+                                class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 relative group overflow-hidden">
+                                <div class="flex justify-between items-start mb-2">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Pendientes
+                                    </p>
+                                    <div class="bg-orange-50 p-1.5 rounded-lg text-orange-500">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <h3 class="text-2xl font-bold text-gray-800 leading-none" id="dashboard-pending-count">0
+                                </h3>
+                                <div class="mt-2 text-[10px] text-blue-600 font-bold uppercase tracking-wide">
+                                    Ver Tareas &rarr;
+                                </div>
+                                <button onclick="switchAdminView('orders')"
+                                    class="absolute inset-0 w-full h-full cursor-pointer z-10 opacity-0">Ver
+                                    Tareas</button>
+                            </div>
+
+                            <!-- Card 2: Today's Commission -->
+                            <div
+                                class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 relative group overflow-hidden">
+                                <div class="flex justify-between items-start mb-2">
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Ganancia Hoy
+                                    </p>
+                                    <div class="bg-green-50 p-1.5 rounded-lg text-green-500">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                                            </path>
+                                        </svg>
+                                    </div>
+                                </div>
+                                <h3 class="text-lg font-bold text-gray-800 leading-none truncate"
+                                    id="dashboard-commission-total">0.00</h3>
+                                <div class="mt-2 text-[10px] text-blue-600 font-bold uppercase tracking-wide">
+                                    Historial &rarr;
+                                </div>
+                                <button onclick="switchAdminView('reports')"
+                                    class="absolute inset-0 w-full h-full cursor-pointer z-10 opacity-0">Ver
+                                    Historial</button>
+                            </div>
+
+                            <!-- Card 3: Quick Exchange Rate -->
+                            <div
+                                class="bg-white p-3 rounded-xl shadow-sm border border-gray-100 col-span-2 md:col-span-1 flex items-center justify-between relative group">
+                                <div>
+                                    <p class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Tasa
+                                        Actual</p>
+                                    <div class="flex items-baseline gap-1">
+                                        <h3 class="text-2xl font-bold text-gray-800 leading-none"
+                                            id="current-rate-display">0.00</h3>
+                                        <span class="text-[10px] text-gray-500 font-bold">COP/VES</span>
+                                    </div>
+                                </div>
+                                <button id="admin-update-rate-btn"
+                                    class="bg-blue-50 text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide hover:bg-blue-100 transition z-20 relative">
+                                    Actualizar
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Recent Activity / Quick Lists -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                                <div class="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
+                                    <h3 class="font-bold text-gray-800">Entrantes Recientes</h3>
+                                    <button onclick="switchAdminView('orders')"
+                                        class="text-sm text-blue-600 hover:text-blue-800">Ver Todo</button>
+                                </div>
+                                <div id="dashboard-recent-orders" class="p-6">
+                                    <p class="text-gray-400 text-sm text-center">Cargando...</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: Orders -->
+                    <div id="view-orders" class="admin-view hidden space-y-6">
+                        <div class="flex justify-between items-center mb-4" id="daily-orders-header">
+                            <h2 class="text-2xl font-semibold text-gray-700">Pedidos de Hoy</h2>
+                            <div class="flex items-center space-x-2">
+                                <label class="text-gray-700 font-medium text-sm" for="order-filter">Filtrar:</label>
+                                <select class="p-2 border border-gray-300 rounded-lg text-sm" id="order-filter">
+                                    <option value="Todos">Todos</option>
+                                    <option value="Pendiente de pago">Pendiente</option>
+                                    <option value="Pagado">Pagado</option>
+                                    <option value="Cancelado">Cancelado</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6" id="daily-orders-container">
+                            <!-- Columna Izquierda: Pendientes -->
+                            <div>
+                                <h3
+                                    class="text-xl font-semibold text-yellow-800 bg-yellow-100 p-3 rounded-lg mb-3 flex justify-between items-center">
+                                    <span>Pendientes</span>
+                                    <span class="text-sm font-normal" id="pending-summary"></span>
+                                </h3>
+                                <div class="space-y-4" id="orders-list-pending"></div>
+                                <p class="text-gray-500 text-center mt-4 hidden" id="no-orders-pending-message">
+                                    No hay pedidos en esta categoría.</p>
+                            </div>
+                            <!-- Columna Derecha: Pagados -->
+                            <div>
+                                <h3
+                                    class="text-xl font-semibold text-green-800 bg-green-100 p-3 rounded-lg mb-3 flex justify-between items-center">
+                                    <span>Pagados</span>
+                                    <span class="text-sm font-normal" id="paid-summary"></span>
+                                </h3>
+                                <div class="space-y-4" id="orders-list-paid"></div>
+                                <p class="text-gray-500 text-center mt-4 hidden" id="no-orders-paid-message">No
+                                    hay pedidos pagados.</p>
+                            </div>
+                        </div>
+
+                        <!-- Batch Process Button Area (Moved from Header) -->
+                        <div
+                            class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-center justify-between mt-6">
+                            <div>
+                                <h4 class="font-bold text-indigo-800">Procesamiento por Lote</h4>
+                                <p class="text-sm text-indigo-600">Procesa múltiples pedidos o pagos
+                                    simultáneamente.</p>
+                            </div>
+                            <div class="flex gap-2" id="admin-batch-process-section">
+                                <button class="btn-premium btn-premium-primary" id="start-batch-process-btn">Iniciar
+                                    Lote</button>
+                                <button class="btn-premium btn-premium-success" id="open-batch-payment-btn">Pagar
+                                    Lote</button>
+                            </div>
+                        </div>
+
+                        <!-- Batch Selection View (Hidden by default) -->
+                        <div class="hidden mt-6 border-t pt-6" id="batch-selection-view">
+                            <h2 class="text-2xl font-semibold text-gray-700 mb-4">Paso 1: Seleccionar Clientes
+                            </h2>
+                            <div class="mb-4">
+                                <input class="form-control" id="batch-view-client-search"
+                                    placeholder="Buscar cliente por nombre o cédula..." type="text" />
+                            </div>
+                            <div class="flex gap-3">
+                                <div class="flex-1">
+                                    <div class="space-y-2 max-h-[60vh] overflow-y-auto border rounded-lg p-2"
+                                        id="batch-view-client-list"></div>
+                                </div>
+                                <nav aria-label="Navegación por letra"
+                                    class="hidden sm:flex flex-col items-center gap-1 w-10 text-xs font-semibold text-gray-500 sticky top-0 self-start"
+                                    id="batch-view-letter-nav"></nav>
+                            </div>
+                        </div>
+
+                        <!-- Floating Action Bar for Batch -->
+                        <div class="hidden sticky bottom-4 z-30 bg-white p-4 rounded-xl shadow-2xl border-2 border-purple-500 max-w-3xl mx-auto items-center justify-between"
+                            id="batch-action-bar">
+                            <p class="font-semibold text-gray-800" id="batch-view-selected-count">0
+                                seleccionados</p>
+                            <div class="flex gap-4">
+                                <button class="btn-neutral" id="cancel-batch-process-btn">Cancelar</button>
+                                <button class="btn-success disabled:opacity-50" disabled=""
+                                    id="continue-batch-process-btn">Continuar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: Accounts -->
+                    <div id="view-accounts" class="admin-view hidden space-y-6">
+
+                        <!-- Saldo en VES -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 text-center">
+                            <h2 class="text-xl font-semibold text-gray-700 mb-4">Saldo Disponible en VES</h2>
+                            <div class="text-4xl font-bold text-green-600 mb-6" id="ves-balance-display">
+                                Cargando...</div>
+                            <div class="flex items-center justify-center gap-2 sm:gap-4">
+                                <button
+                                    class="btn-premium btn-premium-danger text-white font-bold rounded-xl px-4 py-3 sm:px-6 text-xl w-14 sm:w-16 shadow-lg hover:red-600 transition-transform transform hover:scale-105 active:scale-95"
+                                    id="subtract-balance-btn">-</button>
+                                <input
+                                    class="flex-1 w-full min-w-0 text-center text-xl sm:text-2xl font-bold p-2 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none text-gray-800"
+                                    id="balance-amount" placeholder="Monto" step="1" type="number" />
+                                <button
+                                    class="btn-premium btn-premium-success text-white font-bold rounded-xl px-4 py-3 sm:px-6 text-xl w-14 sm:w-16 shadow-lg hover:green-600 transition-transform transform hover:scale-105 active:scale-95"
+                                    id="add-balance-btn">+</button>
+                            </div>
+                            <p class="mt-4 text-sm font-medium text-gray-500 h-6" id="balance-message"></p>
+                        </div>
+
+                        <!-- Desglose de Saldo por Cuenta -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 class="text-xl font-semibold text-gray-700">Saldos por Cuenta</h3>
+                                <div class="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+                                    <button class="px-3 py-1 text-gray-600 hover:text-gray-900 font-bold"
+                                        id="accounts-balance-display-prev-btn">&lt;</button>
+                                    <input type="date"
+                                        class="bg-transparent border-none text-sm w-32 text-center focus:ring-0"
+                                        id="accounts-balance-display-date-picker">
+                                    <button class="px-3 py-1 text-gray-600 hover:text-gray-900 font-bold"
+                                        id="accounts-balance-display-next-btn">&gt;</button>
+                                </div>
+                            </div>
+
+                            <div class="mb-6 flex justify-center">
+                                <button
+                                    class="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 transition duration-300 shadow-sm"
+                                    id="open-transfer-funds-modal-btn">
+                                    Transferir entre Cuentas
+                                </button>
+                            </div>
+
+                            <p class="text-xs text-gray-400 mb-4 text-center">Saldos disponibles en tiempo real
+                                en cada cuenta.</p>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="accounts-balance-list">
+                                <p class="text-gray-500 col-span-full text-center">Calculando saldos...</p>
+                            </div>
+
+                            <!-- Admin Commission Summary -->
+                            <div class="mt-6 pt-6 border-t border-gray-100" id="admin-commission-summary"></div>
+                        </div>
+
+                        <!-- Historial de Movimientos de Saldo VES (Relocated here) -->
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mt-6">
+                            <div id="history-section-ves" class="history-section">
+                                <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                                    <h2 class="text-xl font-semibold text-gray-700">Historial de Movimientos (VES)</h2>
+                                    <button
+                                        class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition duration-300 shadow-sm disabled:bg-gray-400"
+                                        disabled="" id="export-balance-excel-btn">
+                                        Exportar Excel
+                                    </button>
+                                </div>
+                                <!-- Filtros -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div>
+                                        <label class="form-label text-xs" for="balance-history-start">Inicio</label>
+                                        <input class="form-control text-sm" id="balance-history-start" type="date" />
+                                    </div>
+                                    <div>
+                                        <label class="form-label text-xs" for="balance-history-end">Fin</label>
+                                        <input class="form-control text-sm" id="balance-history-end" type="date" />
+                                    </div>
+                                </div>
+                                <div class="flex flex-wrap gap-2 mb-4 items-center">
+                                    <button type="button" class="filter-chip text-xs"
+                                        id="balance-history-today">Hoy</button>
+                                    <button type="button" class="filter-chip text-xs"
+                                        id="balance-history-yesterday">Ayer</button>
+                                    <button type="button" class="filter-chip text-xs" id="balance-history-7days">7
+                                        Días</button>
+                                    <div class="flex items-center gap-1 ml-auto">
+                                        <button
+                                            class="px-2 py-1 text-xs font-bold text-white bg-gray-400 rounded hover:bg-gray-500"
+                                            id="balance-history-prev-day-btn">&lt;</button>
+                                        <span class="text-xs text-gray-500">Día</span>
+                                        <button
+                                            class="px-2 py-1 text-xs font-bold text-white bg-gray-400 rounded hover:bg-gray-500"
+                                            id="balance-history-next-day-btn">&gt;</button>
+                                    </div>
+                                    <button
+                                        class="px-4 py-1.5 text-xs font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 shadow-sm"
+                                        id="balance-history-search-btn">Buscar</button>
+                                </div>
+                                <div class="md:max-h-96 md:overflow-y-auto border rounded-lg bg-gray-50">
+                                    <table class="w-full text-sm table-compact">
+                                        <thead class="hidden" id="balance-history-header">
+                                            <tr
+                                                class="text-xs font-bold text-gray-500 uppercase bg-gray-100 sticky top-0">
+                                                <th class="p-2 text-left whitespace-nowrap">Fecha</th>
+                                                <th class="p-2 text-left">Descripción</th>
+                                                <th class="p-2 text-left">Banco</th>
+                                                <th class="p-2 text-right">Cargo</th>
+                                                <th class="p-2 text-right">Abono</th>
+                                                <th class="p-2 text-right">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="balance-history-list" class="bg-white"></tbody>
+                                    </table>
+                                </div>
+                                <p class="text-gray-400 text-center mt-4 text-sm hidden"
+                                    id="no-balance-history-message">Sin
+                                    movimientos.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: Clients -->
+                    <div id="view-clients" class="admin-view hidden space-y-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+                            <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                                <h2 class="text-2xl font-semibold text-gray-700">Lista de Clientes</h2>
+                                <div class="flex items-center gap-2">
+                                    <input class="p-2 border border-gray-300 rounded-lg text-sm" id="clients-search"
+                                        placeholder="Buscar por nombre o cédula..." type="text" />
+                                    <button
+                                        class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 shadow-sm"
+                                        id="add-client-btn">Agregar Cliente</button>
+                                </div>
+                            </div>
+                            <!-- Controles de Paginación y Orden -->
+                            <div
+                                class="flex flex-wrap justify-between items-center mb-4 gap-4 bg-gray-50 p-3 rounded-lg">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-sm font-medium text-gray-600">Ordenar por:</span>
+                                    <button
+                                        class="px-3 py-1 text-sm font-semibold rounded-full bg-white border border-gray-200 hover:bg-gray-100 shadow-sm transition-colors"
+                                        id="client-sort-name">Nombre (A-Z)</button>
+                                    <button
+                                        class="px-3 py-1 text-sm font-semibold rounded-full bg-white border border-gray-200 hover:bg-gray-100 shadow-sm transition-colors"
+                                        id="client-sort-cedula">Cédula</button>
+                                </div>
+                                <div class="hidden" id="client-pagination-controls">
+                                    <button
+                                        class="px-3 py-1 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                        id="client-pagination-prev">&lt; Anterior</button>
+                                    <span class="text-sm font-medium text-gray-700 mx-2"
+                                        id="client-pagination-info"></span>
+                                    <button
+                                        class="px-3 py-1 text-sm font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                        id="client-pagination-next">Siguiente &gt;</button>
+                                </div>
+                            </div>
+                            <p class="text-sm text-gray-500 mb-2">Total de clientes encontrados: <span
+                                    class="font-bold text-gray-700" id="clients-count">0</span></p>
+                            <div class="space-y-2 min-h-[320px] md:max-h-[60vh] md:overflow-y-auto custom-scrollbar pr-2 border border-gray-100 rounded-lg"
+                                id="clients-list"></div>
+                        </div>
+                    </div>
+
+                    <!-- VIEW: Reports -->
+                    <div id="view-reports" class="admin-view hidden space-y-6">
+                        <!-- Tabbed Navigation for Reports -->
+                        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                            <div class="flex border-b border-gray-200 overflow-x-auto">
+                                <button
+                                    class="history-tab-btn flex-1 min-w-[150px] px-4 py-3 text-sm font-semibold text-blue-600 bg-blue-50 border-b-2 border-blue-600 transition-colors"
+                                    data-target="clp-balance-history-section">Historial Saldo CLP</button>
+                                <button
+                                    class="history-tab-btn flex-1 min-w-[150px] px-4 py-3 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-colors"
+                                    data-target="history-section-commissions">Comisiones</button>
+                                <button
+                                    class="history-tab-btn flex-1 min-w-[150px] px-4 py-3 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-colors"
+                                    data-target="history-section-orders">Historial Pedidos</button>
+                                <button
+                                    class="history-tab-btn flex-1 min-w-[150px] px-4 py-3 text-sm font-semibold text-gray-500 hover:text-blue-600 hover:bg-gray-50 transition-colors"
+                                    data-target="history-section-ves">Historial Saldo VES</button>
+                            </div>
+
+                            <div class="p-6">
+                                <!-- Historial Saldo CLP moved to primary tab in reports -->
+                                <div id="clp-balance-history-section" class="history-section">
+                                    <div class="flex flex-wrap justify-between items-center mb-6 gap-4">
+                                        <h2 class="text-xl font-semibold text-gray-700">Historial de Saldos
+                                            (CLP)</h2>
+                                        <button
+                                            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition duration-300 shadow-sm disabled:bg-gray-400"
+                                            disabled="" id="export-clp-balance-excel-btn">
+                                            Exportar Excel
+                                        </button>
+                                    </div>
+                                    <!-- Filtros -->
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label class="form-label text-xs"
+                                                for="clp-balance-history-start">Inicio</label>
+                                            <input class="form-control text-sm" id="clp-balance-history-start"
+                                                type="date" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label text-xs" for="clp-balance-history-end">Fin</label>
+                                            <input class="form-control text-sm" id="clp-balance-history-end"
+                                                type="date" />
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2 mb-4">
+                                        <button type="button" class="filter-chip text-xs"
+                                            id="clp-balance-history-today">Hoy</button>
+                                        <button type="button" class="filter-chip text-xs"
+                                            id="clp-balance-history-yesterday">Ayer</button>
+                                        <button type="button" class="filter-chip text-xs"
+                                            id="clp-balance-history-7days">7
+                                            Días</button>
+                                        <button
+                                            class="px-4 py-1.5 text-xs font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 shadow-sm ml-auto"
+                                            id="clp-balance-history-search-btn">Buscar</button>
+                                    </div>
+                                    <p class="text-sm text-gray-600 mb-4" id="clp-balance-history-summary"></p>
+                                    <div class="md:max-h-96 md:overflow-y-auto border rounded-lg bg-gray-50">
+                                        <table class="w-full text-sm table-compact">
+                                            <thead class="hidden" id="clp-balance-history-header">
+                                                <tr
+                                                    class="text-xs font-bold text-gray-500 uppercase bg-gray-100 text-left sticky top-0">
+                                                    <th class="p-2 whitespace-nowrap">Fecha</th>
+                                                    <th class="p-2 text-left">Descripción</th>
+                                                    <th class="p-2 text-right">Cargo</th>
+                                                    <th class="p-2 text-right">Abono</th>
+                                                    <th class="p-2 text-right">Saldo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="clp-balance-history-list" class="bg-white"></tbody>
+                                        </table>
+                                    </div>
+                                    <p class="text-gray-400 text-center mt-4 text-sm hidden"
+                                        id="no-clp-balance-history-message">Sin movimientos.</p>
+                                </div>
+
+                                <!-- Seller Commission History -->
+                                <div id="history-section-commissions" class="history-section hidden">
+                                    <h2 class="text-xl font-semibold text-gray-700 mb-4">Comisiones por Vendedor
+                                    </h2>
+                                    <div class="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-4">
+                                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                                            <div>
+                                                <label class="form-label text-xs"
+                                                    for="seller-commission-history-select">Vendedor</label>
+                                                <select class="form-select text-sm"
+                                                    id="seller-commission-history-select">
+                                                    <option value="">-- Seleccionar --</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="form-label text-xs"
+                                                    for="seller-commission-history-start">Desde</label>
+                                                <input class="form-control text-sm" id="seller-commission-history-start"
+                                                    type="date" />
+                                            </div>
+                                            <div>
+                                                <label class="form-label text-xs"
+                                                    for="seller-commission-history-end">Hasta</label>
+                                                <input class="form-control text-sm" id="seller-commission-history-end"
+                                                    type="date" />
+                                            </div>
+                                            <div class="flex gap-2">
+                                                <button
+                                                    class="flex-1 bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600 shadow-sm text-xs"
+                                                    id="seller-commission-history-search-btn">Buscar</button>
+                                                <button
+                                                    class="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 shadow-sm disabled:bg-gray-400 text-xs"
+                                                    disabled="" id="export-seller-commission-excel-btn">Excel</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <!-- RESTORED: Commission History List -->
+                                    <p class="text-sm text-gray-600 mb-4" id="seller-commission-history-summary"></p>
+                                    <div class="md:max-h-96 md:overflow-y-auto border rounded-lg bg-gray-50">
+                                        <table class="w-full text-sm">
+                                            <thead class="bg-gray-100 sticky top-0">
+                                                <tr class="text-xs font-bold text-gray-500 uppercase text-left">
+                                                    <th class="p-2">Fecha</th>
+                                                    <th class="p-2">ID Pedido</th>
+                                                    <th class="p-2 text-right">Venta (CLP)</th>
+                                                    <th class="p-2 text-right">Comisión</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="seller-commission-history-list" class="bg-white"></tbody>
+                                        </table>
+                                    </div>
+                                    <p class="text-gray-400 text-center mt-4 text-sm hidden"
+                                        id="no-seller-commission-history-message">Selecciona filtros.</p>
+                                </div>
+
+                                <!-- Historial de Pedidos -->
+                                <div id="history-section-orders" class="history-section hidden">
+                                    <h2 class="text-xl font-semibold text-gray-700 mb-4">Búsqueda de Pedidos
+                                    </h2>
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <div>
+                                            <label class="form-label text-xs" for="historical-date-start">Inicio</label>
+                                            <input class="form-control text-sm" id="historical-date-start"
+                                                type="date" />
+                                        </div>
+                                        <div>
+                                            <label class="form-label text-xs" for="historical-date-end">Fin</label>
+                                            <input class="form-control text-sm" id="historical-date-end" type="date" />
+                                        </div>
+                                    </div>
+                                    <!-- Search by ID -->
+                                    <div class="mb-4">
+                                        <label class="form-label text-xs" for="historical-id-search">Buscar por
+                                            ID (últimos 5)</label>
+                                        <div class="flex gap-2">
+                                            <input class="form-control text-sm" id="historical-id-search" maxlength="5"
+                                                placeholder="Ej: IhWt6" type="text" />
+                                            <button
+                                                class="px-4 py-2 text-sm font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 shadow-sm"
+                                                id="historical-id-search-btn">Buscar ID</button>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2 mb-4">
+                                        <button type="button" class="filter-chip text-xs"
+                                            id="historical-date-today">Hoy</button>
+                                        <button type="button" class="filter-chip text-xs"
+                                            id="historical-date-yesterday">Ayer</button>
+                                        <button type="button" class="filter-chip text-xs" id="historical-date-7days">7
+                                            Días</button>
+                                        <button
+                                            class="px-4 py-1.5 text-xs font-semibold text-white bg-blue-500 rounded-lg hover:bg-blue-600 shadow-sm ml-auto"
+                                            id="historical-search-btn">Buscar Fecha</button>
+                                    </div>
+                                    <!-- Filtros de Estado -->
+                                    <div class="mb-4">
+                                        <label class="mb-2 form-label text-xs">Estado</label>
+                                        <div class="flex flex-wrap gap-2" id="historical-status-filters">
+                                            <button type="button"
+                                                class="filter-chip historical-status-btn is-active text-xs"
+                                                data-status="Todos">Todos</button>
+                                            <button type="button" class="filter-chip historical-status-btn text-xs"
+                                                data-status="Pendiente de pago">Pendiente</button>
+                                            <button type="button" class="filter-chip historical-status-btn text-xs"
+                                                data-status="Pagado">Pagado</button>
+                                            <button type="button" class="filter-chip historical-status-btn text-xs"
+                                                data-status="Cancelado">Cancelado</button>
+                                        </div>
+                                    </div>
+                                    <div class="flex justify-end items-center mb-4">
+                                        <button
+                                            class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-green-700 transition duration-300 shadow-sm disabled:bg-gray-400"
+                                            disabled="" id="export-excel-btn">
+                                            Exportar Excel
+                                        </button>
+                                    </div>
+                                    <p class="text-sm text-gray-600 mb-4" id="historical-search-summary"></p>
+                                    <div class="space-y-4 md:max-h-96 md:overflow-y-auto" id="historical-orders-list">
+                                    </div>
+                                    <p class="text-gray-400 text-center mt-4 text-sm hidden"
+                                        id="no-historical-orders-message">
+                                        Sin resultados.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </main>
+        </div>
+
+        <!-- Orphaned Admin Content Removed -->
+        <!-- Modal de Autenticación de Cliente -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="customer-auth-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-gray-800">Acceso de Cliente</h3>
+                    <button class="text-gray-400 hover:text-gray-800 text-3xl leading-none"
+                        id="customer-auth-close-btn">×</button>
+                </div>
+                <!-- Customer Auth Tabs -->
+                <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
+                    <button
+                        class="customer-auth-tab flex-1 py-3 px-4 text-center font-semibold rounded-tl-lg bg-white text-blue-600"
+                        data-form="login">Ingresar</button>
+                    <button
+                        class="customer-auth-tab flex-1 py-3 px-4 text-center font-semibold text-gray-700 hover:bg-gray-300"
+                        data-form="register">Registrarse</button>
+                </div>
+                <!-- Login Form -->
+                <form class="space-y-4" id="customer-login-form">
+                    <div>
+                        <label class="form-label" for="customer-login-email">Correo Electrónico</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="customer-login-email"
+                            required="" type="email" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="customer-login-password">Contraseña</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="customer-login-password"
+                            required="" type="password" />
+                    </div>
+                    <div class="text-right">
+                        <a class="text-sm link-inline" href="#" id="forgot-password-link">¿Olvidaste tu
+                            contraseña?</a>
+                    </div>
+                    <button class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                        type="submit">Ingresar</button>
+                </form>
+                <!-- Register Form -->
+                <form class="space-y-4 hidden" id="customer-register-form">
+                    <div>
+                        <label class="form-label" for="customer-register-email">Correo Electrónico</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="customer-register-email"
+                            required="" type="email" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="customer-register-password">Contraseña</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="customer-register-password"
+                            required="" type="password" />
+                    </div>
+                    <div>
+                        <label class="form-label" for="customer-register-confirm-password">Confirmar
+                            Contraseña</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                            id="customer-register-confirm-password" required="" type="password" />
+                    </div>
+                    <button class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700"
+                        type="submit">Crear Cuenta</button>
+                </form>
+                <p class="mt-4 text-center font-medium" id="customer-auth-message"></p>
+            </div>
+        </div>
+
+        <!-- Admin Auth Modal Moved to End of Body -->
+        <!-- Modal para Seleccionar Origen del Pago (Admin) -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden"
+            id="select-payment-source-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-left">
+                <h3 class="text-2xl font-bold mb-2 text-gray-800">Seleccionar Origen del Pago</h3>
+                <p class="mb-4 text-gray-600">Elige la cuenta desde la cual se realizará el pago para el pedido.
+                </p>
+                <div class="mb-4 p-3 bg-gray-100 rounded-lg text-sm" id="payment-source-order-details"></div>
+                <div class="space-y-2 max-h-60 overflow-y-auto mb-4 pr-2" id="payment-source-list">
+                    <!-- Account options will be rendered here -->
+                </div>
+                <div class="text-sm text-orange-600 font-medium p-3 bg-orange-50 rounded-lg mb-6 hidden"
+                    id="payment-fee-details"></div>
+                <div class="flex justify-end items-center mt-6">
+                    <div class="flex space-x-4">
+                        <button
+                            class="bg-blue-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg disabled:bg-gray-400"
+                            disabled="" id="payment-source-next-btn">
+                            Siguiente
+                        </button>
+                        <button
+                            class="bg-red-600 text-white px-6 py-3 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg"
+                            id="payment-source-cancel-btn">
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Modal para Agregar Cliente -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="add-client-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-gray-800">Agregar Cliente o Método de Pago</h3>
+                    <button class="text-gray-400 hover:text-gray-800 text-3xl leading-none"
+                        id="add-client-close-btn">×</button>
+                </div>
+                <p class="mb-6 text-gray-600">Ingresa los datos del cliente. Esto no generará un pedido.</p>
+                <!-- Tabs for payment method type -->
+                <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
+                    <button
+                        class="add-client-tab flex-1 py-3 px-4 text-center font-semibold rounded-tl-lg bg-white text-blue-600"
+                        data-form="transferencia">Transferencia</button>
+                    <button
+                        class="add-client-tab flex-1 py-3 px-4 text-center font-semibold text-gray-700 hover:bg-gray-300"
+                        data-form="pago-movil">Pago Móvil</button>
+                    <button
+                        class="add-client-tab flex-1 py-3 px-4 text-center font-semibold rounded-tr-lg text-gray-700 hover:bg-gray-300"
+                        data-form="recarga">Recarga</button>
+                </div>
+                <!-- Form content -->
+                <div id="add-client-form-content">
+                    <!-- Transferencia Form -->
+                    <form class="space-y-4" id="add-client-form-transferencia">
+                        <input name="type" type="hidden" value="transferencia" />
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label" for="add-client-name-transferencia">Nombre
+                                    Completo</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-name-transferencia" required="" type="text" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-cedula-transferencia">Cédula</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-cedula-transferencia" required="" type="text" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-email-transferencia">Correo
+                                    Electrónico</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-email-transferencia" type="email" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-bank-transferencia">Banco</label>
+                                <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-bank-transferencia" required="">
+                                    <!-- Options will be populated by JS -->
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="form-label" for="add-client-account-number-transferencia">Número
+                                    de
+                                    Cuenta</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-account-number-transferencia" required="" type="text" />
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-4">
+                            <button class="btn-neutral" id="paste-btn-add-client-transferencia" type="button">Pegar
+                                Datos</button>
+                            <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700"
+                                type="submit">Guardar</button>
+                        </div>
+                    </form>
+                    <!-- Pago Movil Form (hidden by default) -->
+                    <form class="space-y-4 hidden" id="add-client-form-pago-movil">
+                        <input name="type" type="hidden" value="pago-movil" />
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label" for="add-client-name-pm">Nombre Completo</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="add-client-name-pm"
+                                    required="" type="text" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-cedula-pm">Cédula</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-cedula-pm" required="" type="text" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-email-pm">Correo Electrónico</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-email-pm" type="email" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-phone-pm">Número de Teléfono</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-phone-pm" required="" type="tel" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-bank-pm">Banco Receptor</label>
+                                <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-bank-pm" required="">
+                                    <!-- Options will be populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-4">
+                            <button class="btn-neutral" id="paste-btn-add-client-pm" type="button">Pegar
+                                Datos</button>
+                            <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700"
+                                type="submit">Guardar</button>
+                        </div>
+                    </form>
+                    <!-- Recarga Form (hidden by default) -->
+                    <form class="space-y-4 hidden" id="add-client-form-recarga">
+                        <input name="type" type="hidden" value="recarga-saldo" />
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label class="form-label" for="add-client-name-recarga">Nombre Completo</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-name-recarga" required="" type="text" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-cedula-recarga">Cédula</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-cedula-recarga" required="" type="text" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="add-client-email-recarga">Correo
+                                    Electrónico</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-email-recarga" type="email" />
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="form-label" for="add-client-phone-recarga">Número de Teléfono a
+                                    Recargar</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="add-client-phone-recarga" required="" type="tel" />
+                            </div>
+                        </div>
+                        <div class="flex justify-end space-x-4">
+                            <button class="btn-neutral" id="paste-btn-add-client-recarga" type="button">Pegar
+                                Datos</button>
+                            <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700"
+                                type="submit">Guardar</button>
+                        </div>
+                    </form>
+                </div>
+                <p class="mt-4 text-center font-medium" id="add-client-message"></p>
+            </div>
+        </div>
+        <!-- Modal para EDITAR Cliente -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="edit-client-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-2xl">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-gray-800">Editar Cliente</h3>
+                    <button class="text-gray-400 hover:text-gray-800 text-3xl leading-none"
+                        id="edit-client-close-btn">×</button>
+                </div>
+                <p class="mb-6 text-gray-600">Modifica los datos del cliente y guarda los cambios.</p>
+
+                <form class="space-y-4" id="edit-client-form">
+                    <!-- Hidden input to store client ID -->
+                    <input name="clientId" type="hidden" id="edit-client-id" />
+                    <input name="type" type="hidden" id="edit-client-type" />
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="form-label" for="edit-client-name">Nombre Completo</label>
+                            <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-name"
+                                required="" type="text" />
+                        </div>
+                        <div>
+                            <label class="form-label" for="edit-client-cedula">Cédula</label>
+                            <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-cedula"
+                                required="" type="text" />
+                        </div>
+                        <div>
+                            <label class="form-label" for="edit-client-email">Correo Electrónico</label>
+                            <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="edit-client-email"
+                                type="email" />
+                        </div>
+
+                        <!-- Transferencia Fields -->
+                        <div class="contents" id="edit-client-fields-transferencia">
+                            <div>
+                                <label class="form-label" for="edit-client-bank-transferencia">Banco</label>
+                                <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="edit-client-bank-transferencia">
+                                    <!-- Options will be populated by JS -->
+                                </select>
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="form-label" for="edit-client-account-number-transferencia">Número
+                                    de
+                                    Cuenta</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="edit-client-account-number-transferencia" type="text" />
+                            </div>
+                        </div>
+
+                        <!-- Pago Movil Fields -->
+                        <div class="contents" id="edit-client-fields-pago-movil">
+                            <div>
+                                <label class="form-label" for="edit-client-phone-pm">Número de Teléfono</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="edit-client-phone-pm" type="tel" />
+                            </div>
+                            <div>
+                                <label class="form-label" for="edit-client-bank-pm">Banco Receptor</label>
+                                <select class="bank-select w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="edit-client-bank-pm">
+                                    <!-- Options will be populated by JS -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Recarga Fields -->
+                        <div class="contents" id="edit-client-fields-recarga">
+                            <div class="md:col-span-2">
+                                <label class="form-label" for="edit-client-phone-recarga">Número de Teléfono a
+                                    Recargar</label>
+                                <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg"
+                                    id="edit-client-phone-recarga" type="tel" />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end">
+                        <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700"
+                            type="submit">Guardar Cambios</button>
+                    </div>
+                </form>
+                <p class="mt-4 text-center font-medium" id="edit-client-message"></p>
+            </div>
+        </div>
+        <!-- Modal para Transferir Fondos entre Cuentas -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="transfer-funds-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-2xl font-bold text-gray-800">Transferir Fondos entre Cuentas</h3>
+                    <button class="text-gray-400 hover:text-gray-800 text-3xl leading-none"
+                        id="transfer-funds-close-btn">×</button>
+                </div>
+                <form class="space-y-4" id="transfer-funds-form">
+                    <div>
+                        <label class="form-label" for="transfer-from-account">Desde la cuenta</label>
+                        <select class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="transfer-from-account"
+                            required="">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="transfer-to-account">Hacia la cuenta</label>
+                        <select class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="transfer-to-account"
+                            required="">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label" for="transfer-amount">Monto a Transferir (VES)</label>
+                        <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="transfer-amount"
+                            placeholder="Ej: 50000" required="" step="0.01" type="number" />
+                    </div>
+                    <div class="text-sm text-orange-600 font-medium p-3 bg-orange-50 rounded-lg hidden"
+                        id="transfer-fee-details"></div>
+                    <div class="flex justify-end space-x-4">
+                        <button class="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700"
+                            type="submit">Confirmar Transferencia</button>
+                    </div>
+                </form>
+                <p class="mt-4 text-center font-medium" id="transfer-funds-message"></p>
+            </div>
+        </div>
+        <!-- Modal para subir captura de pantalla (Admin) -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden"
+            id="admin-upload-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-center">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">Subir Comprobante(s) de Pago</h3>
+                <p class="mb-4 text-gray-600">
+                    Selecciona la(s) imagen(es) del pago para confirmar el pedido.
+                </p>
+
+                <!-- Container for file inputs -->
+                <div id="admin-screenshot-inputs-container" class="mb-2 space-y-2">
+                    <div class="file-input-wrapper">
+                        <input accept="image/*" class="w-full admin-screenshot-input" id="admin-screenshot-input"
+                            type="file" />
+                    </div>
+                </div>
+
+                <!-- Add more files button -->
+                <button type="button" id="add-more-files-btn"
+                    class="mb-4 text-blue-600 hover:text-blue-800 font-semibold text-sm transition-colors">
+                    + Agregar otro archivo
+                </button>
+
+                <p class="mb-4 text-sm font-medium text-gray-700" id="admin-upload-message"></p>
+                <div class="flex justify-center space-x-4">
+                    <button
+                        class="bg-green-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-green-700 transition duration-300 shadow-lg"
+                        id="admin-upload-btn">
+                        Confirmar Pago
+                    </button>
+                    <button
+                        class="bg-red-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg"
+                        id="admin-cancel-upload-btn">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Modal para subir captura de pantalla (CLIENTE) -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-40 hidden"
+            id="client-upload-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg text-center">
+                <h3 class="text-xl font-bold mb-4 text-gray-800">Paso Final: Subir Comprobante</h3>
+                <p class="mb-4 text-gray-600">
+                    Por favor, sube una captura de pantalla de tu pago en Pesos Chilenos (CLP) para continuar.
+                </p>
+                <input accept="image/*" class="mb-4 w-full" id="client-screenshot-input" required="" type="file" />
+                <p class="mb-4 text-sm font-medium text-gray-700" id="client-upload-message"></p>
+                <div class="flex justify-center space-x-4">
+                    <button
+                        class="bg-green-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-green-700 transition duration-300 shadow-lg"
+                        id="client-upload-confirm-btn">
+                        Finalizar Pedido
+                    </button>
+                    <button
+                        class="bg-red-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg"
+                        id="client-upload-cancel-btn">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Modal de confirmación genérico para alertas -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="custom-alert-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-sm text-center">
+                <div class="mb-6" id="custom-alert-message">
+                    <!-- Message content will be injected here -->
+                </div>
+                <button class="bg-blue-600 text-white px-8 py-2 rounded-full font-semibold hover:bg-blue-700"
+                    id="custom-alert-btn">Aceptar</button>
+            </div>
+        </div>
+        <!-- Modal para Cargar/Restar Saldo -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="balance-operation-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md">
+                <h3 class="text-xl font-bold mb-4 text-gray-800" id="balance-op-title">Operación de Saldo</h3>
+                <div class="space-y-4">
+                    <div id="balance-op-bank-section">
+                        <label class="text-sm form-label" for="balance-op-bank-select">Banco</label>
+                        <select class="bank-select form-select" id="balance-op-bank-select">
+                            <!-- Options will be populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm form-label" for="balance-op-holder-select">Titular</label>
+                        <select class="form-select" id="balance-op-holder-select">
+                            <!-- Options populated by JS -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-sm form-label" for="balance-op-note-input">Nota (Opcional)</label>
+                        <input class="form-control" id="balance-op-note-input" maxlength="30"
+                            placeholder="Max 30 caracteres" type="text" />
+                    </div>
+                    <!-- Recent Accounts Section -->
+                    <div id="balance-op-recent-accounts-container" class="mt-4">
+                        <label class="text-[10px] uppercase font-bold text-gray-400 tracking-wider">Cuentas
+                            Recientes</label>
+                        <div id="balance-op-recent-accounts" class="flex flex-wrap gap-2 mt-1">
+                            <!-- Clickable badges will be injected here -->
+                        </div>
+                    </div>
+                </div>
+                <div class="flex justify-center space-x-4 mt-6">
+                    <button
+                        class="bg-green-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-green-700 transition duration-300 shadow-lg"
+                        id="balance-op-confirm-btn">
+                        Siguiente
+                    </button>
+                    <button
+                        class="bg-red-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-red-700 transition duration-300 shadow-lg"
+                        id="balance-op-cancel-btn">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Modal de Confirmación de Operación de Saldo -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="balance-confirm-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md text-left">
+                <h3 class="text-xl font-bold mb-4 text-gray-800" id="balance-confirm-title">Confirmar Operación
+                </h3>
+                <div class="mt-4" id="balance-op-clp-section">
+                    <label class="form-label" for="balance-op-clp-rate">Tasa de Compra (CLP por 1 VES)</label>
+                    <input class="form-control" id="balance-op-clp-rate" placeholder="Ej: 0.035" required=""
+                        step="0.00001" type="number" />
+                    <p class="text-sm text-gray-600 mt-2" id="balance-op-clp-equivalent">Equivalente: 0,00 CLP
+                    </p>
+                </div>
+                <div class="space-y-2 text-gray-700 border-t border-b py-4 mb-6" id="balance-confirm-details">
+                    <!-- Los detalles se inyectarán aquí -->
+                </div>
+                <div class="flex justify-center space-x-4">
+                    <button
+                        class="bg-blue-600 text-white px-6 py-2 rounded-full font-semibold hover:bg-blue-700 transition duration-300 shadow-lg"
+                        id="balance-final-confirm-btn">
+                        Confirmar
+                    </button>
+                    <button
+                        class="bg-gray-500 text-white px-6 py-2 rounded-full font-semibold hover:bg-gray-600 transition duration-300 shadow-lg"
+                        id="balance-final-cancel-btn">
+                        Atrás
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Toast Notification -->
+        <div class="fixed bottom-5 right-5 w-full max-w-xs p-4 text-gray-500 bg-white rounded-lg shadow-lg transition-transform duration-300 ease-in-out transform translate-y-20 opacity-0 z-50"
+            id="toast-notification" role="alert">
+            <div class="flex items-center">
+                <div
+                    class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 text-blue-500 bg-blue-100 rounded-lg">
+                    <svg aria-hidden="true" class="w-5 h-5" fill="currentColor" focusable="false" viewbox="0 0 20 20"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path clip-rule="evenodd"
+                            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                            fill-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <div class="ml-3 text-sm font-normal" id="toast-message">Mensaje de notificación.</div>
+            </div>
+        </div>
+        <!-- Modal para Fecha de Pago Histórico -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="historical-payment-date-modal">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-lg">
+                <h3 class="text-2xl font-bold mb-4 text-gray-800">Registrar Pago Histórico</h3>
+                <p class="mb-6 text-gray-600">Selecciona la fecha en la que se realizó este pago. El sistema lo
+                    registrará al final de ese día.</p>
+                <div class="mb-4 p-3 bg-gray-100 rounded-lg text-sm" id="historical-payment-order-details">
+                    <!-- Order details will be injected here -->
+                </div>
+                <div>
+                    <label class="form-label" for="historical-payment-date">Fecha de Pago</label>
+                    <input class="form-control" id="historical-payment-date" required="" type="date" />
+                </div>
+                <div class="flex justify-end space-x-4 mt-8">
+                    <button class="btn-neutral" id="historical-payment-date-cancel-btn">Cancelar</button>
+                    <button class="btn-success" id="historical-payment-date-next-btn">Siguiente</button>
+                </div>
+            </div>
+        </div>
+        <!-- Modal de Procesamiento por Lote: Paso 1 - Selección de Clientes -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="batch-client-selection-modal">
+            <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-2xl h-[90vh] flex flex-col">
+                <div class="flex-shrink-0">
+                    <h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 1: Seleccionar Clientes para el Lote
+                    </h3>
+                    <input class="form-control mb-4" id="batch-client-search"
+                        placeholder="Buscar cliente por nombre o cédula..." type="text" />
+                </div>
+                <div class="flex-grow overflow-y-auto border rounded-lg p-2 space-y-2" id="batch-client-list"
+                    style="min-height: 0;">
+                    <!-- Client list will be rendered here -->
+                </div>
+                <div class="flex-shrink-0 flex justify-between items-center mt-4">
+                    <p class="font-semibold text-gray-700" id="batch-selected-count">0 cliente(s)
+                        seleccionado(s)
+                    </p>
+                    <div class="flex space-x-4">
+                        <button class="btn-neutral" id="batch-client-selection-cancel-btn">Cancelar</button>
+                        <button class="btn-success disabled:bg-gray-400" disabled=""
+                            id="batch-client-selection-next-btn">Siguiente</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <!-- Modal de Procesamiento por Lote: Paso 2 - Ingreso de Montos -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="batch-amount-entry-modal">
+            <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col h-[90vh]">
+                <h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 2: Ingresar Montos (CLP)</h3>
+                <div class="flex-grow overflow-y-auto border rounded-lg">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-100 sticky top-0">
+                            <tr>
+                                <th class="p-2 text-left font-semibold">Cliente</th>
+                                <th class="p-2 text-left font-semibold">Método de Pago</th>
+                                <th class="p-2 text-left font-semibold">Monto CLP</th>
+                                <th class="p-2 text-left font-semibold">Monto a Recibir</th>
+                            </tr>
+                        </thead>
+                        <tbody id="batch-amount-list">
+                            <!-- Amount entry rows will be rendered here -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex justify-between items-center mt-4">
+                    <button class="btn-neutral" id="batch-amount-entry-back-btn">Atrás</button>
+                    <button class="btn-success disabled:bg-gray-400" disabled=""
+                        id="batch-amount-entry-confirm-btn">Confirmar y Crear Pedidos</button>
+                </div>
+            </div>
+        </div>
+        <!-- Modal de Procesamiento por Lote: Paso 3 - Pago y Comprobantes -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="batch-payment-picker-modal">
+            <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg space-y-4">
+                <div>
+                    <h3 class="text-2xl font-bold text-gray-800">Seleccionar Lote Pendiente</h3>
+                    <p class="text-sm text-gray-600 mt-1">Elige un lote con pedidos pendientes para iniciar el
+                        proceso de pago.</p>
+                </div>
+                <div class="space-y-3 max-h-72 overflow-y-auto" id="batch-payment-picker-list"></div>
+                <p class="hidden text-center text-gray-500" id="batch-payment-picker-empty">No hay lotes
+                    pendientes
+                    de pago.</p>
+                <div class="flex justify-end">
+                    <button class="btn-neutral" id="batch-payment-picker-close-btn">Cerrar</button>
+                </div>
+            </div>
+        </div>
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="batch-payment-modal">
+            <div class="bg-white p-6 rounded-2xl shadow-2xl w-full max-w-lg">
+                <h3 class="text-2xl font-bold mb-4 text-gray-800">Paso 3: Subir Comprobantes</h3>
+                <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg mb-4 space-y-1 text-gray-800"
+                    id="batch-payment-summary">
+                    <!-- Payment summary will be rendered here -->
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="form-label font-semibold text-gray-700 mb-1"
+                            for="batch-payment-source-select">Cuenta
+                            de origen</label>
+                        <select class="w-full p-2 border border-gray-300 rounded-lg text-sm"
+                            id="batch-payment-source-select">
+                            <option value="">Selecciona una cuenta</option>
+                        </select>
+                    </div>
+                    <p class="form-label">Sube un comprobante para cada pedido:</p>
+                    <div class="max-h-60 overflow-y-auto border rounded-lg" id="batch-payment-order-list">
+                        <!-- Individual order upload rows will be rendered here -->
+                    </div>
+                </div>
+                <p class="mt-4 text-center font-medium" id="batch-payment-message"></p>
+                <div class="flex justify-end items-center mt-6 space-x-4">
+                    <button class="btn-neutral" id="batch-payment-cancel-btn">Cancelar</button>
+                    <button class="btn-success disabled:bg-gray-400" disabled=""
+                        id="batch-payment-confirm-btn">Confirmar
+                        Pago del Lote</button>
+                </div>
+            </div>
+        </div>
+        <!-- NEW: Batch Success Modal -->
+        <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-50 hidden"
+            id="batch-success-modal">
+            <div class="bg-white rounded-lg shadow-xl w-full max-w-md m-4">
+                <div class="p-6">
+                    <div class="text-center">
+                        <svg class="mx-auto mb-4 w-14 h-14 text-green-500" fill="none" stroke="currentColor"
+                            viewbox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round"
+                                stroke-linejoin="round" stroke-width="2"></path>
+                        </svg>
+                        <h3 class="text-xl font-bold text-gray-900">Lote Procesado con Éxito</h3>
+                        <p class="text-sm text-gray-500" id="batch-success-batch-label"></p>
+                        <p class="text-sm text-gray-500 mt-2">Puedes compartir cada comprobante individualmente
+                            o
+                            copiar todos los enlaces de una vez.</p>
+                    </div>
+
+                    <div class="mt-4 max-h-64 overflow-y-auto space-y-2" id="batch-success-order-list">
+                        <!-- Individual paid orders will be rendered here by JS -->
+                    </div>
+
+                </div>
+                <div class="bg-gray-50 px-6 py-4 flex justify-between items-center rounded-b-lg">
+                    <button class="btn-secondary" id="batch-success-share-all-btn" type="button">
+                        Compartir Todos
+                    </button>
+                    <button class="btn-primary" id="batch-success-close-btn" type="button">
+                        Finalizar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Modal de Autenticación de Administrador (Moved for Z-Index Fix) -->
+    <div class="fixed inset-0 bg-gray-800 bg-opacity-75 items-center justify-center z-[9999] hidden"
+        id="admin-auth-modal">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md relative">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-2xl font-bold text-gray-800">Acceso de Administrador</h3>
+                <button class="text-gray-400 hover:text-gray-800 text-3xl leading-none"
+                    id="admin-auth-close-btn">×</button>
+            </div>
+            <!-- Single Tab Layout for Consistency -->
+            <div class="flex justify-around bg-gray-200 rounded-t-lg mb-4">
+                <button class="flex-1 py-3 px-4 text-center font-semibold rounded-t-lg bg-white text-blue-600 w-full">
+                    Ingresar
+                </button>
+            </div>
+            <!-- Admin Login Form -->
+            <form class="space-y-4" id="admin-login-form">
+                <div>
+                    <label class="form-label" for="admin-email">Correo Electrónico</label>
+                    <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="admin-email" required=""
+                        type="email" placeholder="admin@manzano.com" />
+                </div>
+                <div>
+                    <label class="form-label" for="admin-password">Contraseña</label>
+                    <input class="w-full mt-1 p-3 border border-gray-300 rounded-lg" id="admin-password" required=""
+                        type="password" />
+                </div>
+                <button class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+                    type="submit">Ingresar</button>
+                <p class="text-center text-sm font-medium text-red-500 rounded-lg hidden" id="login-message">
+                </p>
+            </form>
+        </div>
+    </div>
+    <!-- Sonido de Notificación -->
+    <audio id="notification-sound" preload="auto"></audio>
+    <!-- Firebase SDKs (including Auth for Firestore rules verification) -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-functions-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js"></script>
+    <!-- Initialize Firebase immediately -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyDLZBYfANw7o7FEOrw83PSrrQ7KmamAPEE",
+            authDomain: "manzanoapp-2f775.firebaseapp.com",
+            projectId: "manzanoapp-2f775",
+            storageBucket: "manzanoapp-2f775.firebasestorage.app",
+            messagingSenderId: "250652050778",
+            appId: "1:250652050778:web:cb43d53c10989b046fdf63"
+        };
+        firebase.initializeApp(firebaseConfig);
+        console.log('✅ Firebase initialized (Auth/Firestore/Functions/Storage)');
+    </script>
+    <!-- Capacitor bridge -->
+    <script src="capacitor.js"></script>
+    <!-- Auth wrapper using native plugin -->
+    <script src="/js/auth-wrapper.js"></script>
+    <script src="/js/push-notifications.js"></script>
+    <script type="module" src="js/app-modern.js"></script>
+    <script src="/js/app.js?v=10.97"></script>
+</body>
+
+</html>

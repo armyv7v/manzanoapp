@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Notificaciones Push</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+
+        .test-section {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+
+        button {
+            background: #2563eb;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            background: #1d4ed8;
+        }
+
+        .success {
+            color: green;
+            font-weight: bold;
+        }
+
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+
+        .info {
+            background: #dbeafe;
+            padding: 10px;
+            border-left: 4px solid #2563eb;
+            margin: 10px 0;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🔔 Test de Notificaciones Push - Manzanoapp</h1>
+
+    <div class="test-section">
+        <h2>1. Verificar Permisos de Notificación</h2>
+        <p>Estado actual: <span id="permission-status">Verificando...</span></p>
+        <button onclick="requestPermission()">Solicitar Permisos</button>
+        <div id="permission-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>2. Verificar Service Worker</h2>
+        <p>Estado: <span id="sw-status">Verificando...</span></p>
+        <button onclick="checkServiceWorker()">Verificar Service Worker</button>
+        <div id="sw-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>3. Obtener FCM Token</h2>
+        <p>Este es el token necesario para enviar notificaciones de prueba</p>
+        <button onclick="getToken()">Obtener Token</button>
+        <div id="token-result"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>4. Probar Notificación Local</h2>
+        <p>Envía una notificación de prueba sin usar FCM</p>
+        <button onclick="sendLocalNotification()">Enviar Notificación Local</button>
+        <div id="local-result"></div>
+    </div>
+
+    <div class="test-section info">
+        <h3>📝 Instrucciones para enviar notificación desde Firebase Console:</h3>
+        <ol>
+            <li>Ve a <a href="https://console.firebase.google.com/project/manzanoapp-2f775/messaging"
+                    target="_blank">Firebase Console - Cloud Messaging</a></li>
+            <li>Click en "Enviar mensaje de prueba" o "Send test message"</li>
+            <li>Copia el FCM token de arriba (sección 3)</li>
+            <li>Pégalo en "Add an FCM registration token"</li>
+            <li>Click "Test" o "Probar"</li>
+        </ol>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-messaging-compat.js"></script>
+
+    <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDLZBYfANw7o7FEOrw83PSrrQ7KmamAPEE",
+            authDomain: "manzanoapp-2f775.firebaseapp.com",
+            projectId: "manzanoapp-2f775",
+            storageBucket: "manzanoapp-2f775.firebasestorage.app",
+            messagingSenderId: "250652050778",
+            appId: "1:250652050778:web:cb43d53c10989b046fdf63"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // Check permission on load
+        window.addEventListener('load', () => {
+            updatePermissionStatus();
+            checkServiceWorker();
+        });
+
+        function updatePermissionStatus() {
+            const status = Notification.permission;
+            const statusEl = document.getElementById('permission-status');
+            statusEl.textContent = status;
+            statusEl.className = status === 'granted' ? 'success' : status === 'denied' ? 'error' : '';
+        }
+
+        async function requestPermission() {
+            const resultDiv = document.getElementById('permission-result');
+            try {
+                const permission = await Notification.requestPermission();
+                updatePermissionStatus();
+
+                if (permission === 'granted') {
+                    resultDiv.innerHTML = '<p class="success">✅ Permisos concedidos exitosamente!</p>';
+                } else if (permission === 'denied') {
+                    resultDiv.innerHTML = '<p class="error">❌ Permisos denegados. Ve a configuración del navegador para habilitarlos.</p>';
+                } else {
+                    resultDiv.innerHTML = '<p>⚠️ Permisos no decididos. Intenta nuevamente.</p>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function checkServiceWorker() {
+            const statusEl = document.getElementById('sw-status');
+            const resultDiv = document.getElementById('sw-result');
+
+            if (!('serviceWorker' in navigator)) {
+                statusEl.textContent = 'No soportado';
+                statusEl.className = 'error';
+                resultDiv.innerHTML = '<p class="error">❌ Service Workers no soportados en este navegador</p>';
+                return;
+            }
+
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+
+                if (registrations.length === 0) {
+                    statusEl.textContent = 'No registrado';
+                    statusEl.className = 'error';
+                    resultDiv.innerHTML = '<p class="error">❌ No hay service workers registrados</p>';
+                } else {
+                    statusEl.textContent = 'Registrado (' + registrations.length + ')';
+                    statusEl.className = 'success';
+                    let html = '<p class="success">✅ Service Workers encontrados:</p><pre>';
+                    registrations.forEach((reg, i) => {
+                        html += `SW ${i + 1}: ${reg.scope}\n`;
+                        html += `Active: ${reg.active ? 'Sí' : 'No'}\n\n`;
+                    });
+                    html += '</pre>';
+                    resultDiv.innerHTML = html;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        async function getToken() {
+            const resultDiv = document.getElementById('token-result');
+            resultDiv.innerHTML = '<p>Obteniendo token...</p>';
+
+            try {
+                if (!firebase.messaging.isSupported()) {
+                    throw new Error('Firebase Messaging no soportado en este navegador');
+                }
+
+                const messaging = firebase.messaging();
+                const token = await messaging.getToken({
+                    vapidKey: 'BEju_FPmIxL_aiCOSspYuyoi4iLOJwMyHCrXCkGuXfUGRdOT9HGqPyFXnGb_Vc1tCGRzIzlragLH7j3N12c00E8'
+                });
+
+                if (token) {
+                    resultDiv.innerHTML = `
+                        <p class="success">✅ FCM Token obtenido:</p>
+                        <pre>${token}</pre>
+                        <button onclick="copyToken('${token}')">📋 Copiar Token</button>
+                        <p class="info">Usa este token en Firebase Console para enviar notificaciones de prueba</p>
+                    `;
+                    console.log('FCM Token:', token);
+                } else {
+                    resultDiv.innerHTML = '<p class="error">❌ No se pudo obtener el token. Verifica los permisos.</p>';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+                console.error('Error getting token:', error);
+            }
+        }
+
+        function copyToken(token) {
+            navigator.clipboard.writeText(token).then(() => {
+                alert('Token copiado al portapapeles!');
+            });
+        }
+
+        async function sendLocalNotification() {
+            const resultDiv = document.getElementById('local-result');
+
+            if (Notification.permission !== 'granted') {
+                resultDiv.innerHTML = '<p class="error">❌ Primero debes conceder permisos de notificación</p>';
+                return;
+            }
+
+            try {
+                const notification = new Notification('🔔 Test de Notificación', {
+                    body: 'Esta es una notificación de prueba local',
+                    icon: '/images/icon-192x192.png',
+                    badge: '/images/icon-192x192.png',
+                    timestamp: Date.now(),
+                    requireInteraction: false
+                });
+
+                notification.onclick = () => {
+                    window.focus();
+                    notification.close();
+                };
+
+                resultDiv.innerHTML = '<p class="success">✅ Notificación local enviada! Revisa la parte superior de tu pantalla.</p>';
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="error">❌ Error: ${error.message}</p>`;
+            }
+        }
+    </script>
+</body>
+
+</html>
