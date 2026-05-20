@@ -554,5 +554,31 @@ export function useOrderActions() {
         return text;
     };
 
-    return { ...state, markAsPaid, cancelOrder, voidPaidOrder, copyOrderData };
+    /** Reasignar un pedido a otro vendedor */
+    const reassignOrder = async (orderId: string, targetEmail: string) => {
+        setState({ loading: true, error: null });
+        try {
+            if (!user) throw new Error('Debes iniciar sesion.');
+            const userTag = resolveUserTag(user.email || '');
+            if (!CLP_ADMIN_TAGS.has(userTag) && !isSuperAdminEmail(user.email)) {
+                throw new Error('Solo los administradores principales pueden reasignar pedidos.');
+            }
+
+            const targetTag = resolveUserTag(targetEmail);
+            if (!targetTag) throw new Error('El correo destino no esta registrado o no tiene tag asociado.');
+
+            const functions = getFunctions();
+            const callable = httpsCallable<{ orderId: string; targetEmail: string }, { success: boolean }>(functions, 'reassignOrder');
+            await callable({ orderId, targetEmail });
+
+            setState({ loading: false, error: null });
+            return true;
+        } catch (err: any) {
+            const msg = err.message || 'Error al reasignar el pedido';
+            setState({ loading: false, error: msg });
+            throw new Error(msg);
+        }
+    };
+
+    return { ...state, markAsPaid, cancelOrder, voidPaidOrder, copyOrderData, reassignOrder };
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { SUPER_ADMIN_EMAIL, computeInterbankFee, isSuperAdminEmail, normalizeBankName } from '../lib/constants';
+import { SUPER_ADMIN_EMAIL, computeInterbankFee, isSuperAdminEmail, normalizeBankName, USER_TAGS, resolveUserTag } from '../lib/constants';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth, useOrderActions, useVesAccounts } from '../hooks';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
@@ -21,7 +21,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 export function OrderDetailModal({ order, isOpen, onClose }: Props) {
     const { user, role } = useAuth();
-    const { markAsPaid, cancelOrder, voidPaidOrder, copyOrderData, loading: actionsLoading, error } = useOrderActions();
+    const { markAsPaid, cancelOrder, voidPaidOrder, copyOrderData, reassignOrder, loading: actionsLoading, error } = useOrderActions();
     const { accounts } = useVesAccounts();
     const [files, setFiles] = useState<File[]>([]);
     const [sourceAccountId, setSourceAccountId] = useState('');
@@ -31,6 +31,9 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
     const [toast, setToast] = useState('');
     const [resendingEmail, setResendingEmail] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const [isEditingSeller, setIsEditingSeller] = useState(false);
+    const [targetSellerEmail, setTargetSellerEmail] = useState('');
 
     const loading = actionsLoading || resendingEmail;
     const canVoidPaidOrder = role === 'admin' && isSuperAdminEmail(user?.email) && order?.status === 'Pagado';
@@ -54,10 +57,25 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
     useEffect(() => {
         if (isOpen) {
             setCancelConfirmStep(0);
+            setIsEditingSeller(false);
         }
     }, [isOpen, order?.id]);
 
     if (!order) return null;
+
+    const canReassign = role === 'admin' || isSuperAdminEmail(user?.email);
+
+    const handleReassign = async () => {
+        if (!targetSellerEmail) return;
+        try {
+            await reassignOrder(order.id, targetSellerEmail);
+            setToast('✅ Pedido reasignado correctamente');
+            setIsEditingSeller(false);
+            setTimeout(() => { setToast(''); onClose(); }, 1200);
+        } catch {
+            // Error handled in hook
+        }
+    };
 
     const handleMarkPaid = async () => {
         if (!showUpload) {
@@ -171,6 +189,52 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                         <span className="text-xs text-gray-400">Cliente</span>
                         <span className="text-sm font-semibold text-gray-800">{order.clientName}</span>
                     </div>
+                    {canReassign && (
+                        <div className="flex flex-col gap-1 py-1 border-y border-gray-100 my-1">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs text-gray-400">Vendedor (Creador)</span>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-mono text-gray-700 bg-gray-100 px-1.5 rounded">
+                                        {resolveUserTag(order.createdByTag || order.sellerEmail || '') || order.createdByTag}
+                                    </span>
+                                    <button 
+                                        onClick={() => {
+                                            setIsEditingSeller(!isEditingSeller);
+                                            setTargetSellerEmail(order.sellerEmail || order.createdByTag || '');
+                                        }}
+                                        className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded border border-blue-100 hover:bg-blue-100"
+                                    >
+                                        Editar
+                                    </button>
+                                </div>
+                            </div>
+                            {isEditingSeller && (
+                                <div className="flex gap-2 items-center mt-1">
+                                    <select 
+                                        value={targetSellerEmail} 
+                                        onChange={(e) => setTargetSellerEmail(e.target.value)}
+                                        className="flex-1 text-xs border-gray-200 rounded p-1.5 focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">Selecciona vendedor...</option>
+                                        {Object.entries(USER_TAGS).map(([email, tag]) => (
+                                            <option key={email} value={email}>
+                                                {tag} - {email}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <Button 
+                                        variant="primary" 
+                                        onClick={handleReassign} 
+                                        isLoading={loading} 
+                                        className="!text-[10px] !py-1.5 !px-3"
+                                        disabled={!targetSellerEmail || targetSellerEmail === (order.sellerEmail || order.createdByTag)}
+                                    >
+                                        Guardar
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                     <div className="flex justify-between">
                         <span className="text-xs text-gray-400">Cédula</span>
                         <span className="text-sm font-mono text-gray-700">{order.cedula}</span>
