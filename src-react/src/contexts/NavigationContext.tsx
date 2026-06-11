@@ -16,7 +16,8 @@ export type Screen =
 
 interface NavigationContextType {
     screen: Screen;
-    navigate: (screen: Screen) => void;
+    params: any;
+    navigate: (screen: Screen, params?: any) => void;
     goHome: () => void;
 }
 
@@ -35,19 +36,41 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
         return 'dashboard';
     });
 
-    const navigate = useCallback((s: Screen) => setScreen(s), []);
-    const goHome = useCallback(() => setScreen('dashboard'), []);
+    const [params, setParams] = useState<any>(() => {
+        if (typeof window !== 'undefined') {
+            const searchParams = new URLSearchParams(window.location.search);
+            const orderId = searchParams.get('orderId');
+            const purchaseId = searchParams.get('purchaseId');
+            const result: Record<string, any> = {};
+            if (orderId) result.orderId = orderId;
+            if (purchaseId) result.purchaseId = purchaseId;
+            return Object.keys(result).length > 0 ? result : null;
+        }
+        return null;
+    });
+
+    const navigate = useCallback((s: Screen, p?: any) => {
+        setScreen(s);
+        setParams(p || null);
+    }, []);
+
+    const goHome = useCallback(() => {
+        setScreen('dashboard');
+        setParams(null);
+    }, []);
 
     useEffect(() => {
         const handleNavigate = (e: Event) => {
             const customEvent = e as CustomEvent;
             if (customEvent.detail && customEvent.detail.screen) {
                 setScreen(customEvent.detail.screen as Screen);
+                setParams(customEvent.detail.params || null);
             }
         };
         const handleSwMessage = (event: MessageEvent) => {
             if (event.data && event.data.type === 'manzano-navigate' && event.data.screen) {
                 setScreen(event.data.screen as Screen);
+                setParams(event.data.params || null);
             }
         };
 
@@ -65,7 +88,7 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
     }, []);
 
     return (
-        <NavigationContext.Provider value={{ screen, navigate, goHome }}>
+        <NavigationContext.Provider value={{ screen, params, navigate, goHome }}>
             {children}
         </NavigationContext.Provider>
     );

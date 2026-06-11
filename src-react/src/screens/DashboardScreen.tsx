@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { Directory, Filesystem } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { useAuth, useExchangeRates, useOrders, useOrderActions } from '../hooks';
@@ -260,7 +262,7 @@ export function DashboardScreen() {
     const { totalBalance: vesTotalBalance, loading: vesAccountsLoading } = useVesAccounts();
     const { pending, paid, loading: ordersLoading } = useOrders();
     const { cancelOrder, copyOrderData, loading: actionLoading } = useOrderActions();
-    const { navigate } = useNavigation();
+    const { navigate, params } = useNavigation();
     const toast = useToast();
     const [isOrderFormOpen, setIsOrderFormOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -286,6 +288,31 @@ export function DashboardScreen() {
             checkWalletBalance('USDT');
         }
     }, [role, checkWalletBalance]);
+
+    useEffect(() => {
+        if (params?.orderId) {
+            const found = pending.find(o => o.id === params.orderId) || paid.find(o => o.id === params.orderId);
+            if (found) {
+                setSelectedOrder(found);
+                navigate('dashboard', null);
+            } else {
+                const fetchOrder = async () => {
+                    try {
+                        const orderRef = doc(db, 'orders', params.orderId);
+                        const orderSnap = await getDoc(orderRef);
+                        if (orderSnap.exists()) {
+                            setSelectedOrder({ id: orderSnap.id, ...orderSnap.data() } as Order);
+                        }
+                    } catch (e) {
+                        console.error('Error fetching order by ID:', e);
+                    } finally {
+                        navigate('dashboard', null);
+                    }
+                };
+                void fetchOrder();
+            }
+        }
+    }, [params, pending, paid, navigate]);
 
     const handleCancelOrder = async (order: Order) => {
         try {

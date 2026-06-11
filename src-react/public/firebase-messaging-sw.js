@@ -59,35 +59,40 @@ self.addEventListener('notificationclick', (event) => {
     event.notification.close();
 
     const data = event.notification.data || {};
-    let targetPath = '/';
+    let url = '/';
     
-    if (data.type === 'new_order') {
-        targetPath = '/?screen=dashboard';
-    } else if (data.type === 'order_update') {
-        targetPath = '/?screen=history';
-    } else if (data.type === 'wholesale_purchase') {
-        targetPath = '/?screen=wholesale-purchases';
+    if (data.orderID) {
+        if (data.type === 'new_order') {
+            url = '/?screen=dashboard&orderId=' + data.orderID;
+        } else {
+            url = '/?screen=history&orderId=' + data.orderID;
+        }
+    } else if (data.purchaseID) {
+        url = '/?screen=wholesale-purchases&purchaseId=' + data.purchaseID;
     } else if (data.type === 'balance_load') {
-        targetPath = '/?screen=balance';
+        url = '/?screen=balance';
     } else if (data.type === 'exchange_rate_update') {
-        targetPath = '/?screen=calculator';
+        url = '/?screen=calculator';
+    } else if (data.type === 'new_order') {
+        url = '/?screen=dashboard';
+    } else if (data.type === 'order_update') {
+        url = '/?screen=history';
+    } else if (data.type === 'wholesale_purchase') {
+        url = '/?screen=wholesale-purchases';
     }
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
             for (let i = 0; i < windowClients.length; i++) {
                 const client = windowClients[i];
-                if (client.url && client.url.includes(self.location.origin)) {
-                    client.focus();
-                    const screenMatch = targetPath.match(/screen=([^&]+)/);
-                    if (screenMatch) {
-                        client.postMessage({ type: 'manzano-navigate', screen: screenMatch[1] });
-                    }
-                    return;
+                if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) {
+                    return client.navigate(url).then((focusedClient) => {
+                        if (focusedClient) focusedClient.focus();
+                    });
                 }
             }
             if (clients.openWindow) {
-                return clients.openWindow(targetPath);
+                return clients.openWindow(url);
             }
         })
     );

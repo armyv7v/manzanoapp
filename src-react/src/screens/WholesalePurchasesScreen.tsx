@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button } from '../components/ui';
 import { useNavigation } from '../contexts/NavigationContext';
+import { useAuth } from '../hooks';
 import { useBinanceAPI } from '../hooks/useBinanceAPI';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { useWholesalePurchases } from '../hooks/useWholesalePurchases';
@@ -82,7 +83,8 @@ const round4 = (value: number): number => Math.round((value + Number.EPSILON) * 
 const round6 = (value: number): number => Math.round((value + Number.EPSILON) * 1_000_000) / 1_000_000;
 
 export function WholesalePurchasesScreen({ onBack }: Props = {}) {
-    const { goHome } = useNavigation();
+    const { user } = useAuth();
+    const { goHome, navigate, params } = useNavigation();
     const handleBack = onBack || goHome;
     const { rates } = useExchangeRates();
     const { fetchP2PRate, fetchVesSellFifthBdvRate } = useBinanceAPI();
@@ -97,7 +99,13 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
         search,
         createPurchase,
         loadLatest,
+        updatePurchaseStatus,
     } = useWholesalePurchases();
+
+    const isA1A2 = useMemo(() => {
+        const email = user?.email?.toLowerCase();
+        return email === 'enderjpinar@gmail.com' || email === 'namv2210@gmail.com';
+    }, [user?.email]);
 
     const [vesAmountInput, setVesAmountInput] = useState('');
     const [rateInput, setRateInput] = useState('');
@@ -107,6 +115,7 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
 
     const [quoteLoading, setQuoteLoading] = useState(false);
     const [quoteError, setQuoteError] = useState<string | null>(null);
+    const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
     const todayIso = formatDateInputLocal(new Date());
     const [startDate, setStartDate] = useState(todayIso);
@@ -144,6 +153,39 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
         loadLatest();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loadLatest, search]);
+
+    useEffect(() => {
+        if (params?.purchaseId) {
+            setHighlightedId(params.purchaseId);
+            const fetchAndSearch = async () => {
+                try {
+                    const { doc, getDoc } = await import('firebase/firestore');
+                    const { db } = await import('../lib/firebase');
+                    const purchaseRef = doc(db, 'wholesale_purchases', params.purchaseId);
+                    const purchaseSnap = await getDoc(purchaseRef);
+                    if (purchaseSnap.exists()) {
+                        const data = purchaseSnap.data();
+                        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+                        setStartDate(formatDateInputLocal(date));
+                        setEndDate(formatDateInputLocal(date));
+                        await search(date, date);
+                    }
+                } catch (e) {
+                    console.error('Error fetching purchase by ID:', e);
+                } finally {
+                    navigate('wholesale-purchases', null);
+                }
+            };
+            void fetchAndSearch();
+        }
+    }, [params, search, navigate]);
+
+    useEffect(() => {
+        if (highlightedId) {
+            const timer = setTimeout(() => setHighlightedId(null), 4000);
+            return () => clearTimeout(timer);
+        }
+    }, [highlightedId]);
 
     useEffect(() => {
         if (!latestPurchase) return;
@@ -373,7 +415,7 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
                 {!loading && entries.length > 0 && (
                     <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
                         <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse min-w-[760px]">
+                            <table className="w-full text-left border-collapse min-w-[820px]">
                                 <thead>
                                     <tr className="bg-gray-50 border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-500">
                                         <th className="px-4 py-3 font-semibold">ID</th>
@@ -381,13 +423,20 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
                                         <th className="px-4 py-3 font-semibold text-right">Cantidad VES</th>
                                         <th className="px-4 py-3 font-semibold text-right">Tasa CLP/VES</th>
                                         <th className="px-4 py-3 font-semibold text-right">Cantidad USDT</th>
+                                        <th className="px-4 py-3 font-semibold text-right w-32">Estado</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50 bg-white">
                                     {entries.map((entry) => {
                                         const date = entry.createdAt?.toDate ? entry.createdAt.toDate() : new Date();
+                                        const isHighlighted = highlightedId === entry.id;
                                         return (
-                                            <tr key={entry.id} className="hover:bg-gray-50/50 transition-colors">
+                                            <tr 
+                                                key={entry.id} 
+                                                className={`hover:bg-gray-50/50 transition-all duration-300 ${
+                                                    isHighlighted ? 'bg-amber-50 border border-amber-300 ring-2 ring-amber-100 font-medium' : ''
+                                                }`}
+                                            >
                                                 <td className="px-4 py-2.5 text-[11px] text-gray-500 font-mono whitespace-nowrap">
                                                     {entry.id.slice(0, 8)}
                                                 </td>
@@ -405,6 +454,36 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
                                                 </td>
                                                 <td className="px-4 py-2.5 text-right font-medium text-[11px] text-violet-700 tabular-nums">
                                                     {entry.usdtNeeded.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-right">
+                                                    {isA1A2 ? (
+                                                        <div className="flex items-center gap-1.5 justify-end">
+                                                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                                                entry.status === 'En proceso' ? 'bg-amber-500 animate-pulse' :
+                                                                entry.status === 'Completada' ? 'bg-emerald-500' :
+                                                                'bg-gray-400'
+                                                            }`} />
+                                                            <select
+                                                                value={entry.status || 'Ingresada'}
+                                                                onChange={(e) => updatePurchaseStatus(entry.id, e.target.value as any)}
+                                                                disabled={saving}
+                                                                className="text-[10px] bg-transparent border-none focus:ring-0 p-0 text-gray-600 font-semibold cursor-pointer outline-none w-20 text-right"
+                                                            >
+                                                                <option value="Ingresada">Ingresada</option>
+                                                                <option value="En proceso">En proceso</option>
+                                                                <option value="Completada">Completada</option>
+                                                            </select>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1.5 justify-end text-[10px] text-gray-600 font-semibold">
+                                                            <span className={`w-2 h-2 rounded-full shrink-0 ${
+                                                                entry.status === 'En proceso' ? 'bg-amber-500' :
+                                                                entry.status === 'Completada' ? 'bg-emerald-500' :
+                                                                'bg-gray-400'
+                                                            }`} />
+                                                            <span>{entry.status || 'Ingresada'}</span>
+                                                        </div>
+                                                    )}
                                                 </td>
                                             </tr>
                                         );

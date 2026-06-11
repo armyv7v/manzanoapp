@@ -23,6 +23,7 @@ export interface WholesalePurchaseEntry {
     source: string;
     createdBy: string;
     createdAt: any;
+    status: 'Ingresada' | 'En proceso' | 'Completada';
 }
 
 interface WholesalePurchasesState {
@@ -71,6 +72,7 @@ export function useWholesalePurchases() {
                 source: typeof data?.source === 'string' ? data.source : 'Manual',
                 createdBy: typeof data?.createdBy === 'string' ? data.createdBy : 'ADMIN',
                 createdAt: data?.createdAt || null,
+                status: typeof data?.status === 'string' ? (data.status as any) : 'Ingresada',
             } : null;
 
             setState((prev) => ({ ...prev, latestPurchase }));
@@ -110,6 +112,7 @@ export function useWholesalePurchases() {
                     source: typeof data.source === 'string' ? data.source : 'Manual',
                     createdBy: typeof data.createdBy === 'string' ? data.createdBy : 'ADMIN',
                     createdAt: data.createdAt || null,
+                    status: typeof data.status === 'string' ? (data.status as any) : 'Ingresada',
                 };
             });
 
@@ -161,6 +164,7 @@ export function useWholesalePurchases() {
                     source: payload.source,
                     createdBy: user.email,
                     createdAt: now,
+                    status: 'Ingresada',
                 });
 
                 // Esta tasa queda como referencia por defecto para futuras cargas de saldo.
@@ -180,10 +184,42 @@ export function useWholesalePurchases() {
         }
     }, [loadLatest, user?.email]);
 
+    const updatePurchaseStatus = useCallback(async (purchaseId: string, status: 'Ingresada' | 'En proceso' | 'Completada') => {
+        setState((prev) => ({ ...prev, saving: true, error: null }));
+        try {
+            if (!user?.email) throw new Error('Debes iniciar sesión.');
+            const adminEmails = ['enderjpinar@gmail.com', 'namv2210@gmail.com'];
+            if (!adminEmails.includes(user.email.toLowerCase())) {
+                throw new Error('Solo los administradores A1 y A2 pueden cambiar el estatus.');
+            }
+
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const purchaseRef = doc(db, 'wholesale_purchases', purchaseId);
+            await updateDoc(purchaseRef, { status });
+
+            setState((prev) => ({
+                ...prev,
+                saving: false,
+                entries: prev.entries.map(e => e.id === purchaseId ? { ...e, status } : e),
+                latestPurchase: prev.latestPurchase && prev.latestPurchase.id === purchaseId ? { ...prev.latestPurchase, status } : prev.latestPurchase,
+                error: null
+            }));
+            return true;
+        } catch (err: any) {
+            setState((prev) => ({
+                ...prev,
+                saving: false,
+                error: err?.message || 'No se pudo actualizar el estatus de la compra.',
+            }));
+            return false;
+        }
+    }, [user?.email]);
+
     return {
         ...state,
         search,
         loadLatest,
         createPurchase,
+        updatePurchaseStatus,
     };
 }

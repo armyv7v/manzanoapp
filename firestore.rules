@@ -111,7 +111,11 @@ service cloud.firestore {
     }
 
     match /wholesale_purchases/{purchaseId} {
-      allow read, write: if isAdmin();
+      allow read, create: if isAdmin();
+      allow update, delete: if isAdmin() && (
+        request.auth.token.email == 'enderjpinar@gmail.com' ||
+        request.auth.token.email == 'namv2210@gmail.com'
+      );
     }
 
     match /settings/{docId} {

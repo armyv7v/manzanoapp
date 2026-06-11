@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { useHistoricalOrders } from '../hooks/useHistoricalOrders';
 import { Button } from '../components/ui';
 import { OrderDetailModal } from './OrderDetailModal';
@@ -26,13 +28,38 @@ interface Props {
 }
 
 export function HistoryScreen({ onBack }: Props = {}) {
-    const { goHome } = useNavigation();
+    const { goHome, navigate, params, screen } = useNavigation();
     const handleBack = onBack || goHome;
     const { orders, loading, error, summary, search } = useHistoricalOrders();
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
     const [statusFilter, setStatusFilter] = useState('Todos');
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+
+    useEffect(() => {
+        if (params?.orderId) {
+            const found = orders.find(o => o.id === params.orderId);
+            if (found) {
+                setSelectedOrder(found);
+                navigate(screen, null);
+            } else {
+                const fetchOrder = async () => {
+                    try {
+                        const orderRef = doc(db, 'orders', params.orderId);
+                        const orderSnap = await getDoc(orderRef);
+                        if (orderSnap.exists()) {
+                            setSelectedOrder({ id: orderSnap.id, ...orderSnap.data() } as Order);
+                        }
+                    } catch (e) {
+                        console.error('Error fetching order by ID:', e);
+                    } finally {
+                        navigate(screen, null);
+                    }
+                };
+                void fetchOrder();
+            }
+        }
+    }, [params, orders, navigate, screen]);
 
     const handleSearch = () => {
         if (!startDate || !endDate) return;

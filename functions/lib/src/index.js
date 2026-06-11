@@ -23,7 +23,7 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.binanceVpsProxy = exports.notifyBalanceLoad = exports.notifyExchangeRateUpdate = exports.notifyBinanceP2PActionUpdate = exports.notifyOrderUpdate = exports.notifyNewWholesalePurchase = exports.notifyNewOrder = exports.voidPaidOrder = exports.resendOrderEmail = exports.validateAndSignIn = exports.setAdminClaim = exports.cancelBinanceP2PAction = exports.requestBinanceP2PAction = exports.testPushNotification = exports.ensureUserProfile = exports.helloWorld = exports.syncClpBalanceFromRate = exports.syncClpBalanceFromAccounts = void 0;
+exports.reassignOrder = exports.binanceVpsProxy = exports.notifyBalanceLoad = exports.notifyExchangeRateUpdate = exports.notifyBinanceP2PActionUpdate = exports.notifyOrderUpdate = exports.notifyNewWholesalePurchase = exports.notifyNewOrder = exports.voidPaidOrder = exports.resendOrderEmail = exports.validateAndSignIn = exports.setAdminClaim = exports.cancelBinanceP2PAction = exports.requestBinanceP2PAction = exports.testPushNotification = exports.ensureUserProfile = exports.helloWorld = exports.syncClpBalanceFromRate = exports.syncClpBalanceFromAccounts = void 0;
 const https_1 = require("firebase-functions/v2/https");
 const firestore_1 = require("firebase-functions/v2/firestore");
 const params_1 = require("firebase-functions/params");
@@ -1019,8 +1019,10 @@ exports.notifyNewWholesalePurchase = (0, firestore_1.onDocumentCreated)("wholesa
         }
         const usdtAmount = data.usdtNeeded || 0;
         const formattedAmount = usdtAmount.toLocaleString('en-US', { minimumFractionDigits: 2 });
-        // Explicit requested format: "Se ha registrado COMPRA de X CANTIDAD de USDT"
-        const notificationBody = `Se ha registrado Compra de 💲${formattedAmount} de USDT`;
+        const vesAmount = data.vesAmountComputed || 0;
+        const formattedVes = vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 });
+        // Explicit requested format: "Se ha registrado COMPRA de X CANTIDAD de USDT. Equivalente: Y VES"
+        const notificationBody = `Se ha registrado Compra de 💲${formattedAmount} de USDT. Equivalente: ${formattedVes} VES`;
         const payload = {
             notification: {
                 title: "Nueva Compra Mayorista",
@@ -1437,6 +1439,56 @@ exports.binanceVpsProxy = (0, https_1.onRequest)({ cors: false }, async (req, re
     catch (error) {
         logger.error("Error critico en Proxy VPS:", error);
         res.status(500).json({ error: "Fallo comunicacion con el VPS de Binance.", details: String(error) });
+    }
+});
+/**
+ * Reassign an order to a different seller
+ */
+exports.reassignOrder = (0, https_1.onCall)(async (request) => {
+    if (!request.auth) {
+        throw new https_1.HttpsError("unauthenticated", "Debes estar autenticado.");
+    }
+    const email = request.auth.token.email;
+    const userTag = resolveUserTag(email || "");
+    // Only admins can reassign, specifically A1 or A2 as requested, but we can allow all admins or just A1/A2.
+    if (request.auth.token.admin !== true) {
+        throw new https_1.HttpsError("permission-denied", "Solo los administradores pueden reasignar pedidos.");
+    }
+    // Enforce A1/A2 or SuperAdmin
+    if (!CLP_ADMIN_TAGS.has(userTag) && !isSuperAdminEmail(email)) {
+        throw new https_1.HttpsError("permission-denied", "Solo los administradores principales pueden reasignar pedidos.");
+    }
+    const orderId = typeof request.data?.orderId === "string" ? request.data.orderId.trim() : "";
+    const targetEmail = typeof request.data?.targetEmail === "string" ? request.data.targetEmail.trim() : "";
+    if (!orderId || !targetEmail) {
+        throw new https_1.HttpsError("invalid-argument", "Falta ID del pedido o email destino.");
+    }
+    try {
+        const targetUserRecord = await admin.auth().getUserByEmail(targetEmail);
+        const db = admin.firestore();
+        const orderRef = db.collection("orders").doc(orderId);
+        const orderDoc = await orderRef.get();
+        if (!orderDoc.exists) {
+            throw new https_1.HttpsError("not-found", "El pedido no existe.");
+        }
+        const updateData = {
+            createdByTag: targetEmail,
+            sellerEmail: targetEmail,
+            sellerId: targetUserRecord.uid
+        };
+        if (targetUserRecord.customClaims && typeof targetUserRecord.customClaims.commissionRate === 'number') {
+            updateData.sellerCommissionRate = targetUserRecord.customClaims.commissionRate;
+        }
+        else {
+            updateData.sellerCommissionRate = 0;
+        }
+        await orderRef.update(updateData);
+        logger.info(`Order ${orderId} reassigned to ${targetEmail} by ${email}`);
+        return { success: true };
+    }
+    catch (error) {
+        logger.error("Error reassigning order:", error);
+        throw new https_1.HttpsError("internal", "Error al reasignar el pedido. Puede que el usuario no exista.");
     }
 });
 //# sourceMappingURL=index.js.map

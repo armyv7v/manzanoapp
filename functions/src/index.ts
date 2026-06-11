@@ -1156,9 +1156,11 @@ export const notifyNewWholesalePurchase = onDocumentCreated("wholesale_purchases
 
     const usdtAmount = data.usdtNeeded || 0;
     const formattedAmount = usdtAmount.toLocaleString('en-US', { minimumFractionDigits: 2 });
+    const vesAmount = data.vesAmountComputed || 0;
+    const formattedVes = vesAmount.toLocaleString('es-VE', { minimumFractionDigits: 2 });
 
-    // Explicit requested format: "Se ha registrado COMPRA de X CANTIDAD de USDT"
-    const notificationBody = `Se ha registrado Compra de 💲${formattedAmount} de USDT`;
+    // Explicit requested format: "Se ha registrado COMPRA de X CANTIDAD de USDT. Equivalente: Y VES"
+    const notificationBody = `Se ha registrado Compra de 💲${formattedAmount} de USDT. Equivalente: ${formattedVes} VES`;
 
     const payload = {
       notification: {

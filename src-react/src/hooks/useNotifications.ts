@@ -269,13 +269,26 @@ export function useNotifications() {
                     console.log('Mobile Push clicked:', notificationAction);
                     const data = notificationAction.notification.data || {};
                     let targetScreen = 'dashboard';
-                    if (data.type === 'new_order') targetScreen = 'dashboard';
-                    else if (data.type === 'order_update') targetScreen = 'history';
-                    else if (data.type === 'wholesale_purchase') targetScreen = 'wholesale-purchases';
-                    else if (data.type === 'balance_load') targetScreen = 'balance';
-                    else if (data.type === 'exchange_rate_update') targetScreen = 'calculator';
+                    const params: Record<string, any> = {};
 
-                    window.dispatchEvent(new CustomEvent('manzano-navigate', { detail: { screen: targetScreen } }));
+                    if (data.type === 'new_order') {
+                        targetScreen = 'dashboard';
+                        if (data.orderID) params.orderId = data.orderID;
+                    } else if (data.type === 'order_update') {
+                        targetScreen = 'history';
+                        if (data.orderID) params.orderId = data.orderID;
+                    } else if (data.type === 'wholesale_purchase') {
+                        targetScreen = 'wholesale-purchases';
+                        if (data.purchaseID) params.purchaseId = data.purchaseID;
+                    } else if (data.type === 'balance_load') {
+                        targetScreen = 'balance';
+                    } else if (data.type === 'exchange_rate_update') {
+                        targetScreen = 'calculator';
+                    }
+
+                    window.dispatchEvent(new CustomEvent('manzano-navigate', { 
+                        detail: { screen: targetScreen, params } 
+                    }));
                 });
                 nativeHandles.push(notificationActionHandle);
             };
