@@ -1497,13 +1497,31 @@ export const notifyBalanceLoad = onDocumentCreated("balance_history/{historyId}"
   logger.info("Balance load detected", { historyId });
 
   try {
+    // Auto-complete wholesale purchases with matching VES amount
+    const amount = data.amount || 0;
+    if (amount > 0) {
+      const db = admin.firestore();
+      const purchasesSnap = await db.collection("wholesale_purchases")
+        .where("vesAmountComputed", "==", amount)
+        .where("status", "in", ["Ingresada", "En proceso"])
+        .get();
+
+      if (!purchasesSnap.empty) {
+        const batch = db.batch();
+        purchasesSnap.docs.forEach((docSnap) => {
+          batch.update(docSnap.ref, { status: "Completada" });
+        });
+        await batch.commit();
+        logger.info(`Automatically completed ${purchasesSnap.size} wholesale purchases for amount ${amount}`, { historyId });
+      }
+    }
+
     const tokenList = await getAdminTokens();
     if (tokenList.length === 0) {
       logger.info("No admin tokens found, skipping balance notification");
       return null;
     }
 
-    const amount = data.amount || 0;
     const holder = data.holder || 'N/A';
     const bank = data.bank || 'N/A';
     const formattedAmount = amount.toLocaleString('es-VE', { minimumFractionDigits: 2 });
