@@ -198,7 +198,7 @@ export function useBinanceAPI() {
         const rows = await fetchP2POffers({
             fiat: 'VES',
             asset: 'USDT',
-            tradeType: 'SELL',
+            tradeType: 'BUY',
             rows: 20,
             payTypes: ['BancoDeVenezuela'],
             amount: targetAmount,

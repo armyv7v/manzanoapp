@@ -3,7 +3,7 @@ import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
 import type { ExchangeRates } from './useExchangeRates';
-import { VENEZUELAN_BANK_PREFIXES, shouldRestrictOrdersByVesBalance } from '../lib/constants';
+import { VENEZUELAN_BANK_PREFIXES, isOrderBalanceRestrictionActive } from '../lib/constants';
 
 export type OrderType = 'transferencia' | 'pago-movil' | 'recarga-saldo';
 
@@ -40,7 +40,8 @@ export function useCreateOrder() {
 
         try {
             if (!user) throw new Error('Debes iniciar sesion para crear pedidos.');
-            const shouldEnforceVesBalance = shouldRestrictOrdersByVesBalance(role);
+            const isHourRestrictionActive = isOrderBalanceRestrictionActive();
+            const shouldEnforceVesBalance = (role === 'seller' || role === 'client') && isHourRestrictionActive;
 
             const rate = rates.VES || 0;
             if (rate <= 0) throw new Error('La tasa de cambio no esta disponible.');
