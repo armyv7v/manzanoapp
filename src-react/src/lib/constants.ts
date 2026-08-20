@@ -81,12 +81,33 @@ export const normalizeBankName = (value: string): string =>
     (typeof value === 'string' ? value.trim().toLowerCase() : '');
 
 /**
- * Calcula la comisión por transferencia interbancaria.
- * < 700 VES → 2 VES fijo; ≥ 700 VES → 0.3% del monto.
+ * Tasas de comisión aplicadas al procesar un pedido.
+ */
+export const ADMIN_COMMISSION_RATE = 0.01;    // 1%
+export const TILLO_COMMISSION_RATE = 0.0015;  // 0.15%
+
+/**
+ * Calcula el monto total proyectado de un pedido incluyendo las comisiones admin y Tillo.
+ * Usa Math.ceil con precisión de 2 decimales para cada comisión.
+ */
+export const computeOrderTotalWithCommissions = (destinationAmount: number): {
+    adminCommission: number;
+    tilloCommission: number;
+    totalConComisiones: number;
+} => {
+    const adminCommission  = Math.ceil(destinationAmount * ADMIN_COMMISSION_RATE  * 100) / 100;
+    const tilloCommission  = Math.ceil(destinationAmount * TILLO_COMMISSION_RATE  * 100) / 100;
+    const totalConComisiones = destinationAmount + adminCommission + tilloCommission;
+    return { adminCommission, tilloCommission, totalConComisiones };
+};
+
+/**
+ * Calcula la comisión por transferencia interbancaria / pago móvil P2P.
+ * < 4600 VES → 14 VES fijo (mínimo de comisión); ≥ 4600 VES → 0.30% del monto (mínimo 14 VES).
  */
 export const computeInterbankFee = (amount: number): number => {
     if (typeof amount !== 'number' || amount <= 0) return 0;
-    const fee = amount < 700 ? 2 : amount * 0.003;
+    const fee = amount < 4600 ? 14 : Math.max(14, amount * 0.003);
     return Math.ceil(fee * 100) / 100; // Round up to 2 decimals
 };
 
