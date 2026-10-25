@@ -155,7 +155,10 @@ export function AccountsScreen({ onBack }: Props = {}) {
                         )}
 
                         {Object.entries(holders)
-                        .map(([holder, allAccs]) => [holder, allAccs.filter(a => a.balance > 0 && !isSourceAccount(a))] as const)
+                        // Las cuentas pagadoras con un número registrado deben quedar visibles
+                        // aunque aún no tengan saldo. Esto permite confirmar que una cuenta
+                        // recién agregada está disponible sin alterar su balance inicial.
+                        .map(([holder, allAccs]) => [holder, allAccs.filter(a => !isSourceAccount(a) && (a.balance > 0 || Boolean(a.accountNumber)))] as const)
                         .filter(([, accs]) => accs.length > 0)
                         .sort(([, a], [, b]) => {
                             const totalA = a.reduce((s, acc) => s + acc.balance, 0);
