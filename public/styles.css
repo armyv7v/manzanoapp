@@ -1,4 +1,0 @@
-audio,canvas,embed,iframe,img,object,svg,video {
-    display: block;
-    /* Removed vertical-align since it's ignored with display: block */
-}

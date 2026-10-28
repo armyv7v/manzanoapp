@@ -1,0 +1,13 @@
+{
+  "name": "play-upload",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Sube el AAB a Google Play con la Android Publisher API",
+  "type": "module",
+  "scripts": {
+    "upload": "node upload.mjs --aab ../../android/app/build/outputs/bundle/release/app-release.aab --track internal"
+  },
+  "dependencies": {
+    "googleapis": "^178.0.0"
+  }
+}
