@@ -79,8 +79,26 @@ google-services.json
 
 # Sensitive files
 serviceAccountKey.json
+tools/play-upload/play-key.json
+.env.local
+.env.*.local
+
+# Bots locales con perfiles de navegador (sesiones bancarias - nunca commitear)
+bdv-bot/
 
 # IDE and Agent Metadata
 .agent/
 .idea/
 .vscode/
+.kiro/
+.atl/
+.codex-remote-attachments/
+
+# Scratch local
+tmp/
+src-react/build_log*.txt
+functions/fns_list.txt
+tools/play-upload/*.exe
+
+# Build output de Cloud Functions (el deploy lo regenera con npm run build)
+functions/lib/
