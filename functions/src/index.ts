@@ -7,7 +7,12 @@ import * as admin from "firebase-admin";
 admin.initializeApp();
 
 const brevoApiKey = defineSecret("BREVO_API_KEY");
+const vpsAuthToken = defineSecret("VPS_AUTH_TOKEN");
 const SUPER_ADMIN_EMAIL = "enderjpinar@gmail.com";
+const WHOLESALE_CALCULATOR_ADMIN_EMAILS = new Set([
+  SUPER_ADMIN_EMAIL,
+  "namv2210@gmail.com",
+]);
 const CLP_ADMIN_TAGS = new Set(["A1", "A2"]);
 const VES_ADMIN_TAGS = new Set(["A3", "A4", "A5"]);
 const USER_TAGS: Record<string, string> = {
@@ -44,8 +49,14 @@ function isSuperAdminEmail(raw: string | null | undefined): boolean {
   return (raw || "").trim().toLowerCase() === SUPER_ADMIN_EMAIL;
 }
 
+function canUseWholesaleCalculator(raw: string | null | undefined): boolean {
+  return WHOLESALE_CALCULATOR_ADMIN_EMAILS.has((raw || "").trim().toLowerCase());
+}
+
 const BINANCE_P2P_ALLOWED_ACTIONS = new Set([
   "prepare_sell",
+  "publish_offline_ad",
+  "retry_publish_offline_ad",
   "heartbeat",
 ]);
 
@@ -54,6 +65,8 @@ type BinanceP2PActionPayload = {
   amountMode?: "fiat" | "asset";
   advertiser?: string;
   rowIndex?: number;
+  wholesalePurchaseId?: string;
+  amountUsdt?: number;
 };
 
 function assertSuperAdmin(request: Parameters<typeof onCall>[0] extends never ? never : any): { uid: string; email: string } {
@@ -73,8 +86,16 @@ function assertSuperAdmin(request: Parameters<typeof onCall>[0] extends never ? 
 }
 
 function sanitizeBinanceP2PActionPayload(actionType: string, raw: Record<string, unknown>): BinanceP2PActionPayload {
-  if (actionType === "heartbeat") {
+  if (actionType === "heartbeat" || actionType === "publish_offline_ad") {
     return {};
+  }
+
+  if (actionType === "retry_publish_offline_ad") {
+    const wholesalePurchaseId = typeof raw.wholesalePurchaseId === "string" ? raw.wholesalePurchaseId.trim() : "";
+    if (!wholesalePurchaseId || wholesalePurchaseId.length > 128) {
+      throw new HttpsError("invalid-argument", "Debes indicar la compra mayorista a reintentar.");
+    }
+    return { wholesalePurchaseId };
   }
 
   const amount = typeof raw.amount === "string" ? raw.amount.trim() : "";
@@ -421,14 +442,6 @@ function collectTokensFromUser(data: any): string[] {
 }
 
 /**
- * A simple placeholder function to ensure deployment works.
- */
-export const helloWorld = onRequest((request, response) => {
-  logger.info("Hello logs!", { structuredData: true });
-  response.send("Hello from Firebase! Your functions are deploying correctly.");
-});
-
-/**
  * Ensures the authenticated user has a Firestore profile doc managed by backend.
  */
 export const ensureUserProfile = onCall(async (request) => {
@@ -536,6 +549,36 @@ export const requestBinanceP2PAction = onCall(async (request) => {
   }
 
   const db = admin.firestore();
+  let retryPayload: BinanceP2PActionPayload | null = null;
+  if (actionType === "retry_publish_offline_ad") {
+    const requested = sanitizeBinanceP2PActionPayload(actionType, request.data || {});
+    const purchaseSnap = await db.collection("wholesale_purchases").doc(requested.wholesalePurchaseId!).get();
+    const purchase = purchaseSnap.data();
+    if (!purchaseSnap.exists || purchase?.automationStatus !== "transferred" || Number(purchase.transferredUsdt || 0) <= 0) {
+      throw new HttpsError("failed-precondition", "La compra indicada no está transferida a Fondos.");
+    }
+    if (purchase.offlineAdStatus !== "failed") {
+      throw new HttpsError("failed-precondition", "Solo se pueden reintentar anuncios que hayan fallado.");
+    }
+    retryPayload = {
+      wholesalePurchaseId: purchaseSnap.id,
+      amountUsdt: Number(Number(purchase.transferredUsdt).toFixed(8)),
+    };
+  }
+  if (actionType === "prepare_sell") {
+    const latestPurchase = await db.collection("wholesale_purchases")
+      .orderBy("createdAt", "desc")
+      .limit(1)
+      .get();
+    const purchase = latestPurchase.docs[0]?.data();
+    if (!purchase || purchase.automationStatus !== "transferred" || Number(purchase.transferredUsdt || 0) <= 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "El anuncio sólo puede prepararse después de transferir el USDT de la última compra mayorista a Fondos.",
+      );
+    }
+  }
+
   const activeActionSnapshot = await db.collection("binance_p2p_actions")
     .where("status", "in", ["pending", "running"])
     .limit(1)
@@ -549,7 +592,7 @@ export const requestBinanceP2PAction = onCall(async (request) => {
     );
   }
 
-  const payload = sanitizeBinanceP2PActionPayload(actionType, request.data || {});
+  const payload = retryPayload || sanitizeBinanceP2PActionPayload(actionType, request.data || {});
   const actionRef = await db.collection("binance_p2p_actions").add({
     actionType,
     status: "pending",
@@ -779,10 +822,24 @@ export const voidPaidOrder = onCall(async (request) => {
       }
 
       const financials = buildPaidOrderFinancials(orderData);
-      const purchaseRateVESUsed = Number(rateDoc.data()?.purchaseRateVES || 0);
-      const totalDebitClp = purchaseRateVESUsed > 0
-        ? roundUp2(financials.totalDebitVes / purchaseRateVESUsed)
-        : 0;
+
+      // Reversion CLP con la MISMA tasa y monto grabados al pagar (registro
+      // type 'subtract' del pedido en clp_balance_history). Recalcular con la
+      // tasa actual descuadraria el saldo CLP cuando la tasa mayorista cambio
+      // entre el pago y la anulacion.
+      const originalClpDebitSnap = await transaction.get(
+        db.collection("clp_balance_history")
+          .where("orderId", "==", orderId)
+          .where("type", "==", "subtract")
+          .limit(10)
+      );
+      const originalClpDebit = originalClpDebitSnap.empty ? null : originalClpDebitSnap.docs[0].data();
+      const purchaseRateVESUsed = originalClpDebit
+        ? Number(originalClpDebit.purchaseRateVESUsed || 0)
+        : Number(rateDoc.data()?.purchaseRateVES || 0);
+      const totalDebitClp = originalClpDebit
+        ? Number(originalClpDebit.clpAmountComputed || originalClpDebit.amount || 0)
+        : (purchaseRateVESUsed > 0 ? roundUp2(financials.totalDebitVes / purchaseRateVESUsed) : 0);
       const ts = admin.firestore.FieldValue.serverTimestamp();
 
       transaction.update(orderRef, {
@@ -1121,6 +1178,71 @@ export const notifyNewOrder = onDocumentCreated("orders/{orderId}", async (event
     });
 
     logger.info(`Sent ${response.successCount} notifications, ${response.failureCount} failed`);
+
+    // Alerta de Saldo VES Insuficiente a A2 (namv2210@gmail.com)
+    try {
+      const accountsSnap = await admin.firestore().collection("accounts").get();
+      let totalVesBalance = 0;
+      accountsSnap.forEach((d) => {
+        totalVesBalance += Number(d.data()?.balance || 0);
+      });
+      totalVesBalance = round2(totalVesBalance);
+
+      const requiredVes = Number(orderData.destinationAmount || orderData.vesAmount || 0);
+
+      if (requiredVes > 0 && totalVesBalance < requiredVes) {
+        const a2Tokens = await getUserTokensByEmail("namv2210@gmail.com");
+        if (a2Tokens.length > 0) {
+          const formattedRequired = requiredVes.toLocaleString('es-VE', { minimumFractionDigits: 2 });
+          const formattedAvailable = totalVesBalance.toLocaleString('es-VE', { minimumFractionDigits: 2 });
+
+          const alertPayload = {
+            notification: {
+              title: "⚠️ 🚨 SALDO VES INSUFICIENTE",
+              body: `⚠️ Pedido #${orderId} de Bs. ${formattedRequired} VES supera el saldo disponible (Bs. ${formattedAvailable} VES). ¡Recuerda hacer una compra mayorista!`,
+            },
+            data: {
+              orderID: orderId,
+              type: "insufficient_ves_balance",
+            },
+            webpush: {
+              notification: {
+                title: "⚠️ 🚨 SALDO VES INSUFICIENTE",
+                body: `⚠️ Pedido #${orderId} de Bs. ${formattedRequired} VES supera el saldo disponible (Bs. ${formattedAvailable} VES). ¡Recuerda hacer una compra mayorista!`,
+                icon: "/images/icon-192x192.png",
+                vibrate: [300, 100, 300, 100, 300],
+                requireInteraction: true,
+              },
+              fcmOptions: { link: "/wholesale-purchases" }
+            },
+            apns: { payload: { aps: { sound: "default" } } },
+            android: {
+              priority: "high" as const,
+              notification: {
+                channelId: "manzano_alerts_v1",
+                sound: "default",
+                icon: "ic_stat_notification",
+                color: "#e11d48",
+              },
+            },
+          };
+
+          await sendMulticastWithCleanup({
+            tokens: a2Tokens,
+            ...alertPayload,
+          });
+
+          logger.info("Sent insufficient VES balance alert to A2 (namv2210@gmail.com)", {
+            orderId,
+            requiredVes,
+            totalVesBalance,
+          });
+        }
+      }
+    } catch (err: any) {
+      logger.error("Error checking/notifying insufficient VES balance to A2:", err);
+    }
+
     return response;
   } catch (error) {
     logger.error("Error sending new order notification:", error);
@@ -1209,6 +1331,49 @@ export const notifyNewWholesalePurchase = onDocumentCreated("wholesale_purchases
 });
 
 /**
+ * Alerts A2 when the second scheduled Spot check cannot find the USDT
+ * requested by a wholesale purchase. The worker writes the marker once;
+ * this trigger owns push delivery so credentials remain in Firebase.
+ */
+export const notifyWholesaleUsdtMissing = onDocumentUpdated("wholesale_purchases/{purchaseId}", async (event) => {
+  const before = event.data?.before.data();
+  const after = event.data?.after.data();
+  if (!after || before?.automationAlertA2At || !after.automationAlertA2At) return null;
+
+  const tokens = getUserTokensByEmail("namv2210@gmail.com");
+  const a2Tokens = await tokens;
+  if (a2Tokens.length === 0) {
+    logger.info("No tokens found for A2 wholesale missing-USDT alert", { purchaseId: event.params.purchaseId });
+    return null;
+  }
+
+  const usdt = Number(after.usdtNeeded || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+  const response = await sendMulticastWithCleanup({
+    tokens: a2Tokens,
+    notification: {
+      title: "Compra mayorista pendiente",
+      body: `No ingresaron ${usdt} USDT a Spot tras 10 minutos. Por favor ingresa el monto solicitado.`,
+    },
+    data: {
+      purchaseID: event.params.purchaseId,
+      type: "wholesale_usdt_missing",
+    },
+    android: {
+      priority: "high" as const,
+      notification: { channelId: "manzano_alerts_v1", sound: "default", icon: "ic_stat_notification", color: "#8cb33e" },
+    },
+    apns: { payload: { aps: { sound: "default" } } },
+  });
+
+  logger.info("Sent A2 wholesale missing-USDT alert", {
+    purchaseId: event.params.purchaseId,
+    successCount: response.successCount,
+    failureCount: response.failureCount,
+  });
+  return response;
+});
+
+/**
  * Send push notification when an order status is updated
  */
 export const notifyOrderUpdate = onDocumentUpdated(
@@ -1263,10 +1428,12 @@ export const notifyOrderUpdate = onDocumentUpdated(
       if (afterData.status === "Pagado") {
         notificationBody = `El pedido de ${clientName} ha sido procesado y pagado. ${afterData.vesAmount || 0} VES`;
 
-        // Enviar email de confirmación al cliente
+        // Enviar email de confirmación al cliente.
+        // Await: si el trigger retorna sin esperar, la instancia puede congelarse
+        // a medias y perder el envio (se vieron 19 pedidos con emailSent=false).
         const key = brevoApiKey.value();
         if (key) {
-          sendOrderConfirmation(key, orderId, afterData)
+          await sendOrderConfirmation(key, orderId, afterData)
             .catch(err => logger.error("Email confirmation failed", { orderId, err: err.message }));
         } else {
           logger.warn("BREVO_API_KEY secret not available, skipping email", { orderId });
@@ -1340,21 +1507,23 @@ export const notifyBinanceP2PActionUpdate = onDocumentUpdated("binance_p2p_actio
   if (!interestingStates.has(afterData.status)) return null;
 
   try {
-    const tokenList = await getUserTokensByEmail(SUPER_ADMIN_EMAIL);
+    const actionType = String(afterData.actionType || "binance_p2p");
+    const isOfflineAdPublished = actionType === "publish_offline_ad" && afterData.status === "succeeded";
+    const recipientEmails = isOfflineAdPublished ? [SUPER_ADMIN_EMAIL, "namv2210@gmail.com"] : [SUPER_ADMIN_EMAIL];
+    const tokenList = [...new Set((await Promise.all(recipientEmails.map(getUserTokensByEmail))).flat())];
     if (tokenList.length === 0) {
       logger.info("No super-admin tokens found for Binance P2P notification", { actionId: event.params.actionId });
       return null;
     }
 
-    const actionType = String(afterData.actionType || "binance_p2p");
     const amount = String(afterData.payload?.amount || "");
     const processorHost = String(afterData.processorHost || "");
     const resultSummary = String(afterData.resultSummary || "");
 
-    let body = "Actualizacion disponible.";
-    if (afterData.status === "running") {
+    let body = isOfflineAdPublished ? "📢🤖 Anuncio Binance publicado offline" : "Actualizacion disponible.";
+    if (!isOfflineAdPublished && afterData.status === "running") {
       body = `El VPS comenzo a procesar ${actionType}${processorHost ? ` en ${processorHost}` : ""}.`;
-    } else if (afterData.status === "succeeded") {
+    } else if (!isOfflineAdPublished && afterData.status === "succeeded") {
       body = resultSummary || `Accion ${actionType} completada${amount ? ` para ${amount}` : ""}.`;
     } else if (afterData.status === "failed") {
       body = afterData.errorMessage || `La accion ${actionType} fallo en el VPS.`;
@@ -1364,7 +1533,7 @@ export const notifyBinanceP2PActionUpdate = onDocumentUpdated("binance_p2p_actio
 
     const payload = {
       notification: {
-        title: "Binance P2P Admin",
+        title: isOfflineAdPublished ? "" : "Binance P2P Admin",
         body,
       },
       data: {
@@ -1375,7 +1544,7 @@ export const notifyBinanceP2PActionUpdate = onDocumentUpdated("binance_p2p_actio
       },
       webpush: {
         notification: {
-          title: "Binance P2P Admin",
+          title: isOfflineAdPublished ? "" : "Binance P2P Admin",
           body,
           icon: "/images/icon-192x192.png",
           requireInteraction: true,
@@ -1579,21 +1748,49 @@ export const notifyBalanceLoad = onDocumentCreated("balance_history/{historyId}"
  * =========================================================
  */
 export const binanceVpsProxy = onRequest(
-    { cors: false },
+    { cors: false, secrets: [vpsAuthToken] },
     async (req, res) => {
-        // Configuracion explicita de CORS para permitir headers personalizados como x-vps-token
-        res.set('Access-Control-Allow-Origin', '*');
+        // CORS must be answered before authentication because browser preflight has no ID token.
+        // Android usa androidScheme=https, por lo que Capacitor emite Origin https://localhost.
+        // Debe estar permitido junto a capacitor://localhost para que el preflight no termine en Failed to fetch.
+        const allowedOrigins = new Set(['https://cambiosmanzano.app', 'https://manzanoapp-2f775.web.app', 'http://localhost', 'https://localhost', 'capacitor://localhost']);
+        const origin = req.header('origin') || '';
+        if (allowedOrigins.has(origin)) res.set('Access-Control-Allow-Origin', origin);
         res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-vps-token');
-        
+        res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
         if (req.method === 'OPTIONS') {
             res.status(204).send('');
             return;
         }
 
+        const authorization = req.header('authorization') || '';
+        const idToken = authorization.startsWith('Bearer ') ? authorization.slice(7) : '';
+        if (!idToken) {
+            res.status(401).json({ error: 'Autenticacion requerida.' });
+            return;
+        }
+        const cleanPath = req.url.split('?')[0].replace('/binanceVpsProxy', '');
+        const normalizedPath = cleanPath === '/p2p-rate' ? '/api/p2p-rate' : cleanPath;
+        let isSuperAdmin = false;
+        try {
+            const decoded = await admin.auth().verifyIdToken(idToken);
+            const email = typeof decoded.email === 'string' ? decoded.email : '';
+            isSuperAdmin = isSuperAdminEmail(email);
+            // A2 puede calcular compras mayoristas, pero sólo consulta el libro P2P.
+            // Balance y cualquier otro endpoint continúan restringidos al super admin.
+            const a2CalculatorRequest = req.method === 'POST' && normalizedPath === '/api/proxy/p2p';
+            if (!isSuperAdmin && (!canUseWholesaleCalculator(email) || !a2CalculatorRequest)) {
+                res.status(403).json({ error: 'No tienes permisos para usar esta consulta Binance.' });
+                return;
+            }
+        } catch {
+            res.status(401).json({ error: 'Sesion no valida.' });
+            return;
+        }
+
         try {
             const axios = require('axios');
-            const vpsIp = "http://165.227.158.59:3005";
+            const vpsIp = "http://159.112.146.251:3005";
             
             // Reparacion de path: Firebase a veces deja el nombre de la funcion en req.url
             let cleanPath = req.url.split('?')[0].replace('/binanceVpsProxy', '');
@@ -1613,12 +1810,19 @@ export const binanceVpsProxy = onRequest(
                 url: targetUrl,
                 data: req.body,
                 headers: {
-                    'x-vps-token': req.header('x-vps-token') || 'un_token_largo_y_secreto_para_manzano'
+                    'x-vps-token': vpsAuthToken.value()
                 },
                 validateStatus: () => true // Permitir 401, 404, etc. para que el front los maneje
             });
 
-            res.status(proxyResponse.status).send(proxyResponse.data);
+            // El cálculo de A2 requiere precio y límites, nunca identidad del anunciante.
+            const responseData = !isSuperAdmin && cleanPath === '/api/proxy/p2p' && Array.isArray(proxyResponse.data?.data)
+                ? {
+                    ...proxyResponse.data,
+                    data: proxyResponse.data.data.map(({ advertiser: _advertiser, ...advert }: Record<string, unknown>) => advert),
+                }
+                : proxyResponse.data;
+            res.status(proxyResponse.status).send(responseData);
         } catch (error) {
             logger.error("Error critico en Proxy VPS:", error);
             res.status(500).json({ error: "Fallo comunicacion con el VPS de Binance.", details: String(error) });
@@ -1685,3 +1889,5 @@ export const reassignOrder = onCall(async (request) => {
     throw new HttpsError("internal", "Error al reasignar el pedido. Puede que el usuario no exista.");
   }
 });
+
+export { agentApi } from "./agentApi";
