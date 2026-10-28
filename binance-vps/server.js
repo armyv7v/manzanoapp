@@ -1,4 +1,6 @@
-require('dotenv').config();
+// PM2 can retain variables from a previous process. The VPS .env is the
+// operational source of truth, so it must override that inherited state.
+require('dotenv').config({ override: true });
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,7 +11,13 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3005;
 
-const VPS_AUTH_TOKEN = process.env.VPS_AUTH_TOKEN || 'manzano_dev_token';
+// Sin token configurado el server expone el saldo de Binance a cualquiera que
+// escanee el puerto: no arrancar con un fallback.
+if (!process.env.VPS_AUTH_TOKEN) {
+    console.error('VPS_AUTH_TOKEN no configurado: refusing to start.');
+    process.exit(1);
+}
+const VPS_AUTH_TOKEN = process.env.VPS_AUTH_TOKEN;
 const BINANCE_P2P_SEARCH_URL = 'https://p2p.binance.com/bapi/c2c/v2/friendly/c2c/adv/search';
 const BINANCE_SPOT_PRICE_URL = 'https://api.binance.com/api/v3/ticker/price';
 
@@ -20,7 +28,10 @@ app.use(morgan('combined'));
 
 const authenticate = (req, res, next) => {
     const token = req.headers['x-vps-token'];
-    if (token !== VPS_AUTH_TOKEN) {
+    const provided = Buffer.from(String(token || ''), 'utf8');
+    const expected = Buffer.from(VPS_AUTH_TOKEN, 'utf8');
+    const tokenOk = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+    if (!tokenOk) {
         return res.status(401).json({ error: 'No autorizado. Token P2P incorrecto.' });
     }
     next();
@@ -68,11 +79,11 @@ app.get('/api/balance', authenticate, async (req, res) => {
     try {
         const timestamp = Date.now();
         const asset = req.query.asset || 'USDT';
-        const queryString = `timestamp=${timestamp}`;
+        const queryString = `asset=${encodeURIComponent(asset)}&timestamp=${timestamp}`;
         const signature = crypto.createHmac('sha256', apiSecret).update(queryString).digest('hex');
 
         const response = await axios.post(
-            `https://api.binance.com/sapi/v3/asset/getUserAsset?${queryString}&signature=${signature}`,
+            `https://api.binance.com/sapi/v1/asset/get-funding-asset?${queryString}&signature=${signature}`,
             {},
             {
                 headers: {
