@@ -282,6 +282,9 @@ export function useNotifications() {
                         if (data.purchaseID) params.purchaseId = data.purchaseID;
                     } else if (data.type === 'balance_load') {
                         targetScreen = 'balance';
+                    } else if (data.type === 'agent_intent') {
+                        targetScreen = 'dashboard';
+                        if (data.intentId) params.intentId = data.intentId;
                     } else if (data.type === 'exchange_rate_update') {
                         targetScreen = 'calculator';
                     }

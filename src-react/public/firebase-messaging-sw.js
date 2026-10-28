@@ -69,6 +69,9 @@ self.addEventListener('notificationclick', (event) => {
         }
     } else if (data.purchaseID) {
         url = '/?screen=wholesale-purchases&purchaseId=' + data.purchaseID;
+    } else if (data.type === 'agent_intent') {
+        // Abrir la app en el modal de aprobacion de la intencion del agente.
+        url = data.intentId ? ('/?id=' + data.intentId) : '/?screen=dashboard';
     } else if (data.type === 'balance_load') {
         url = '/?screen=balance';
     } else if (data.type === 'exchange_rate_update') {

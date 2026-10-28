@@ -16,6 +16,7 @@ import { CommissionsScreen } from './screens/CommissionsScreen';
 import { AccountsScreen } from './screens/AccountsScreen';
 import { ReportsScreen } from './screens/ReportsScreen';
 import { BdvMonitorScreen } from './screens/BdvMonitorScreen';
+import { AgentIntentApprovalModal } from './screens/AgentIntentApprovalModal';
 import { BottomNav } from './components/BottomNav';
 import { Apple } from 'lucide-react';
 
@@ -101,10 +102,11 @@ function AppRouter() {
 
     return (
         <>
-            <div className="pb-16 md:pb-0">
+            <div className="pb-16 md:pb-0 safe-area-top">
                 {SCREENS[screen] || <DashboardScreen />}
             </div>
             <BottomNav />
+            <AgentIntentApprovalModal />
         </>
     );
 }

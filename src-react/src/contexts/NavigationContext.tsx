@@ -41,9 +41,11 @@ export function NavigationProvider({ children }: { children: ReactNode }) {
             const searchParams = new URLSearchParams(window.location.search);
             const orderId = searchParams.get('orderId');
             const purchaseId = searchParams.get('purchaseId');
+            const intentId = searchParams.get('id') || searchParams.get('intentId');
             const result: Record<string, any> = {};
             if (orderId) result.orderId = orderId;
             if (purchaseId) result.purchaseId = purchaseId;
+            if (intentId) result.intentId = intentId;
             return Object.keys(result).length > 0 ? result : null;
         }
         return null;

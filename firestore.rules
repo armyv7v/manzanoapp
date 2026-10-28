@@ -134,6 +134,15 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Intenciones del agente (Hermes). Las CREA la Cloud Function agentApi con
+    // el Admin SDK (bypassa reglas). El super-admin las LEE (onSnapshot del
+    // AgentIntentApprovalModal) y las puede RECHAZAR (update de status).
+    match /agent_intents/{intentId} {
+      allow read: if isAdmin();
+      allow update: if isAdmin();
+      allow create, delete: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
