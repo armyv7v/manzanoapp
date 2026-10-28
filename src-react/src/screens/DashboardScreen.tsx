@@ -491,7 +491,8 @@ export function DashboardScreen() {
                             />
                             <StatCard 
                                 label="Fondeo USDT" 
-                                value={binanceBalance ? Number(binanceBalance.free).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '...'} 
+                                value={binanceBalance ? (Number(binanceBalance.free || 0) + Number(binanceBalance.freeze || 0) + Number(binanceBalance.locked || 0)).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '...'} 
+                                detail={binanceBalance ? `Disponible: $${Number(binanceBalance.free || 0).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · Comprometido: $${(Number(binanceBalance.freeze || 0) + Number(binanceBalance.locked || 0)).toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : undefined}
                                 color="green" 
                                 prefix="$" 
                                 icon={CircleDollarSign} 
@@ -629,8 +630,8 @@ export function DashboardScreen() {
     );
 }
 
-function StatCard({ label, value, color, prefix, icon: Icon, onClick }: {
-    label: string; value: string | number; color: string; prefix?: string; icon: typeof Clock; onClick?: () => void;
+function StatCard({ label, value, detail, color, prefix, icon: Icon, onClick }: {
+    label: string; value: string | number; detail?: string; color: string; prefix?: string; icon: typeof Clock; onClick?: () => void;
 }) {
     const colorMap: Record<string, { card: string; icon: string }> = {
         amber: { card: 'bg-amber-50 border-amber-100', icon: 'text-amber-500' },
@@ -647,6 +648,7 @@ function StatCard({ label, value, color, prefix, icon: Icon, onClick }: {
                 <Icon className={`w-3 h-3 ${c.icon}`} />
             </div>
             <p className="text-sm font-bold text-gray-800">{prefix}{value}</p>
+            {detail && <p className="mt-1 text-[9px] leading-tight text-gray-500">{detail}</p>}
         </Wrapper>
     );
 }

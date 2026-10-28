@@ -191,7 +191,7 @@ export function BalanceOperationModal({ type, vesAmount, accounts, onClose }: Pr
                         /* ======= PASO 2: Tasa CLP y Confirmación ======= */
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tasa de Compra (CLP por 1 VES)</label>
+                                <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Tasa de Compra (VES por 1 CLP)</label>
                                 <input
                                     type="number"
                                     step="0.00001"

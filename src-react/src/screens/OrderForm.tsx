@@ -8,6 +8,7 @@ import { Button, Modal } from '../components/ui';
 import { useToast } from '../contexts/ToastContext';
 import { Building2, Smartphone, CreditCard } from 'lucide-react';
 import {
+    computeOrderTotalWithCommissions,
     detectBankByPrefix,
     isOrderBalanceRestrictionActive,
     ORDER_BALANCE_RESTRICTION_HOUR,
@@ -58,6 +59,11 @@ export function OrderForm({
         return Math.ceil(amount * rate * 100) / 100;
     }, [clpAmount, rates.VES]);
 
+    const { totalConComisiones } = useMemo(() => {
+        if (destinationAmount <= 0) return { adminCommission: 0, tilloCommission: 0, totalConComisiones: 0 };
+        return computeOrderTotalWithCommissions(destinationAmount);
+    }, [destinationAmount]);
+
     const currentUserTag = resolveUserTag(user?.email || '');
     const balanceRestrictionActive = isOrderBalanceRestrictionActive();
     const shouldEnforceVesBalance = shouldRestrictOrdersByVesBalance(role);
@@ -65,8 +71,8 @@ export function OrderForm({
     const safeAvailableVesBalance = typeof availableVesBalance === 'number' ? availableVesBalance : 0;
     const vesShortfallVisible = showVesAvailability
         && !vesBalanceLoading
-        && destinationAmount > 0
-        && destinationAmount > safeAvailableVesBalance;
+        && totalConComisiones > 0
+        && totalConComisiones > safeAvailableVesBalance;
     const insufficientVesBalance = shouldEnforceVesBalance && vesShortfallVisible;
 
     const handlePaste = async () => {

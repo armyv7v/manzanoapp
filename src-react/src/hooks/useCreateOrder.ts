@@ -3,7 +3,7 @@ import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
 import type { ExchangeRates } from './useExchangeRates';
-import { VENEZUELAN_BANK_PREFIXES, isOrderBalanceRestrictionActive } from '../lib/constants';
+import { VENEZUELAN_BANK_PREFIXES, isOrderBalanceRestrictionActive, computeOrderTotalWithCommissions } from '../lib/constants';
 
 export type OrderType = 'transferencia' | 'pago-movil' | 'recarga-saldo';
 
@@ -51,13 +51,16 @@ export function useCreateOrder() {
 
             const normalizedEmail = (formData.email || '').trim().toLowerCase();
             const destinationAmount = Math.ceil(formData.clpAmount * rate * 100) / 100;
+            const { totalConComisiones: totalConComisionesRaw } = computeOrderTotalWithCommissions(destinationAmount);
+            // Redondear a 2 decimales para evitar errores de punto flotante en la comparación
+            const totalConComisiones = Math.round(totalConComisionesRaw * 100) / 100;
             let sellerCommissionRate = 0;
 
             if (shouldEnforceVesBalance && typeof availableVesBalance === 'number' && Number.isFinite(availableVesBalance)) {
                 const roundedAvailable = Math.round(availableVesBalance * 100) / 100;
-                if (destinationAmount > roundedAvailable) {
+                if (totalConComisiones > roundedAvailable) {
                     throw new Error(
-                        `Saldo VES insuficiente. Disponible: ${roundedAvailable.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES. Pedido: ${destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES.`
+                        `Saldo VES insuficiente. Disponible: ${roundedAvailable.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES. Pedido (con comisiones): ${totalConComisiones.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES.`
                     );
                 }
             }
