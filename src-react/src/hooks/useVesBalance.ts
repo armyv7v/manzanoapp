@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 
 export interface VesBalanceEntry {
@@ -60,10 +60,13 @@ export function useVesBalance() {
                 collection(db, 'balance_history'),
                 where('timestamp', '>=', qStart),
                 where('timestamp', '<=', qEnd),
-                orderBy('timestamp', 'desc')
+                orderBy('timestamp', 'desc'),
+                // Cota de lecturas: sin limit, un rango anual leeria ~22k docs completos.
+                limit(2000)
             );
 
             const snapshot = await getDocs(q);
+            if (snapshot.size >= 2000) console.warn('[useVesBalance] resultado truncado en 2000 movimientos; acorta el rango de fechas.');
             const entries: VesBalanceEntry[] = snapshot.docs.map(d => {
                 const data = d.data();
                 return {

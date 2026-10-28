@@ -111,27 +111,28 @@ export function useBalanceHistory() {
             const qEnd = new Date(endDate);
             qEnd.setHours(23, 59, 59, 999);
 
-            const byTimestamp = query(
+            // Todos los escritores graban `timestamp` (inclusive legacy), así que un
+            // solo query cubre el rango. El query por `createdAt` queda como rescate
+            // si el primero viene vacío; correr ambos duplicaba cada lectura
+            // facturada de clp_balance_history.
+            const primarySnapshot = await getDocs(query(
                 collection(db, 'clp_balance_history'),
                 where('timestamp', '>=', qStart),
                 where('timestamp', '<=', qEnd),
                 orderBy('timestamp', 'desc')
-            );
+            ));
 
-            const byCreatedAt = query(
-                collection(db, 'clp_balance_history'),
-                where('createdAt', '>=', qStart),
-                where('createdAt', '<=', qEnd),
-                orderBy('createdAt', 'desc')
-            );
-
-            const [timestampSnapshot, createdAtSnapshot] = await Promise.all([
-                getDocs(byTimestamp),
-                getDocs(byCreatedAt).catch(() => ({ docs: [] as any[] } as any)),
-            ]);
+            let allDocs: any[] = primarySnapshot.docs;
+            if (allDocs.length === 0) {
+                allDocs = await getDocs(query(
+                    collection(db, 'clp_balance_history'),
+                    where('createdAt', '>=', qStart),
+                    where('createdAt', '<=', qEnd),
+                    orderBy('createdAt', 'desc')
+                )).then(s => s.docs).catch(() => [] as any[]);
+            }
 
             const merged = new Map<string, BalanceEntry>();
-            const allDocs = [...timestampSnapshot.docs, ...(createdAtSnapshot.docs || [])];
 
             allDocs.forEach((docSnap: any) => {
                 const data = docSnap.data();

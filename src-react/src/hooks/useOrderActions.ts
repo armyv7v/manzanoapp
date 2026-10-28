@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { doc, serverTimestamp, runTransaction, collection, increment } from 'firebase/firestore';
+import { doc, serverTimestamp, runTransaction, collection, increment, query, where, limit, getDocs } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage } from '../lib/firebase';
@@ -198,6 +198,12 @@ export function useOrderActions() {
                     const historyHolder = typeof accountData.holder === 'string' ? accountData.holder.trim() : 'Sin titular';
                     let runningBalance = accountData.balance || 0;
 
+                    // Bloqueo anti-sobregiro: ningún pago VES puede dejar la cuenta en negativo.
+                    // Va dentro de la transacción y antes de cualquier write para que el abort sea atómico.
+                    if (runningBalance + 1e-6 < totalDebitVesWithSellerCommission) {
+                        throw new Error(`Saldo insuficiente en ${historyHolder} - ${accountData.bank || 'Sin banco'}: disponible ${Number(runningBalance).toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES, requerido ${Number(totalDebitVesWithSellerCommission).toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES.`);
+                    }
+
                     transaction.update(accountRef, {
                         balance: increment(-totalDebitVesWithSellerCommission)
                     });
@@ -292,9 +298,19 @@ export function useOrderActions() {
         try {
             if (!user) throw new Error('Debes iniciar sesion.');
 
+            // La SDK modular de Firestore no permite transaction.get(query): el
+            // registro de pago se lee antes de la transaccion (es inmutable tras
+            // crearse en el pago) y el estado del pedido se re-verifica dentro.
+            const originalClpDebitSnap = await getDocs(query(
+                collection(db, 'clp_balance_history'),
+                where('orderId', '==', orderId),
+                where('type', '==', 'subtract'),
+                limit(10)
+            ));
+            const originalClpDebit = originalClpDebitSnap.empty ? null : originalClpDebitSnap.docs[0].data();
+
             await runTransaction(db, async (transaction) => {
                 const orderRef = doc(db, 'orders', orderId);
-                const rateRef = doc(db, 'config', 'rate');
 
                 // READ PHASE
                 const orderDoc = await transaction.get(orderRef);
@@ -327,19 +343,28 @@ export function useOrderActions() {
                         throw new Error('Este pedido fue pagado sin registrar la cuenta origen. No se puede anular automaticamente.');
                     }
 
-                    const rateDoc = await transaction.get(rateRef);
-                    const purchaseRateVES = rateDoc.exists() ? rateDoc.data().purchaseRateVES || 0 : 0;
+                    // Reversion CLP con la MISMA tasa y monto grabados al pagar
+                    // (registro original leido antes de la transaccion), no con
+                    // la tasa vigente: si la tasa mayorista cambio desde el pago,
+                    // recalcular descuadraria el saldo CLP.
+                    let purchaseRateVES = 0;
+                    if (originalClpDebit) {
+                        purchaseRateVES = Number(originalClpDebit.purchaseRateVESUsed || 0);
+                        totalDebitClp = Number(originalClpDebit.clpAmountComputed || originalClpDebit.amount || 0);
+                    } else {
+                        // Fallback legacy: pedidos sin registro de pago usan la tasa vigente.
+                        const rateDoc = await transaction.get(doc(db, 'config', 'rate'));
+                        purchaseRateVES = rateDoc.exists() ? rateDoc.data().purchaseRateVES || 0 : 0;
+                        if (purchaseRateVES > 0) {
+                            totalDebitClp = Math.ceil(buildPaidOrderFinancials(orderData).totalDebitVes / purchaseRateVES * 100) / 100;
+                        }
+                    }
                     purchaseRateVESUsed = purchaseRateVES;
 
                     accountRef = doc(db, 'accounts', sourceAccountId);
                     accountDoc = await transaction.get(accountRef);
                     if (!accountDoc.exists()) {
                         throw new Error('La cuenta origen registrada ya no existe.');
-                    }
-
-                    if (purchaseRateVES > 0) {
-                        const financials = buildPaidOrderFinancials(orderData);
-                        totalDebitClp = Math.ceil(financials.totalDebitVes / purchaseRateVES * 100) / 100;
                     }
                 }
 

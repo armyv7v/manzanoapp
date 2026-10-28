@@ -50,7 +50,8 @@ export function useTransferFunds() {
             const fee = fromBank !== toBank ? computeInterbankFee(amount) : 0;
             const totalDebit = amount + fee;
 
-            if (fromAccount.balance < totalDebit) {
+            // Tolerancia 1e-6 por polvo flotante (mismo criterio que markAsPaid).
+            if (Number(fromAccount.balance || 0) + 1e-6 < totalDebit) {
                 throw new Error('Saldo insuficiente en la cuenta de origen para cubrir el monto y la comisión.');
             }
 

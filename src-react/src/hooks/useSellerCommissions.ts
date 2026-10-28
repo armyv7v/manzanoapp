@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
 
@@ -60,14 +60,16 @@ export function useSellerCommissions() {
                     where('sellerId', '==', user.uid),
                     where('timestamp', '>=', qStart),
                     where('timestamp', '<=', qEnd),
-                    orderBy('timestamp', 'desc')
+                    orderBy('timestamp', 'desc'),
+                    limit(2000)
                 )
                 : query(
                     baseCollection,
                     where('sellerEmail', '==', sellerEmail),
                     where('timestamp', '>=', qStart),
                     where('timestamp', '<=', qEnd),
-                    orderBy('timestamp', 'desc')
+                    orderBy('timestamp', 'desc'),
+                    limit(2000)
                 );
 
             if (role !== 'seller' && !sellerEmail) {
@@ -75,6 +77,7 @@ export function useSellerCommissions() {
             }
 
             const snapshot = await getDocs(q);
+            if (snapshot.size >= 2000) console.warn('[useSellerCommissions] resultado truncado en 2000 comisiones; acorta el rango de fechas.');
             const entries: CommissionEntry[] = snapshot.docs.map((d) => {
                 const data = d.data();
                 return {

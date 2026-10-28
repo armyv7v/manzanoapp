@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { SUPER_ADMIN_EMAIL, computeInterbankFee, isSuperAdminEmail, normalizeBankName, USER_TAGS, resolveUserTag } from '../lib/constants';
+import { SUPER_ADMIN_EMAIL, computeOrderBankFee, computeOrderTotalRequired, isSuperAdminEmail, USER_TAGS, resolveUserTag } from '../lib/constants';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth, useOrderActions, useVesAccounts } from '../hooks';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
@@ -43,15 +43,7 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
     const sourceAccount = accounts.find(a => a.id === sourceAccountId);
     let fee = 0;
     if (order && sourceAccount && order.destinationCurrency === 'VES') {
-        if (order.type === 'pago-movil') {
-            fee = computeInterbankFee(order.destinationAmount);
-        } else if (order.type === 'transferencia') {
-            const sourceBank = normalizeBankName(sourceAccount.bank);
-            const destBank = normalizeBankName(order.bank || '');
-            if (sourceBank !== destBank) {
-                fee = computeInterbankFee(order.destinationAmount);
-            }
-        }
+        fee = computeOrderBankFee(order, sourceAccount.bank);
     }
 
     useEffect(() => {
@@ -283,20 +275,12 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                 {order.status === 'Pendiente de pago' && order.destinationCurrency === 'VES' && (() => {
                     const availableAccounts = accounts.filter(acc => {
                         if (!isPayoutAccount(acc)) return false;
-                        let accFee = 0;
-                        if (order.type === 'pago-movil') {
-                            accFee = computeInterbankFee(order.destinationAmount);
-                        } else if (order.type === 'transferencia') {
-                            const sourceBank = normalizeBankName(acc.bank);
-                            const destBank = normalizeBankName(order.bank || '');
-                            if (sourceBank !== destBank) {
-                                accFee = computeInterbankFee(order.destinationAmount);
-                            }
-                        }
-                        const adminCommission = Math.ceil((order.destinationAmount * 0.01) * 100) / 100;
-                        const tilloCommission = Math.ceil((order.destinationAmount * 0.0015) * 100) / 100;
-                        const totalRequired = order.destinationAmount + accFee + adminCommission + tilloCommission;
-                        return acc.balance >= totalRequired;
+                        // Incluye comisión de venta VES: si se omitiera, la UI ofrecería
+                        // cuentas que markAsPaid rechazará por saldo insuficiente.
+                        const totalRequired = computeOrderTotalRequired(order, acc.bank);
+                        // Tolerancia 1e-6: los saldos acumulan polvo flotante (ej. 29826.299999999996)
+                        // y una cuenta con saldo exacto al centavo no debe quedar excluida.
+                        return acc.balance + 1e-6 >= totalRequired;
                     });
 
                     if (availableAccounts.length === 0) {
@@ -342,7 +326,7 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                             {sourceAccountId && (
                                 <div className="text-[11px] text-gray-600 bg-white p-2 rounded border border-gray-100 mt-2">
                                     <p>Comisión bancaria: <b className="text-gray-800">{fee.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b></p>
-                                    <p>Total a descontar: <b className="text-red-600">{(order.destinationAmount + fee + (order.destinationAmount * 0.01) + (order.destinationAmount * 0.0015)).toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b></p>
+                                    <p>Total a descontar: <b className="text-red-600">{computeOrderTotalRequired(order, sourceAccount?.bank || '').toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b></p>
                                 </div>
                             )}
                         </div>
@@ -516,13 +500,13 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                                     <option value="">Seleccione cuenta pagadora...</option>
                                     {accounts.filter(isPayoutAccount).map(acc => (
                                         <option key={acc.id} value={acc.id}>
-                                            {acc.bank} - {acc.holder} {acc.alias ? `(${acc.alias})` : ''}
+                                            {acc.bank} - {acc.holder}{acc.alias ? ` (${acc.alias})` : ''} (Saldo: {acc.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES) [{acc.id.slice(-6)}]
                                         </option>
                                     ))}
                                 </select>
                                 {sourceAccountId && sourceAccount && (
                                     <p className="text-[11px] text-gray-600 bg-white p-2 rounded border border-amber-100">
-                                        Usarás: <b>{sourceAccount.bank}</b> - <b>{sourceAccount.holder}</b>
+                                        Usarás: <b>{sourceAccount.bank}</b> - <b>{sourceAccount.holder}</b> (Saldo: <b>{sourceAccount.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b>) [{sourceAccount.id}]
                                     </p>
                                 )}
                             </div>

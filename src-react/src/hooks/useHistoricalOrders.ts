@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { collection, query, where, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import type { Query, DocumentData } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
@@ -38,7 +38,9 @@ export function useHistoricalOrders() {
                 ordersRef,
                 where('createdAt', '>=', queryStart),
                 where('createdAt', '<=', queryEnd),
-                orderBy('createdAt', 'desc')
+                orderBy('createdAt', 'desc'),
+                // Cota de lecturas: sin limit, un rango anual leeria todos los pedidos del periodo.
+                limit(2000)
             );
 
             if (role === 'client') {
@@ -48,6 +50,7 @@ export function useHistoricalOrders() {
             }
 
             const snapshot = await getDocs(q);
+            if (snapshot.size >= 2000) console.warn('[useHistoricalOrders] resultado truncado en 2000 pedidos; acorta el rango de fechas.');
             let allOrders: Order[] = [];
 
             snapshot.forEach(docSnap => {

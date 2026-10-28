@@ -106,9 +106,65 @@ export const computeOrderTotalWithCommissions = (destinationAmount: number): {
  * < 4600 VES → 14 VES fijo (mínimo de comisión); ≥ 4600 VES → 0.30% del monto (mínimo 14 VES).
  */
 export const computeInterbankFee = (amount: number): number => {
-    if (typeof amount !== 'number' || amount <= 0) return 0;
+    // NaN pasa el check `amount <= 0` (evalua false), por eso se excluye explicito.
+    if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return 0;
     const fee = amount < 4600 ? 14 : Math.max(14, amount * 0.003);
     return Math.ceil(fee * 100) / 100; // Round up to 2 decimals
+};
+
+/** Tags de vendedor que cobran comisión de venta en VES sobre el monto destino. */
+const VES_SELLER_TAGS = new Set(['A3', 'A4', 'A5']);
+
+/**
+ * Comisión de venta VES de un pedido pendiente (aún no viene en el doc):
+ * ceil a 2 decimales sobre destinationAmount, solo para tags A3-A5.
+ * Debe coincidir exactamente con lo que persisten markAsPaid y el pago en lote.
+ */
+export const computeSellerCommissionVES = (order: {
+    destinationAmount?: number;
+    sellerCommissionRate?: number | string;
+    commissionRate?: number | string;
+    sellerEmail?: string;
+    createdByTag?: string;
+}): number => {
+    const sellerTag = resolveUserTag(String(order.sellerEmail || order.createdByTag || ''));
+    if (!VES_SELLER_TAGS.has(sellerTag)) return 0;
+    const rawRate = Number(order.sellerCommissionRate ?? order.commissionRate ?? 0);
+    const rate = Number.isFinite(rawRate) ? rawRate : 0;
+    const base = Number(order.destinationAmount || 0);
+    if (rate <= 0 || base <= 0) return 0;
+    return Math.ceil(base * rate * 100) / 100;
+};
+
+/**
+ * Comisión bancaria de pagar `order` desde una cuenta del banco `sourceBank`:
+ * pago-movil siempre paga; transferencia paga solo si el banco origen difiere.
+ */
+export const computeOrderBankFee = (
+    order: { destinationAmount?: number; type?: string; bank?: string },
+    sourceBank: string
+): number => {
+    const base = Number(order.destinationAmount || 0);
+    if (order.type === 'pago-movil') return computeInterbankFee(base);
+    if (order.type === 'transferencia' && normalizeBankName(sourceBank) !== normalizeBankName(order.bank || '')) {
+        return computeInterbankFee(base);
+    }
+    return 0;
+};
+
+/**
+ * Débito total real de pagar un pedido pendiente desde una cuenta VES:
+ * monto destino + comisión bancaria + admin + Tillo + comisión de venta VES.
+ * El campo totalDebitVes persistido omite la comisión de venta: este es el
+ * valor que la UI debe mostrar y con el que debe filtrar cuentas disponibles.
+ */
+export const computeOrderTotalRequired = (
+    order: { destinationAmount?: number; type?: string; bank?: string; sellerEmail?: string; createdByTag?: string; sellerCommissionRate?: number | string; commissionRate?: number | string },
+    sourceBank: string
+): number => {
+    const base = Number(order.destinationAmount || 0);
+    const { adminCommission, tilloCommission } = computeOrderTotalWithCommissions(base);
+    return base + computeOrderBankFee(order, sourceBank) + adminCommission + tilloCommission + computeSellerCommissionVES(order);
 };
 
 /** Detecta el banco por los primeros 4 dígitos del número de cuenta */

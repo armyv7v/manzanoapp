@@ -3,14 +3,13 @@ import { db, storage } from '../lib/firebase';
 import { runTransaction, doc, serverTimestamp, collection, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth, useVesAccounts } from '../hooks';
-import { computeInterbankFee, normalizeBankName, USER_TAGS } from '../lib/constants';
+import { computeInterbankFee, computeOrderTotalRequired, computeSellerCommissionVES, normalizeBankName, USER_TAGS } from '../lib/constants';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
 import { Modal, Button } from '../components/ui';
 import { useToast } from '../contexts/ToastContext';
 import type { Order } from '../hooks/useOrders';
 
 const CLP_ADMIN_TAGS = new Set(['A1', 'A2']);
-const VES_ADMIN_TAGS = new Set(['A3', 'A4', 'A5']);
 const roundUp2 = (value: number) => Math.ceil(value * 100) / 100;
 
 const resolveUserTag = (raw: string): string => {
@@ -142,14 +141,11 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                 const orderCLPAmount = Number(order.clpAmount || 0);
                 const sellerTag = resolveUserTag(sellerEmail || createdByTagEmail);
 
-                const useVesCommission = VES_ADMIN_TAGS.has(sellerTag);
                 const useClpCommission = CLP_ADMIN_TAGS.has(sellerTag) || sellerTag.startsWith('V');
                 const sellerCommissionAmountCLP = useClpCommission && sellerCommissionRate > 0 && orderCLPAmount > 0
                     ? roundUp2(orderCLPAmount * sellerCommissionRate)
                     : 0;
-                const sellerCommissionAmountVES = useVesCommission && sellerCommissionRate > 0 && order.destinationAmount > 0
-                    ? roundUp2(order.destinationAmount * sellerCommissionRate)
-                    : 0;
+                const sellerCommissionAmountVES = computeSellerCommissionVES(order);
 
                 sellerCommissionByOrder.set(order.id, {
                     sellerId,
@@ -172,7 +168,9 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                 const accountRef = doc(db, 'accounts', sourceAccountId);
                 const accountDoc = await transaction.get(accountRef);
 
-                if (!accountDoc.exists() || (accountDoc.data().balance || 0) < totalDebitVes) {
+                // Tolerancia 1e-6: el filtro de UI acepta saldo exacto al centavo
+                // (polvo flotante); la transaccion no debe rechazar ese caso.
+                if (!accountDoc.exists() || (accountDoc.data().balance || 0) + 1e-6 < totalDebitVes) {
                     throw new Error('Saldo insuficiente en la cuenta seleccionada para cubrir el lote (incluyendo comisiones).');
                 }
 
@@ -181,8 +179,21 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                 const historyHolder = sourceAccount?.holder || 'Desconocido';
                 const historyBank = sourceAccount?.bank || 'Desconocido';
 
-                selectedOrders.forEach(order => {
+                for (const order of selectedOrders) {
                     const orderRef = doc(db, 'orders', order.id);
+
+                    // Re-verificar el estado DENTRO de la transaccion: evita doble
+                    // pago si otro admin marco el pedido Pagado/Cancelado mientras
+                    // se preparaba este lote (los props pueden venir stale).
+                    const freshOrderDoc = await transaction.get(orderRef);
+                    if (!freshOrderDoc.exists()) {
+                        throw new Error(`El pedido ${order.id} ya no existe.`);
+                    }
+                    const freshStatus = freshOrderDoc.data()?.status;
+                    if (freshStatus !== 'Pendiente de pago') {
+                        throw new Error(`El pedido ${order.id} ya no esta pendiente de pago (estado: ${freshStatus}).`);
+                    }
+
                     const fileUrl = uploadResults.find(r => r.orderId === order.id)?.url;
 
                     const currentAdminCommission = Math.ceil((order.destinationAmount * ADMIN_BASE_COMMISSION_RATE) * 100) / 100;
@@ -344,7 +355,7 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                             balanceAfter: runningBalance
                         });
                     }
-                });
+                }
 
                 // Decrement the main balance on Account
                 transaction.update(accountRef, {
@@ -429,21 +440,11 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                             if (!isPayoutAccount(account)) return false;
                             let totalDebitForThisAccount = 0;
                             selectedOrders.forEach(order => {
-                                let fee = 0;
-                                if (order.type === 'pago-movil') {
-                                    fee = computeInterbankFee(order.destinationAmount);
-                                } else if (order.type === 'transferencia') {
-                                    const sourceBank = normalizeBankName(account.bank);
-                                    const destBank = normalizeBankName(order.bank || '');
-                                    if (sourceBank !== destBank) {
-                                        fee = computeInterbankFee(order.destinationAmount);
-                                    }
-                                }
-                                const adminCommission = Math.ceil((order.destinationAmount * 0.01) * 100) / 100;
-                                const tilloCommission = Math.ceil((order.destinationAmount * 0.0015) * 100) / 100;
-                                totalDebitForThisAccount += order.destinationAmount + fee + adminCommission + tilloCommission;
+                                // Incluye comisión de venta VES: mismo débito que aplicará la transacción.
+                                totalDebitForThisAccount += computeOrderTotalRequired(order, account.bank);
                             });
-                            return account.balance >= totalDebitForThisAccount;
+                            // Tolerancia 1e-6 por polvo flotante: saldo exacto al centavo debe contar como suficiente.
+                            return account.balance + 1e-6 >= totalDebitForThisAccount;
                         });
 
                         if (availableAccounts.length === 0) {

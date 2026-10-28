@@ -48,45 +48,29 @@ export function useDailyCommissions(selectedDateStr?: string | null) {
             });
         };
 
-        // 1. Admin Commission
-        const qAdmin = query(
+        // 1-3. Comisiones admin/tillo/bancarias: UN listener por rango con
+        // agrupación client-side por type (antes eran 3 listeners idénticos,
+        // 3 snapshots iniciales por visita a la pantalla). Un `type in` + rango
+        // exigiría un índice compuesto nuevo; el rango simple no.
+        const qFees = query(
             collection(db, 'balance_history'),
-            where('type', '==', 'admin_commission'),
             where('timestamp', '>=', startOfDay),
             where('timestamp', '<=', endOfDay)
         );
-        const unsubAdmin = onSnapshot(qAdmin, (snapshot) => {
-            let total = 0;
-            snapshot.forEach(doc => total += doc.data().amount || 0);
-            currentAdmin = Math.ceil(total * 100) / 100;
-            updateState();
-        }, () => updateState());
-
-        // 2. Tillo Commission
-        const qTillo = query(
-            collection(db, 'balance_history'),
-            where('type', '==', 'tillo_commission'),
-            where('timestamp', '>=', startOfDay),
-            where('timestamp', '<=', endOfDay)
-        );
-        const unsubTillo = onSnapshot(qTillo, (snapshot) => {
-            let total = 0;
-            snapshot.forEach(doc => total += doc.data().amount || 0);
-            currentTillo = Math.ceil(total * 100) / 100;
-            updateState();
-        }, () => updateState());
-
-        // 3. Bank Fees
-        const qBank = query(
-            collection(db, 'balance_history'),
-            where('type', '==', 'fee'),
-            where('timestamp', '>=', startOfDay),
-            where('timestamp', '<=', endOfDay)
-        );
-        const unsubBank = onSnapshot(qBank, (snapshot) => {
-            let total = 0;
-            snapshot.forEach(doc => total += doc.data().amount || 0);
-            currentBank = Math.ceil(total * 100) / 100;
+        const unsubFees = onSnapshot(qFees, (snapshot) => {
+            let admin = 0;
+            let tillo = 0;
+            let bank = 0;
+            snapshot.forEach(docSnap => {
+                const d = docSnap.data();
+                const amount = Number(d.amount || 0);
+                if (d.type === 'admin_commission') admin += amount;
+                else if (d.type === 'tillo_commission') tillo += amount;
+                else if (d.type === 'fee') bank += amount;
+            });
+            currentAdmin = Math.ceil(admin * 100) / 100;
+            currentTillo = Math.ceil(tillo * 100) / 100;
+            currentBank = Math.ceil(bank * 100) / 100;
             updateState();
         }, () => updateState());
 
@@ -115,9 +99,7 @@ export function useDailyCommissions(selectedDateStr?: string | null) {
         }, () => updateState());
 
         return () => {
-            unsubAdmin();
-            unsubTillo();
-            unsubBank();
+            unsubFees();
             unsubSellers();
         };
     }, [selectedDateStr]);
