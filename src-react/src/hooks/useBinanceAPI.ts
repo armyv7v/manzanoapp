@@ -1,14 +1,25 @@
 import { useCallback, useState } from 'react';
+import { getAuth } from 'firebase/auth';
+import app from '../lib/firebase';
 
-// Se obtienen las URLs y Token de las variables de entorno de Vite
-// Cambiado para usar el Cloud Function Proxy y evitar errores de Mixed Content (HTTPS -> HTTP)
+// El proxy de Cloud Functions conserva el secreto del VPS: el cliente nunca lo recibe.
 const VPS_BASE_URL = import.meta.env.VITE_VPS_BINANCE_URL || 'https://us-central1-manzanoapp-2f775.cloudfunctions.net/binanceVpsProxy';
-const VPS_AUTH_TOKEN = import.meta.env.VITE_VPS_BINANCE_TOKEN || 'un_token_largo_y_secreto_para_manzano';
+
+async function authenticatedHeaders(contentType = false): Promise<HeadersInit> {
+    const token = await getAuth(app).currentUser?.getIdToken();
+    if (!token) throw new Error('Debes iniciar sesión para consultar Binance.');
+    return {
+        ...(contentType ? { 'Content-Type': 'application/json' } : {}),
+        Authorization: `Bearer ${token}`,
+    };
+}
 
 export interface BinanceBalance {
     asset: string;
     free: string;
     locked: string;
+    freeze?: string;
+    withdrawing?: string;
     source: string;
     updatedAt: string;
 }
@@ -54,6 +65,7 @@ interface FetchP2POffersOptions {
     rows?: number;
     payTypes?: string[];
     amount?: number;
+    throwOnError?: boolean;
 }
 
 export interface VesSellReferenceRate {
@@ -63,6 +75,7 @@ export interface VesSellReferenceRate {
     targetAmount: number;
     selectedIndex: number;
     rowsUsed: number;
+    advertiserNickName: string;
 }
 
 const toNumber = (value: unknown): number => {
@@ -79,6 +92,17 @@ const canCoverTargetAmount = (row: BinanceP2PAdvert, targetAmount: number) => {
     return true;
 };
 
+const extractErrorDetail = async (response: Response): Promise<string> => {
+    try {
+        const body = await response.json();
+        if (body?.details) return String(body.details);
+        if (body?.error) return String(body.error);
+        return '';
+    } catch {
+        return '';
+    }
+};
+
 export function useBinanceAPI() {
     const [loadingBalance, setLoadingBalance] = useState(false);
     const [loadingP2P, setLoadingP2P] = useState(false);
@@ -92,9 +116,7 @@ export function useBinanceAPI() {
         try {
             const response = await fetch(`${VPS_BASE_URL}/balance?asset=${asset}`, {
                 method: 'GET',
-                headers: {
-                    'x-vps-token': VPS_AUTH_TOKEN
-                }
+                headers: await authenticatedHeaders()
             });
 
             if (!response.ok) {
@@ -120,19 +142,17 @@ export function useBinanceAPI() {
         try {
             const response = await fetch(`${VPS_BASE_URL}/p2p-rate`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-vps-token': VPS_AUTH_TOKEN
-                },
+                headers: await authenticatedHeaders(true),
                 body: JSON.stringify({ amount, fiat, asset, tradeType })
             });
 
             if (!response.ok) {
-                throw new Error('Error al consultar P2P en el VPS');
+                const detail = await extractErrorDetail(response);
+                throw new Error(detail || `Error ${response.status} consultando el VPS de Binance.`);
             }
 
             const data = await response.json();
-            if (data.error) throw new Error(data.error);
+            if (data.error) throw new Error(String(data.error));
 
             setP2pRate(data);
             return data;
@@ -151,6 +171,7 @@ export function useBinanceAPI() {
         rows = 20,
         payTypes = [],
         amount = 0,
+        throwOnError = false,
     }: FetchP2POffersOptions = {}): Promise<BinanceP2PAdvert[]> => {
         setLoadingP2P(true);
         setError(null);
@@ -172,40 +193,59 @@ export function useBinanceAPI() {
 
             const response = await fetch(`${VPS_BASE_URL}/api/proxy/p2p`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'x-vps-token': VPS_AUTH_TOKEN
-                },
+                headers: await authenticatedHeaders(true),
                 body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
-                throw new Error('Error al consultar anuncios P2P directos en el VPS');
+                const detail = await extractErrorDetail(response);
+                const message = detail || `Error ${response.status} consultando el VPS de Binance.`;
+                setError(message);
+                if (throwOnError) throw new Error(message);
+                return [];
             }
 
             const data = await response.json();
-            if (data?.error) throw new Error(data.error);
+            if (data?.error) {
+                const message = String(data.error);
+                setError(message);
+                if (throwOnError) throw new Error(message);
+                return [];
+            }
             return Array.isArray(data?.data) ? data.data : [];
         } catch (err: any) {
-            setError(err.message);
+            const message = err?.message || 'Error al consultar anuncios P2P directos en el VPS';
+            setError(message);
+            if (throwOnError) throw err;
             return [];
         } finally {
             setLoadingP2P(false);
         }
     }, []);
 
-    const fetchVesSellFifthBdvRate = useCallback(async (targetAmount: number = 50000): Promise<VesSellReferenceRate | null> => {
+    const fetchVesBdvReferenceRate = useCallback(async (
+        tradeType: 'BUY' | 'SELL',
+        targetAmount: number = 50000,
+        selectedIndex: number = 5,
+    ): Promise<VesSellReferenceRate | null> => {
         const rows = await fetchP2POffers({
             fiat: 'VES',
             asset: 'USDT',
-            tradeType: 'BUY',
+            tradeType,
             rows: 20,
             payTypes: ['BancoDeVenezuela'],
             amount: targetAmount,
+            throwOnError: true,
         });
 
         const matchingRows = rows.filter((row) => canCoverTargetAmount(row, targetAmount));
-        const selected = matchingRows[4];
+        const targetIndex = selectedIndex - 1;
+        const selected = matchingRows[targetIndex >= 0 && targetIndex < matchingRows.length ? targetIndex : 0];
+        
+        if (!selected) {
+            return null;
+        }
+        
         const rate = toNumber(selected?.adv?.price);
 
         if (!(rate > 0)) {
@@ -214,13 +254,28 @@ export function useBinanceAPI() {
 
         return {
             rate,
-            source: `Binance P2P SELL BDV #5 (${targetAmount.toLocaleString('es-VE')} VES)`,
+            source: `Binance P2P ${tradeType} BDV #${selectedIndex} (${targetAmount.toLocaleString('es-VE')} VES)`,
             updatedAt: new Date().toISOString(),
             targetAmount,
-            selectedIndex: 5,
+            selectedIndex,
             rowsUsed: matchingRows.length,
+            advertiserNickName: selected?.advertiser?.nickName || 'Desconocido',
         };
     }, [fetchP2POffers]);
+
+    // SELL book: sellers offering USDT. Used to price a wholesale USDT purchase.
+    const fetchVesSellFifthBdvRate = useCallback(
+        (targetAmount: number = 50000, selectedIndex: number = 5) =>
+            fetchVesBdvReferenceRate('SELL', targetAmount, selectedIndex),
+        [fetchVesBdvReferenceRate],
+    );
+
+    // BUY book: buyers of USDT. Used to position our own USDT sell advertisement.
+    const fetchVesBuyFifthBdvRate = useCallback(
+        (targetAmount: number = 50000, selectedIndex: number = 5) =>
+            fetchVesBdvReferenceRate('BUY', targetAmount, selectedIndex),
+        [fetchVesBdvReferenceRate],
+    );
 
     return {
         balance,
@@ -232,5 +287,6 @@ export function useBinanceAPI() {
         fetchP2PRate,
         fetchP2POffers,
         fetchVesSellFifthBdvRate,
+        fetchVesBuyFifthBdvRate,
     };
 }

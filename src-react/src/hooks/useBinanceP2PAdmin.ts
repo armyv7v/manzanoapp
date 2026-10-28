@@ -136,11 +136,12 @@ export function useBinanceP2PAdmin() {
     const activeAction = useMemo(() => actions.find((action) => action.status === 'pending' || action.status === 'running') || null, [actions]);
 
     const requestAction = async (input: {
-        actionType: 'prepare_sell' | 'heartbeat';
+        actionType: 'prepare_sell' | 'publish_offline_ad' | 'retry_publish_offline_ad' | 'heartbeat';
         amount?: string;
         amountMode?: 'fiat' | 'asset';
         advertiser?: string;
         rowIndex?: number;
+        wholesalePurchaseId?: string;
     }) => {
         setSubmitting(true);
         try {

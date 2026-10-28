@@ -223,7 +223,10 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
         try {
             const [clpMarkets, directVesReference] = await Promise.all([
                 fetchJson<Record<string, any>>('https://criptoya.com/api/USDT/CLP/1'),
-                fetchVesSellFifthBdvRate(50000),
+                fetchVesSellFifthBdvRate(50000).catch((err) => {
+                    console.warn('Falla consultando VPS Binance en tasa mayorista:', err);
+                    return null;
+                }),
             ]);
 
             const rawUsdtToClp = pickCryptoYaAsk(clpMarkets, 'CLP');
@@ -316,7 +319,7 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
                             />
                         </div>
                         <div className="bg-emerald-50/50 border border-emerald-100/50 rounded-lg p-3 transition-colors">
-                            <label className="exchange-label text-emerald-700 font-bold">Tasa mayorista CLP/VES</label>
+                            <label className="exchange-label text-emerald-700 font-bold">Tasa mayorista VES/CLP</label>
                             <input
                                 type="number"
                                 min="0.000001"
@@ -351,13 +354,13 @@ export function WholesalePurchasesScreen({ onBack }: Props = {}) {
                     </p>
                     {latestPurchase?.wholesaleRateClpPerVes ? (
                         <p className="text-xs text-indigo-600">
-                            Última tasa mayorista registrada: {latestPurchase.wholesaleRateClpPerVes.toFixed(4)} CLP/VES
+                            Última tasa mayorista registrada: {latestPurchase.wholesaleRateClpPerVes.toFixed(4)} VES/CLP
                         </p>
                     ) : null}
                     {clpAmountComputed > 0 && (
                         <div className="space-y-1">
                             <p className="text-xs text-emerald-700 font-medium">
-                                Tasa Manzano App sugerida: {suggestedAppRate.toLocaleString('es-CL', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} CLP/VES
+                                Tasa Manzano App sugerida: {suggestedAppRate.toLocaleString('es-CL', { minimumFractionDigits: 4, maximumFractionDigits: 4 })} VES/CLP
                             </p>
                             <p className="text-xs text-gray-500">
                             Referencia CLP para esta compra: {clpAmountComputed.toLocaleString('es-CL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

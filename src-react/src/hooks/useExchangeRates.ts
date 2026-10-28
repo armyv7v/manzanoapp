@@ -12,6 +12,10 @@ export interface ExchangeRates {
     purchaseRateVES: number;
     totalClpBalance: number;
     isTakingOrders: boolean;
+    /** Posición en el libro BUY para fijar el precio del anuncio propio USDT/VES. */
+    binanceAdReferenceIndex?: number;
+    /** Posición en el libro SELL usada exclusivamente para la compra mayorista. */
+    binanceBuyerIndex?: number;
 }
 
 const DEFAULT_RATES: ExchangeRates = {
@@ -24,6 +28,8 @@ const DEFAULT_RATES: ExchangeRates = {
     purchaseRateVES: 0,
     totalClpBalance: 0,
     isTakingOrders: true,
+    binanceAdReferenceIndex: 5,
+    binanceBuyerIndex: 5,
 };
 
 interface ExchangeRateState {
@@ -78,6 +84,10 @@ export function useExchangeRates() {
                 rates.totalClpBalance = rateData.totalClpBalance || 0;
                 rates.purchaseRateVES = rateData.purchaseRateVES || 0;
                 rates.isTakingOrders = rateData.isTakingOrders !== false;
+                rates.binanceAdReferenceIndex = typeof rateData.binanceAdReferenceIndex === 'number'
+                    ? rateData.binanceAdReferenceIndex
+                    : 5;
+                rates.binanceBuyerIndex = typeof rateData.binanceBuyerIndex === 'number' ? rateData.binanceBuyerIndex : 5;
 
                 setState({ rates, loading: false, error: null });
             },

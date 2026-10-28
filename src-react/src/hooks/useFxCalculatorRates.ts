@@ -182,9 +182,9 @@ const fetchUsdtFiatVps = async (fiat: string, amount: number, vpsFetchP2P: any):
     }
 };
 
-const fetchUsdtVesSellFifthDirect = async (fetchVesSellFifthBdvRate: any): Promise<MarketQuote | null> => {
+const fetchUsdtVesSellFifthDirect = async (fetchVesSellFifthBdvRate: any, selectedIndex: number = 5): Promise<MarketQuote | null> => {
     try {
-        const data = await fetchVesSellFifthBdvRate(50000);
+        const data = await fetchVesSellFifthBdvRate(50000, selectedIndex);
         if (!data?.rate) return null;
         return {
             bid: data.rate,
@@ -237,7 +237,7 @@ export function useFxCalculatorRates(debouncedAmount: number = 0) {
                 fetchUsdtFiatCryptoYa('COP'),
                 fetchUsdtFiatCryptoYa('PEN'),
                 fetchUsdtFiatCryptoYa('VES'),
-                fetchUsdtVesSellFifthDirect(fetchVesSellFifthBdvRate),
+                fetchUsdtVesSellFifthDirect(fetchVesSellFifthBdvRate, rates.binanceBuyerIndex || 5),
             ]);
 
             const usdtVesFallback = usdtVesDirect

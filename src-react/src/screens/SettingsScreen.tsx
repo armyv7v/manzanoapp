@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useExchangeRates } from '../hooks/useExchangeRates';
 import { useBinanceP2PAdmin } from '../hooks/useBinanceP2PAdmin';
+import { useBinanceAPI } from '../hooks/useBinanceAPI';
 import { useNavigation } from '../contexts/NavigationContext';
 import { USER_TAGS, isSuperAdminEmail } from '../lib/constants';
 
@@ -15,6 +16,21 @@ const TAG_ROLES: Record<string, string> = {
     V2: 'Vendedor',
     V3: 'Vendedor',
 };
+
+const P2P_AD_TERMS = `☢️☢️ LEER POR FAVOR ☢️☢️
+
+🚨 NO ACEPTO PAGO DE TERCEROS. SERÁ REPORTADO EL USUARIO SI RECIBO PAGO DE TERCEROS. 🚨
+
+☢️☢️ Buen día si el anuncio está en línea. Estamos activos para liberar una vez confirmado el pago y recibo del capture 👀👀
+
+👉Por favor no pregunte si estamos en línea.
+
+Comerciante verificado con mas de 4 años operando en Binance, 100% calificaciones positivas ✅ y más de 9000 operaciones exitosas. 🔝
+
+☢️☢️ LEER POR FAVOR ☢️☢️
+
+Contamos con 15 minutos para liberar, estamos procesando varias ordenes a la vez. Tiempo promedio de liberación 4-6 min. Por favor no se desespere que si el pago se confirma será liberado a la brevedad.
+☢️☢️`;
 
 interface Props {
     onBack?: () => void;
@@ -55,6 +71,7 @@ export function SettingsScreen({ onBack }: Props = {}) {
     const handleBack = onBack || goHome;
     const { user, role, logout } = useAuth();
     const { rates } = useExchangeRates();
+    const { fetchVesBuyFifthBdvRate } = useBinanceAPI();
     const currentTag = user?.email ? USER_TAGS[user.email] || '—' : '—';
     const superAdmin = isSuperAdminEmail(user?.email);
 
@@ -74,6 +91,39 @@ export function SettingsScreen({ onBack }: Props = {}) {
     const [prepareMode, setPrepareMode] = useState<'fiat' | 'asset'>('fiat');
     const [advertiser, setAdvertiser] = useState('');
     const [rowIndex, setRowIndex] = useState('0');
+
+    const [adReferenceIndexInput, setAdReferenceIndexInput] = useState<string>('');
+    const [updatingIndex, setUpdatingIndex] = useState(false);
+    const [adDraftReference, setAdDraftReference] = useState<{ rate: number; source: string } | null>(null);
+
+    useEffect(() => {
+        if (rates.binanceAdReferenceIndex) {
+            setAdReferenceIndexInput(rates.binanceAdReferenceIndex.toString());
+        }
+    }, [rates.binanceAdReferenceIndex]);
+
+    const handleSaveAdReferenceIndex = async () => {
+        const val = parseInt(adReferenceIndexInput, 10);
+        if (isNaN(val) || val < 1 || val > 10) {
+            showToast('El índice del anuncio debe estar entre 1 y 10.');
+            return;
+        }
+        setUpdatingIndex(true);
+        try {
+            const { doc, updateDoc } = await import('firebase/firestore');
+            const { db } = await import('../lib/firebase');
+            const rateRef = doc(db, 'config', 'rate');
+            await updateDoc(rateRef, { binanceAdReferenceIndex: val });
+            const reference = await fetchVesBuyFifthBdvRate(50000, val);
+            if (!reference) throw new Error('No se encontró una oferta BUY válida para esa posición.');
+            setAdDraftReference({ rate: reference.rate, source: reference.source });
+            showToast(`Referencia #${val} guardada y borrador actualizado.`);
+        } catch (error: any) {
+            showToast(error.message || 'Error al actualizar la referencia del anuncio.');
+        } finally {
+            setUpdatingIndex(false);
+        }
+    };
 
     const runtimeLabel = useMemo(() => {
         if (runtime.status === 'running') return 'VPS procesando acción';
@@ -109,6 +159,16 @@ export function SettingsScreen({ onBack }: Props = {}) {
             showToast(`Pre-order enviado al VPS. Acción ${result.actionId}.`);
         } catch (error) {
             const message = error instanceof Error ? error.message : 'No se pudo solicitar el pre-order.';
+            showToast(message);
+        }
+    };
+
+    const handlePublishOfflineAd = async () => {
+        try {
+            const result = await requestAction({ actionType: 'publish_offline_ad' });
+            showToast(`Publicación offline enviada al VPS. Acción ${result.actionId}.`);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'No se pudo publicar el anuncio offline.';
             showToast(message);
         }
     };
@@ -246,6 +306,74 @@ export function SettingsScreen({ onBack }: Props = {}) {
                                 <p>{runtime.lastError}</p>
                             </div>
                         )}
+
+                        <div className="bg-blue-50/40 rounded-xl p-4 space-y-3 border border-blue-100/50">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-bold text-blue-900">Referencia del anuncio de venta Binance P2P</p>
+                                    <p className="text-[11px] text-gray-400 mt-1">Define la posición 1 a 10 entre compradores Banco de Venezuela para fijar el precio del anuncio propio. No afecta la tasa mayorista.</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-end gap-3">
+                                <label className="text-xs text-gray-600 space-y-1 flex-1">
+                                    <span>Comprador de referencia (1 a 10)</span>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        max="10"
+                                        value={adReferenceIndexInput}
+                                        onChange={(event) => setAdReferenceIndexInput(event.target.value)}
+                                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-800"
+                                        placeholder="Ej: 4"
+                                    />
+                                </label>
+                                <button
+                                    onClick={handleSaveAdReferenceIndex}
+                                    disabled={updatingIndex || !adReferenceIndexInput.trim()}
+                                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-xs font-semibold py-2 px-4 rounded-lg transition-colors h-9 flex items-center justify-center"
+                                >
+                                    {updatingIndex ? 'Guardando...' : 'Guardar índice'}
+                                </button>
+                            </div>
+
+                            <p className="rounded-lg border border-blue-100 bg-white/80 p-3 text-[11px] text-gray-600">
+                                La cotización BUY se consulta una sola vez cuando la compra mayorista se transfiera a Fondos y se inicie la preparación del anuncio.
+                            </p>
+                        </div>
+
+                        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div>
+                                    <p className="text-xs font-bold text-amber-950">Vista previa · Anuncio USDT/VES</p>
+                                    <p className="text-[11px] text-amber-800 mt-1">Borrador seguro: se publicará inicialmente fuera de línea.</p>
+                                </div>
+                                <span className="rounded-full bg-amber-200 px-2 py-1 text-[10px] font-bold uppercase text-amber-900">Borrador</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] text-amber-950">
+                                <p><span className="font-semibold">Par:</span> USDT / VES</p>
+                                <p><span className="font-semibold">Método:</span> Banco de Venezuela</p>
+                                <p><span className="font-semibold">Precio ref.:</span> {adDraftReference ? `${adDraftReference.rate.toFixed(3)} VES/USDT` : 'guarda el índice para consultar el borrador'}</p>
+                                <p><span className="font-semibold">Estado inicial:</span> Offline</p>
+                                <p><span className="font-semibold">Límite:</span> 25.000–200.000 VES*</p>
+                                <p><span className="font-semibold">Comprador:</span> +60 días</p>
+                                <p className="col-span-2"><span className="font-semibold">Filtro adicional:</span> comprobante de pago requerido (pendiente de validación API).</p>
+                            </div>
+                            <details className="rounded-lg border border-amber-200 bg-white/70 p-3 text-[11px] text-gray-700">
+                                <summary className="cursor-pointer font-semibold text-amber-900">Ver términos y mensaje inicial</summary>
+                                <p className="mt-2 whitespace-pre-line leading-relaxed">{P2P_AD_TERMS}</p>
+                            </details>
+                            <div className="flex flex-wrap gap-2">
+                                <button onClick={handlePublishOfflineAd} disabled={!!activeAction} className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">
+                                    Publicar offline
+                                </button>
+                                <button disabled className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800 opacity-50" title="Sólo se habilita tras confirmar el anuncio offline">
+                                    Activar anuncio
+                                </button>
+                            </div>
+                            <p className="text-[10px] text-amber-800">*El máximo final se recalcula con el valor VES del USDT disponible antes de publicar.</p>
+                            {adDraftReference && <p className="text-[10px] text-amber-800">Fuente del borrador: {adDraftReference.source}</p>}
+                        </div>
 
                         <div className="bg-gray-50 rounded-xl p-4 space-y-3 border border-gray-100">
                             <div className="flex items-center justify-between gap-3">

@@ -23,7 +23,11 @@ export interface WholesalePurchaseEntry {
     source: string;
     createdBy: string;
     createdAt: any;
-    status: 'Ingresada' | 'En proceso' | 'Completada';
+    status: 'Ingresada' | 'En proceso' | 'Completada' | 'Expirada';
+    automationStatus?: 'pending_spot' | 'transferring' | 'transferred' | 'expired' | 'transfer_failed';
+    spotCheckAttempts?: number;
+    offlineAdStatus?: 'pending' | 'published_offline' | 'failed';
+    offlineAdError?: string;
 }
 
 interface WholesalePurchasesState {
@@ -38,6 +42,20 @@ interface WholesalePurchasesState {
 const toNumber = (value: unknown): number => {
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toAutomationStatus = (value: unknown): WholesalePurchaseEntry['automationStatus'] => {
+    const allowed = ['pending_spot', 'transferring', 'transferred', 'expired', 'transfer_failed'];
+    return typeof value === 'string' && allowed.includes(value)
+        ? value as NonNullable<WholesalePurchaseEntry['automationStatus']>
+        : 'pending_spot';
+};
+
+const toOfflineAdStatus = (value: unknown): WholesalePurchaseEntry['offlineAdStatus'] => {
+    const allowed = ['pending', 'published_offline', 'failed'];
+    return typeof value === 'string' && allowed.includes(value)
+        ? value as NonNullable<WholesalePurchaseEntry['offlineAdStatus']>
+        : undefined;
 };
 
 export function useWholesalePurchases() {
@@ -73,6 +91,10 @@ export function useWholesalePurchases() {
                 createdBy: typeof data?.createdBy === 'string' ? data.createdBy : 'ADMIN',
                 createdAt: data?.createdAt || null,
                 status: typeof data?.status === 'string' ? (data.status as any) : 'Ingresada',
+                automationStatus: toAutomationStatus(data?.automationStatus),
+                spotCheckAttempts: toNumber(data?.spotCheckAttempts),
+                offlineAdStatus: toOfflineAdStatus(data?.offlineAdStatus),
+                offlineAdError: typeof data?.offlineAdError === 'string' ? data.offlineAdError : undefined,
             } : null;
 
             setState((prev) => ({ ...prev, latestPurchase }));
@@ -113,6 +135,10 @@ export function useWholesalePurchases() {
                     createdBy: typeof data.createdBy === 'string' ? data.createdBy : 'ADMIN',
                     createdAt: data.createdAt || null,
                     status: typeof data.status === 'string' ? (data.status as any) : 'Ingresada',
+                    automationStatus: toAutomationStatus(data.automationStatus),
+                    spotCheckAttempts: toNumber(data.spotCheckAttempts),
+                    offlineAdStatus: toOfflineAdStatus(data.offlineAdStatus),
+                    offlineAdError: typeof data.offlineAdError === 'string' ? data.offlineAdError : undefined,
                 };
             });
 
@@ -165,6 +191,9 @@ export function useWholesalePurchases() {
                     createdBy: user.email,
                     createdAt: now,
                     status: 'Ingresada',
+                    automationEnabled: true,
+                    automationStatus: 'pending_spot',
+                    spotCheckAttempts: 0,
                 });
 
                 // Esta tasa queda como referencia por defecto para futuras cargas de saldo.
