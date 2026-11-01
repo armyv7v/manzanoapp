@@ -3,6 +3,8 @@ import { useAuth, useNotifications } from './hooks';
 import { AuthProvider } from './contexts/AuthContext';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { RatesProvider } from './contexts/RatesContext';
+import { AccountsProvider } from './contexts/AccountsContext';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
@@ -118,7 +120,11 @@ function App() {
             <AuthProvider>
                 <NavigationProvider>
                     <ToastProvider>
-                        <AppRouter />
+                        <RatesProvider>
+                            <AccountsProvider>
+                                <AppRouter />
+                            </AccountsProvider>
+                        </RatesProvider>
                     </ToastProvider>
                 </NavigationProvider>
             </AuthProvider>
