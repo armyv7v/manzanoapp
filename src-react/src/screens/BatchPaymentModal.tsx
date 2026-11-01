@@ -1,27 +1,13 @@
-﻿import { useState } from 'react';
+﻿import { useEffect, useState } from 'react';
 import { db, storage } from '../lib/firebase';
 import { runTransaction, doc, serverTimestamp, collection, increment } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth, useVesAccounts } from '../hooks';
-import { computeInterbankFee, computeOrderTotalRequired, computeSellerCommissionVES, normalizeBankName, USER_TAGS } from '../lib/constants';
+import { computeOrderTotalRequired, computePaidOrderFinancials, MAX_BATCH_ORDERS, type PaidOrderFinancials } from '../lib/constants';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
 import { Modal, Button } from '../components/ui';
 import { useToast } from '../contexts/ToastContext';
 import type { Order } from '../hooks/useOrders';
-
-const CLP_ADMIN_TAGS = new Set(['A1', 'A2']);
-const roundUp2 = (value: number) => Math.ceil(value * 100) / 100;
-
-const resolveUserTag = (raw: string): string => {
-    const normalized = (raw || '').trim();
-    if (!normalized) return '';
-
-    const mapped = USER_TAGS[normalized.toLowerCase()];
-    if (mapped) return mapped;
-
-    const asTag = normalized.toUpperCase();
-    return /^[AV]\d+$/.test(asTag) ? asTag : '';
-};
 
 interface BatchPaymentModalProps {
     isOpen: boolean;
@@ -36,8 +22,14 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
     const toast = useToast();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [confirmStep, setConfirmStep] = useState<0 | 1>(0);
     const [sourceAccountId, setSourceAccountId] = useState('');
     const [proofFiles, setProofFiles] = useState<Record<string, File>>({});
+
+    // El modal queda montado: cada apertura arranca en el paso de formulario.
+    useEffect(() => {
+        if (isOpen) setConfirmStep(0);
+    }, [isOpen]);
 
     const totalVes = selectedOrders.reduce((sum, order) => sum + order.destinationAmount, 0);
 
@@ -90,6 +82,17 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
             return;
         }
 
+        // Primer submit = revisión: el botón final confirma la ejecución.
+        if (confirmStep === 0) {
+            setConfirmStep(1);
+            return;
+        }
+
+        if (selectedOrders.length > MAX_BATCH_ORDERS) {
+            toast.error(`El lote admite hasta ${MAX_BATCH_ORDERS} pedidos por transacción.`);
+            return;
+        }
+
         const sourceAccount = accounts.find(a => a.id === sourceAccountId);
         if (!sourceAccount) {
             toast.error("Cuenta de origen no encontrada.");
@@ -109,66 +112,33 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
             });
             const uploadResults = await Promise.all(uploadPromises);
 
-            const ADMIN_BASE_COMMISSION_RATE = 0.01;
-            const TILLO_COMMISSION_RATE = 0.0015;
-
-            // Compute total amount to deduct first (for validation)
-            let totalDebitVes = 0;
-            const orderFeeMap = new Map<string, number>();
-            const sellerCommissionByOrder = new Map<string, {
+            // Financials via la ÚNICA fuente (constants.ts), con el mismo
+            // sourceBank que usará la transacción: lo mostrado, lo filtrado
+            // y lo debitado salen del mismo cálculo.
+            const batchByOrder = new Map<string, {
+                financials: PaidOrderFinancials;
                 sellerId: string;
                 sellerEmail: string;
-                sellerTag: string;
                 sellerCommissionRate: number;
                 orderCLPAmount: number;
-                sellerCommissionAmountCLP: number;
-                sellerCommissionAmountVES: number;
             }>();
+            let totalDebitVes = 0;
 
             selectedOrders.forEach(order => {
-                let fee = 0;
-                if (sourceAccount) {
-                    if (order.type === 'pago-movil') {
-                        fee = computeInterbankFee(order.destinationAmount);
-                    } else if (order.type === 'transferencia') {
-                        const sourceBank = normalizeBankName(sourceAccount.bank);
-                        const destBank = normalizeBankName(order.bank || '');
-                        if (sourceBank !== destBank) {
-                            fee = computeInterbankFee(order.destinationAmount);
-                        }
-                    }
-                }
-                orderFeeMap.set(order.id, fee);
-
-                const adminCommission = Math.ceil((order.destinationAmount * ADMIN_BASE_COMMISSION_RATE) * 100) / 100;
-                const tilloCommission = Math.ceil((order.destinationAmount * TILLO_COMMISSION_RATE) * 100) / 100;
-
+                const financials = computePaidOrderFinancials(order, sourceAccount.bank);
                 const sellerId = typeof order.sellerId === 'string' ? order.sellerId.trim() : '';
                 const sellerEmailFromOrder = typeof order.sellerEmail === 'string' ? order.sellerEmail.trim() : '';
                 const createdByTagEmail = typeof order.createdByTag === 'string' ? order.createdByTag.trim() : '';
                 const sellerEmail = sellerEmailFromOrder || createdByTagEmail;
                 const rawSellerRate = Number(order.sellerCommissionRate || (order as any).commissionRate || 0);
-                const sellerCommissionRate = Number.isFinite(rawSellerRate) ? rawSellerRate : 0;
-                const orderCLPAmount = Number(order.clpAmount || 0);
-                const sellerTag = resolveUserTag(sellerEmail || createdByTagEmail);
-
-                const useClpCommission = CLP_ADMIN_TAGS.has(sellerTag) || sellerTag.startsWith('V');
-                const sellerCommissionAmountCLP = useClpCommission && sellerCommissionRate > 0 && orderCLPAmount > 0
-                    ? roundUp2(orderCLPAmount * sellerCommissionRate)
-                    : 0;
-                const sellerCommissionAmountVES = computeSellerCommissionVES(order);
-
-                sellerCommissionByOrder.set(order.id, {
+                batchByOrder.set(order.id, {
+                    financials,
                     sellerId,
                     sellerEmail,
-                    sellerTag,
-                    sellerCommissionRate,
-                    orderCLPAmount,
-                    sellerCommissionAmountCLP,
-                    sellerCommissionAmountVES,
+                    sellerCommissionRate: Number.isFinite(rawSellerRate) ? rawSellerRate : 0,
+                    orderCLPAmount: Number(order.clpAmount || 0),
                 });
-
-                totalDebitVes += order.destinationAmount + fee + adminCommission + tilloCommission + sellerCommissionAmountVES;
+                totalDebitVes += financials.totalDebitVesWithSellerCommission;
             });
 
             await runTransaction(db, async (transaction) => {
@@ -207,17 +177,18 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
 
                     const fileUrl = uploadResults.find(r => r.orderId === order.id)?.url;
 
-                    const currentAdminCommission = Math.ceil((order.destinationAmount * ADMIN_BASE_COMMISSION_RATE) * 100) / 100;
-                    const currentTilloCommission = Math.ceil((order.destinationAmount * TILLO_COMMISSION_RATE) * 100) / 100;
-                    const currentBankFee = orderFeeMap.get(order.id) || 0;
-                    const sellerCommission = sellerCommissionByOrder.get(order.id);
-                    const sellerId = sellerCommission?.sellerId || '';
-                    const sellerEmail = sellerCommission?.sellerEmail || '';
-                    const sellerTag = sellerCommission?.sellerTag || '';
-                    const sellerCommissionRate = sellerCommission?.sellerCommissionRate || 0;
-                    const orderCLPAmount = sellerCommission?.orderCLPAmount || 0;
-                    const sellerCommissionAmountCLP = sellerCommission?.sellerCommissionAmountCLP || 0;
-                    const sellerCommissionAmountVES = sellerCommission?.sellerCommissionAmountVES || 0;
+                    const batchEntry = batchByOrder.get(order.id)!;
+                    const f = batchEntry.financials;
+                    const currentAdminCommission = f.adminCommissionVes;
+                    const currentTilloCommission = f.tilloCommissionVes;
+                    const currentBankFee = f.bankFee;
+                    const sellerId = batchEntry.sellerId;
+                    const sellerEmail = batchEntry.sellerEmail;
+                    const sellerTag = f.sellerTag;
+                    const sellerCommissionRate = batchEntry.sellerCommissionRate;
+                    const orderCLPAmount = batchEntry.orderCLPAmount;
+                    const sellerCommissionAmountCLP = f.sellerCommissionAmountCLP;
+                    const sellerCommissionAmountVES = f.sellerCommissionAmountVES;
 
                     // 1. Update order
                     transaction.update(orderRef, {
@@ -234,7 +205,7 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                         bankFee: currentBankFee,
                         sellerCommissionAmountCLP,
                         sellerCommissionAmountVES,
-                        totalDebitVes: order.destinationAmount + currentBankFee + currentAdminCommission + currentTilloCommission,
+                        totalDebitVes: f.totalDebitVes,
                     });
 
                     if (sellerEmail && sellerCommissionRate > 0 && sellerCommissionAmountCLP > 0) {
@@ -515,13 +486,40 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                     })()}
                 </div>
 
+                {confirmStep === 1 && (
+                    <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-1.5">
+                        <p className="text-sm font-bold text-amber-800">Confirmación: revisa antes de ejecutar</p>
+                        <p className="text-xs text-amber-700">
+                            Se pagarán <b>{selectedOrders.length}</b> pedidos desde{' '}
+                            <b>{selectedSourceAccount?.bank} - {selectedSourceAccount?.holder}</b> por un total de{' '}
+                            <b>{totalDebitVesReal.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</b> (incluye fees y comisiones).
+                        </p>
+                        <p className="text-[11px] font-semibold text-red-600">
+                            Esta acción es irreversible: revierte solo con anulación (super admin).
+                        </p>
+                    </div>
+                )}
+
                 <div className="flex gap-3 pt-4 border-t border-gray-100">
-                    <Button variant="danger" onClick={onClose} type="button" className="flex-1" disabled={isSubmitting}>
-                        Cancelar
-                    </Button>
-                    <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
-                        Pagar Lote
-                    </Button>
+                    {confirmStep === 0 ? (
+                        <>
+                            <Button variant="danger" onClick={onClose} type="button" className="flex-1" disabled={isSubmitting}>
+                                Cancelar
+                            </Button>
+                            <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+                                Revisar y Confirmar
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Button variant="outline" onClick={() => setConfirmStep(0)} type="button" className="flex-1" disabled={isSubmitting}>
+                                Volver
+                            </Button>
+                            <Button type="submit" isLoading={isSubmitting} disabled={isSubmitting} className="flex-1 bg-emerald-600 hover:bg-emerald-700">
+                                Confirmar y Pagar Lote
+                            </Button>
+                        </>
+                    )}
                 </div>
             </form>
         </Modal>

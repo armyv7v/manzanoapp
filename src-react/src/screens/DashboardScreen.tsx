@@ -19,7 +19,7 @@ import { CreateBatchModal } from './CreateBatchModal';
 import { BatchPaymentModal } from './BatchPaymentModal';
 import type { ExchangeRates } from '../hooks/useExchangeRates';
 import type { Order } from '../hooks/useOrders';
-import { USER_TAGS } from '../lib/constants';
+import { USER_TAGS, MAX_BATCH_ORDERS } from '../lib/constants';
 import {
     Menu, Plus, TrendingUp, Clock, CheckCircle,
     CircleDollarSign, Apple, Copy, X, Share2, AlertTriangle, Eye, EyeOff,
@@ -390,8 +390,17 @@ export function DashboardScreen() {
     const toggleBatchSelect = (orderId: string) => {
         setSelectedForBatch(prev => {
             const next = new Set(prev);
-            if (next.has(orderId)) next.delete(orderId);
-            else next.add(orderId);
+            if (next.has(orderId)) {
+                next.delete(orderId);
+            } else {
+                // Tope del lote: cada pedido genera ~5-8 writes y la
+                // transaccion de Firestore tiene limite de 500.
+                if (next.size >= MAX_BATCH_ORDERS) {
+                    toast.warning(`El lote admite hasta ${MAX_BATCH_ORDERS} pedidos por transacción.`);
+                    return prev;
+                }
+                next.add(orderId);
+            }
             return next;
         });
     };
