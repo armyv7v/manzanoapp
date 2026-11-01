@@ -1,8 +1,9 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getMessaging, isSupported } from 'firebase/messaging';
+import type { FirebaseApp } from 'firebase/app';
 
 const firebaseConfig = {
     apiKey: "AIzaSyDLZBYfANw7o7FEOrw83PSrrQ7KmamAPEE",
@@ -16,7 +17,24 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+
+// Persistencia offline en IndexedDB: los writes en cola se envian al
+// recuperar red y los pedidos/lecturas sobreviven a cortes y arranques
+// en frio (critico en movil). Sin IndexedDB (WebView antiguo, pruebas),
+// cae a cache en memoria como antes.
+function createDb(app: FirebaseApp) {
+    try {
+        if (typeof indexedDB !== 'undefined') {
+            return initializeFirestore(app, {
+                localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+            });
+        }
+    } catch (err) {
+        console.warn('Persistencia offline no disponible, usando cache en memoria:', err);
+    }
+    return getFirestore(app);
+}
+export const db = createDb(app);
 export const storage = getStorage(app);
 
 let messagingInstance: any = null;
