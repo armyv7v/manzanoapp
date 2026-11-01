@@ -87,7 +87,7 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
             return;
         }
         try {
-            await markAsPaid(order.id, files, sourceAccountId, fee);
+            await markAsPaid(order.id, files, sourceAccountId);
             setToast('✅ Pedido marcado como pagado');
             setTimeout(() => { setToast(''); onClose(); }, 1200);
             setFiles([]);

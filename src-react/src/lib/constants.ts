@@ -45,6 +45,13 @@ export const shouldRestrictOrdersByVesBalance = (
 ): boolean => (role === 'seller' || role === 'client') && isOrderBalanceRestrictionActive(now);
 
 /**
+ * Tope de pedidos por pago en lote: cada pedido genera ~5-8 writes y la
+ * transacción de Firestore tiene un límite de 500 writes (además de
+ * contención por bloqueo de la cuenta origen).
+ */
+export const MAX_BATCH_ORDERS = 40;
+
+/**
  * Prefijos de cuentas bancarias venezolanas → nombre del banco
  */
 export const VENEZUELAN_BANK_PREFIXES: Record<string, string> = {
@@ -114,6 +121,90 @@ export const computeInterbankFee = (amount: number): number => {
 
 /** Tags de vendedor que cobran comisión de venta en VES sobre el monto destino. */
 const VES_SELLER_TAGS = new Set(['A3', 'A4', 'A5']);
+
+/** Tags que cobran comisión de venta en CLP sobre el monto CLP del pedido. */
+const CLP_SELLER_TAGS = new Set(['A1', 'A2']);
+
+const roundUp2 = (value: number): number => Math.ceil(value * 100) / 100;
+
+/**
+ * Comisión de venta en CLP sobre el monto CLP del pedido (tags A1/A2/V*).
+ * Debe coincidir exactamente con lo que persisten markAsPaid y el pago en lote.
+ */
+export const computeSellerCommissionCLP = (order: {
+    clpAmount?: number;
+    sellerCommissionRate?: number | string;
+    commissionRate?: number | string;
+    sellerEmail?: string;
+    createdByTag?: string;
+}): number => {
+    const sellerTag = resolveUserTag(String(order.sellerEmail || order.createdByTag || ''));
+    const eligible = CLP_SELLER_TAGS.has(sellerTag) || sellerTag.startsWith('V');
+    if (!eligible) return 0;
+    const rawRate = Number(order.sellerCommissionRate ?? order.commissionRate ?? 0);
+    const rate = Number.isFinite(rawRate) ? rawRate : 0;
+    const clpAmount = Number(order.clpAmount || 0);
+    if (rate <= 0 || clpAmount <= 0) return 0;
+    return roundUp2(clpAmount * rate);
+};
+
+/**
+ * ÚNICA fuente de verdad para los financials de marcar un pedido pendiente
+ * como pagado desde una cuenta VES. Usada por markAsPaid y el pago en lote:
+ * nunca recalcular comisiones inline en los puntos de pago.
+ *
+ * `sourceBank` vacío/undefined = pago sin cuenta origen (pedidos no-VES o
+ * legacy): sin fee bancario, igual que el comportamiento previo.
+ */
+export interface PaidOrderFinancials {
+    baseAmount: number;
+    bankFee: number;
+    adminCommissionVes: number;
+    tilloCommissionVes: number;
+    sellerCommissionAmountVES: number;
+    sellerCommissionAmountCLP: number;
+    sellerTag: string;
+    /** base + fee + admin + tillo: lo que persiste en order.totalDebitVes. */
+    totalDebitVes: number;
+    /** totalDebitVes + comisión de venta VES: débito real de la cuenta origen. */
+    totalDebitVesWithSellerCommission: number;
+}
+
+export const computePaidOrderFinancials = (
+    order: {
+        destinationAmount?: number;
+        type?: string;
+        bank?: string;
+        clpAmount?: number;
+        sellerEmail?: string;
+        createdByTag?: string;
+        sellerCommissionRate?: number | string;
+        commissionRate?: number | string;
+    },
+    sourceBank?: string
+): PaidOrderFinancials => {
+    const baseAmount = Number(order.destinationAmount || 0);
+    const bankFee = sourceBank ? computeOrderBankFee(order, sourceBank) : 0;
+    const { adminCommission, tilloCommission } = computeOrderTotalWithCommissions(baseAmount);
+    const sellerCommissionAmountVES = computeSellerCommissionVES(order);
+    const sellerCommissionAmountCLP = computeSellerCommissionCLP(order);
+    const sellerTag = resolveUserTag(String(order.sellerEmail || order.createdByTag || ''));
+    // Sumas crudas (componentes ya con ceil individual): mantener paridad
+    // exacta con lo que persistia el codigo previo y con lo que lee la
+    // reversion; la tolerancia 1e-6 cubre el polvo flotante en comparaciones.
+    const totalDebitVes = baseAmount + bankFee + adminCommission + tilloCommission;
+    return {
+        baseAmount,
+        bankFee,
+        adminCommissionVes: adminCommission,
+        tilloCommissionVes: tilloCommission,
+        sellerCommissionAmountVES,
+        sellerCommissionAmountCLP,
+        sellerTag,
+        totalDebitVes,
+        totalDebitVesWithSellerCommission: totalDebitVes + sellerCommissionAmountVES,
+    };
+};
 
 /**
  * Comisión de venta VES de un pedido pendiente (aún no viene en el doc):

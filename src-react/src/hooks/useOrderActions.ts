@@ -4,11 +4,9 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db, storage } from '../lib/firebase';
 import { useAuth } from './useAuth';
-import { SUPER_ADMIN_EMAIL, USER_TAGS, isSuperAdminEmail } from '../lib/constants';
+import { SUPER_ADMIN_EMAIL, USER_TAGS, computePaidOrderFinancials, isSuperAdminEmail } from '../lib/constants';
 
 const CLP_ADMIN_TAGS = new Set(['A1', 'A2']);
-const VES_ADMIN_TAGS = new Set(['A3', 'A4', 'A5']);
-const roundUp2 = (value: number) => Math.ceil(value * 100) / 100;
 
 const resolveUserTag = (raw: string): string => {
     const normalized = (raw || '').trim();
@@ -69,7 +67,7 @@ export function useOrderActions() {
     const [state, setState] = useState<ActionState>({ loading: false, error: null });
 
     /** Marcar un pedido como pagado y subir comprobante(s) */
-    const markAsPaid = async (orderId: string, files: File[], sourceAccountId?: string, fee?: number) => {
+    const markAsPaid = async (orderId: string, files: File[], sourceAccountId?: string) => {
         setState({ loading: true, error: null });
         try {
             if (!user) throw new Error('Debes iniciar sesion.');
@@ -99,12 +97,24 @@ export function useOrderActions() {
                 const orderData = orderDoc.data();
                 if (orderData.status === 'Pagado') throw new Error('El pedido ya estaba pagado.');
 
-                const baseAmount = orderData.destinationAmount || 0;
-                const appliedFee = fee || 0;
-                const adminCommissionVes = Math.ceil((baseAmount * 0.01) * 100) / 100;
-                const tilloCommissionVes = Math.ceil((baseAmount * 0.0015) * 100) / 100;
-                const totalCommissionVes = adminCommissionVes + tilloCommissionVes;
-                const totalDebitVes = baseAmount + appliedFee + totalCommissionVes;
+                // ÚNICA fuente de financials (constants.ts): fee, comisiones
+                // admin/tillo y comisión de venta CLP/VES. Sin cuenta origen
+                // (no-VES/legacy) no hay fee, igual que antes.
+                const sourceBank = (accountRef && accountDoc?.exists())
+                    ? String(accountDoc.data().bank || '')
+                    : '';
+                const financials = computePaidOrderFinancials(orderData, sourceBank);
+                const {
+                    baseAmount,
+                    bankFee: appliedFee,
+                    adminCommissionVes,
+                    tilloCommissionVes,
+                    sellerCommissionAmountVES,
+                    sellerCommissionAmountCLP,
+                    sellerTag,
+                    totalDebitVes,
+                    totalDebitVesWithSellerCommission,
+                } = financials;
                 const sellerId = typeof orderData.sellerId === 'string' ? orderData.sellerId.trim() : '';
                 const sellerEmailFromOrder = typeof orderData.sellerEmail === 'string' ? orderData.sellerEmail.trim() : '';
                 const createdByTagEmail = typeof orderData.createdByTag === 'string' ? orderData.createdByTag.trim() : '';
@@ -112,24 +122,12 @@ export function useOrderActions() {
                 const rawSellerRate = Number(orderData.sellerCommissionRate || orderData.commissionRate || 0);
                 const sellerCommissionRate = Number.isFinite(rawSellerRate) ? rawSellerRate : 0;
                 const orderCLPAmount = Number(orderData.clpAmount || 0);
-                const sellerTag = resolveUserTag(sellerEmail || createdByTagEmail);
-                const useVesCommission = VES_ADMIN_TAGS.has(sellerTag);
-                const useClpCommission = CLP_ADMIN_TAGS.has(sellerTag) || sellerTag.startsWith('V');
-
-                const sellerCommissionAmountCLP = useClpCommission && sellerCommissionRate > 0 && orderCLPAmount > 0
-                    ? roundUp2(orderCLPAmount * sellerCommissionRate)
-                    : 0;
-                const sellerCommissionAmountVES = useVesCommission && sellerCommissionRate > 0 && baseAmount > 0
-                    ? roundUp2(baseAmount * sellerCommissionRate)
-                    : 0;
 
                 const purchaseRateVES = rateDoc.exists() ? rateDoc.data().purchaseRateVES || 0 : 0;
                 let totalDebitClp = 0;
                 if (purchaseRateVES > 0) {
-                    totalDebitClp = Math.ceil((baseAmount + appliedFee + totalCommissionVes) / purchaseRateVES * 100) / 100;
+                    totalDebitClp = Math.ceil(totalDebitVes / purchaseRateVES * 100) / 100;
                 }
-
-                const totalDebitVesWithSellerCommission = totalDebitVes + sellerCommissionAmountVES;
 
                 const ts = serverTimestamp();
 
