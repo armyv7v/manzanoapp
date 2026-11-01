@@ -260,7 +260,7 @@ export function DashboardScreen() {
     const { user, role, logout } = useAuth();
     const { rates, loading: ratesLoading } = useExchangeRates();
     const { totalBalance: vesTotalBalance, loading: vesAccountsLoading } = useVesAccounts();
-    const { pending, paid, loading: ordersLoading } = useOrders();
+    const { pending, paid, loading: ordersLoading, error: ordersError } = useOrders();
     const { cancelOrder, copyOrderData, loading: actionLoading } = useOrderActions();
     const { navigate, params } = useNavigation();
     const toast = useToast();
@@ -519,6 +519,12 @@ export function DashboardScreen() {
                         </div>
                         {ordersLoading ? (
                             <div className="text-center py-8 text-gray-400 text-sm animate-pulse">Cargando...</div>
+                        ) : ordersError ? (
+                            <div className="py-6 bg-red-50 rounded-xl border border-red-200 text-center space-y-2">
+                                <p className="text-red-600 text-sm font-bold">No se pudieron cargar los pedidos</p>
+                                <p className="text-red-400 text-xs px-4 break-words">{ordersError}</p>
+                                <p className="text-gray-400 text-[11px]">Revisa tu conexión; los datos se sincronizan al reconectar.</p>
+                            </div>
                         ) : pending.length === 0 ? (
                             <div className="text-center py-8 bg-white rounded-xl border border-gray-100">
                                 <CheckCircle className="w-8 h-8 text-green-300 mx-auto mb-2" />
@@ -573,6 +579,10 @@ export function DashboardScreen() {
                             </div>
                         ) : ordersLoading ? (
                             <div className="text-center py-8 text-gray-400 text-sm animate-pulse">Cargando...</div>
+                        ) : ordersError ? (
+                            <div className="py-6 bg-red-50 rounded-xl border border-red-200 text-center">
+                                <p className="text-red-600 text-sm font-bold">No se pudieron cargar los pagos</p>
+                            </div>
                         ) : paid.length === 0 ? (
                             <div className="text-center py-8 bg-white rounded-xl border border-gray-100">
                                 <p className="text-gray-400 text-sm">No hay pagos registrados hoy.</p>

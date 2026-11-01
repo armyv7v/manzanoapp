@@ -18,6 +18,7 @@ import { ReportsScreen } from './screens/ReportsScreen';
 import { BdvMonitorScreen } from './screens/BdvMonitorScreen';
 import { AgentIntentApprovalModal } from './screens/AgentIntentApprovalModal';
 import { BottomNav } from './components/BottomNav';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Apple } from 'lucide-react';
 
 function AppRouter() {
@@ -113,13 +114,15 @@ function AppRouter() {
 
 function App() {
     return (
-        <AuthProvider>
-            <NavigationProvider>
-                <ToastProvider>
-                    <AppRouter />
-                </ToastProvider>
-            </NavigationProvider>
-        </AuthProvider>
+        <ErrorBoundary>
+            <AuthProvider>
+                <NavigationProvider>
+                    <ToastProvider>
+                        <AppRouter />
+                    </ToastProvider>
+                </NavigationProvider>
+            </AuthProvider>
+        </ErrorBoundary>
     );
 }
 
