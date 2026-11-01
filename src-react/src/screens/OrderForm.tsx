@@ -388,7 +388,9 @@ export function OrderForm({
                             }
                         </p>
                         <p className="mt-2 text-[11px] text-gray-600">
-                            Pedido actual: <span className="font-bold">{destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</span>
+                            Pedido (con comisiones): <span className="font-bold">{totalConComisiones > 0
+                                ? totalConComisiones.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                                : '0,00'} VES</span>
                         </p>
                         {insufficientVesBalance && (
                             <p className="mt-1 text-[11px] font-semibold text-amber-700">
