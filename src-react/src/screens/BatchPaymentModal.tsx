@@ -41,6 +41,17 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
 
     const totalVes = selectedOrders.reduce((sum, order) => sum + order.destinationAmount, 0);
 
+    // Debito real: base + fee interbancario (depende del banco de la cuenta
+    // origen) + comisiones admin/tillo + comision vendedor. Mismo calculo que
+    // aplicara la transaccion, para que el numero mostrado coincida con el
+    // delta de saldo.
+    const selectedSourceAccount = accounts.find(a => a.id === sourceAccountId);
+    const totalDebitVesReal = selectedOrders.reduce(
+        (sum, order) => sum + computeOrderTotalRequired(order, selectedSourceAccount?.bank || ''),
+        0
+    );
+    const totalFeesYComisiones = totalDebitVesReal - totalVes;
+
     const handleFileChange = (orderId: string, file: File | null) => {
         if (file) {
             setProofFiles(prev => ({ ...prev, [orderId]: file }));
@@ -377,15 +388,31 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
         <Modal isOpen={isOpen} onClose={onClose} title="Procesar Lote Pendiente" maxWidth="xl">
             <form onSubmit={handleSubmit} className="space-y-6">
 
-                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl">
-                    <div className="flex justify-between items-center text-sm mb-2">
+                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl space-y-1.5">
+                    <div className="flex justify-between items-center text-sm">
                         <span className="text-emerald-800">Total Pedidos:</span>
                         <span className="font-bold text-emerald-900">{selectedOrders.length}</span>
                     </div>
-                    <div className="flex justify-between items-center text-lg">
-                        <span className="text-emerald-800 font-bold">Total a Pagar:</span>
-                        <span className="font-black text-emerald-900">{totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+                    <div className="flex justify-between items-center text-sm">
+                        <span className="text-emerald-800">Monto base:</span>
+                        <span className="font-bold text-emerald-900">{totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
                     </div>
+                    {sourceAccountId ? (
+                        <>
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-emerald-800">Fees y comisiones:</span>
+                                <span className="font-semibold text-emerald-700">{totalFeesYComisiones.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+                            </div>
+                            <div className="flex justify-between items-center text-lg border-t border-emerald-200 pt-1.5">
+                                <span className="text-emerald-800 font-bold">Total a Debitar:</span>
+                                <span className="font-black text-emerald-900">{totalDebitVesReal.toLocaleString('es-VE', { minimumFractionDigits: 2 })} VES</span>
+                            </div>
+                        </>
+                    ) : (
+                        <p className="text-[11px] text-emerald-600 pt-0.5">
+                            Selecciona la cuenta origen para ver las comisiones bancarias y el total real a debitar.
+                        </p>
+                    )}
                 </div>
 
                 <div className="space-y-4 max-h-[40vh] overflow-y-auto w-full px-1">
