@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { useAuth, useNotifications } from './hooks';
 import { AuthProvider } from './contexts/AuthContext';
 import { NavigationProvider, useNavigation } from './contexts/NavigationContext';
@@ -7,21 +7,32 @@ import { RatesProvider } from './contexts/RatesContext';
 import { AccountsProvider } from './contexts/AccountsContext';
 import { LoginScreen } from './screens/LoginScreen';
 import { DashboardScreen } from './screens/DashboardScreen';
-import { HistoryScreen } from './screens/HistoryScreen';
-import { ClientsScreen } from './screens/ClientsScreen';
-import { BalanceScreen } from './screens/BalanceScreen';
-import { FxCalculatorScreen } from './screens/FxCalculatorScreen';
-import { WholesalePurchasesScreen } from './screens/WholesalePurchasesScreen';
-import { VesBalanceScreen } from './screens/VesBalanceScreen';
-import { SettingsScreen } from './screens/SettingsScreen';
-import { CommissionsScreen } from './screens/CommissionsScreen';
-import { AccountsScreen } from './screens/AccountsScreen';
-import { ReportsScreen } from './screens/ReportsScreen';
-import { BdvMonitorScreen } from './screens/BdvMonitorScreen';
 import { AgentIntentApprovalModal } from './screens/AgentIntentApprovalModal';
 import { BottomNav } from './components/BottomNav';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Apple } from 'lucide-react';
+
+// Pantallas secundarias con carga diferida: el chunk inicial solo lleva el
+// Dashboard; el resto baja al navegar. El vendor split ya saca firebase/react.
+const HistoryScreen = lazy(() => import('./screens/HistoryScreen').then(m => ({ default: m.HistoryScreen })));
+const ClientsScreen = lazy(() => import('./screens/ClientsScreen').then(m => ({ default: m.ClientsScreen })));
+const BalanceScreen = lazy(() => import('./screens/BalanceScreen').then(m => ({ default: m.BalanceScreen })));
+const FxCalculatorScreen = lazy(() => import('./screens/FxCalculatorScreen').then(m => ({ default: m.FxCalculatorScreen })));
+const WholesalePurchasesScreen = lazy(() => import('./screens/WholesalePurchasesScreen').then(m => ({ default: m.WholesalePurchasesScreen })));
+const VesBalanceScreen = lazy(() => import('./screens/VesBalanceScreen').then(m => ({ default: m.VesBalanceScreen })));
+const SettingsScreen = lazy(() => import('./screens/SettingsScreen').then(m => ({ default: m.SettingsScreen })));
+const CommissionsScreen = lazy(() => import('./screens/CommissionsScreen').then(m => ({ default: m.CommissionsScreen })));
+const AccountsScreen = lazy(() => import('./screens/AccountsScreen').then(m => ({ default: m.AccountsScreen })));
+const ReportsScreen = lazy(() => import('./screens/ReportsScreen').then(m => ({ default: m.ReportsScreen })));
+const BdvMonitorScreen = lazy(() => import('./screens/BdvMonitorScreen').then(m => ({ default: m.BdvMonitorScreen })));
+
+function ScreenFallback() {
+    return (
+        <div className="flex items-center justify-center py-24">
+            <p className="text-gray-400 text-sm animate-pulse">Cargando...</p>
+        </div>
+    );
+}
 
 function AppRouter() {
     const { user, role, loading } = useAuth();
@@ -106,7 +117,9 @@ function AppRouter() {
     return (
         <>
             <div className="pb-16 md:pb-0 safe-area-top">
-                {SCREENS[screen] || <DashboardScreen />}
+                <Suspense fallback={<ScreenFallback />}>
+                    {SCREENS[screen] || <DashboardScreen />}
+                </Suspense>
             </div>
             <BottomNav />
             <AgentIntentApprovalModal />
