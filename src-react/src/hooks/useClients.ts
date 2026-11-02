@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { collection, query, orderBy, limit, getDocs, where, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, where, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from './useAuth';
@@ -131,11 +131,19 @@ export const findClientSilently = async (
         // Shared clients is admin-only according to Firestore rules.
         if (!scope) {
             try {
-                const clientsQuery = query(collection(db, 'clients'), where('cedula', '==', cleanCedula), limit(1));
-                const clientsSnapshot = await getDocs(clientsQuery);
-                if (!clientsSnapshot.empty) {
-                    rawClient = clientsSnapshot.docs[0].data() as Record<string, any>;
-                    rawClientId = clientsSnapshot.docs[0].id;
+                // La colección usa doc-ID = cédula: getDoc directo cuesta 1
+                // lectura y también encuentra legacy sin campo `cedula`.
+                const byId = await getDoc(doc(db, 'clients', cleanCedula));
+                if (byId.exists()) {
+                    rawClient = byId.data() as Record<string, any>;
+                    rawClientId = byId.id;
+                } else {
+                    const clientsQuery = query(collection(db, 'clients'), where('cedula', '==', cleanCedula), limit(1));
+                    const clientsSnapshot = await getDocs(clientsQuery);
+                    if (!clientsSnapshot.empty) {
+                        rawClient = clientsSnapshot.docs[0].data() as Record<string, any>;
+                        rawClientId = clientsSnapshot.docs[0].id;
+                    }
                 }
             } catch {
                 rawClient = null;
