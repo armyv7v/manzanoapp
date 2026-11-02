@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
-import { SUPER_ADMIN_EMAIL, computeOrderBankFee, computeOrderTotalRequired, isSuperAdminEmail, USER_TAGS, resolveUserTag } from '../lib/constants';
+import { SUPER_ADMIN_EMAIL, computeOrderBankFee, computeOrderTotalRequired, isSuperAdminEmail, resolveUserTag } from '../lib/constants';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth, useOrderActions, useVesAccounts } from '../hooks';
+import { useStaffUsers } from '../hooks/useStaffUsers';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
 import type { Order } from '../hooks/useOrders';
 import { compressImage, formatFileSize } from '../lib/compressImage';
@@ -31,6 +32,7 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
     const { user, role } = useAuth();
     const { markAsPaid, cancelOrder, voidPaidOrder, copyOrderData, reassignOrder, loading: actionsLoading, error } = useOrderActions();
     const { accounts } = useVesAccounts();
+    const { staff: staffUsers } = useStaffUsers();
     const [files, setFiles] = useState<File[]>([]);
     const [compressing, setCompressing] = useState(false);
     const [sourceAccountId, setSourceAccountId] = useState('');
@@ -223,15 +225,15 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                             </div>
                             {isEditingSeller && (
                                 <div className="flex gap-2 items-center mt-1">
-                                    <select 
-                                        value={targetSellerEmail} 
+                                    <select
+                                        value={targetSellerEmail}
                                         onChange={(e) => setTargetSellerEmail(e.target.value)}
                                         className="flex-1 text-xs border-gray-200 rounded p-1.5 focus:ring-blue-500 focus:border-blue-500"
                                     >
                                         <option value="">Selecciona vendedor...</option>
-                                        {Object.entries(USER_TAGS).map(([email, tag]) => (
-                                            <option key={email} value={email}>
-                                                {tag} - {email}
+                                        {staffUsers.map(u => (
+                                            <option key={u.uid} value={u.email}>
+                                                {u.isAdmin ? '👑 ' : ''}{u.tag || 'sin tag'} - {u.email}
                                             </option>
                                         ))}
                                     </select>
