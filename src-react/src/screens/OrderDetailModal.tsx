@@ -4,7 +4,9 @@ import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth, useOrderActions, useVesAccounts } from '../hooks';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
 import type { Order } from '../hooks/useOrders';
+import { compressImage, formatFileSize } from '../lib/compressImage';
 import { Button, Modal } from '../components/ui';
+import { useToast } from '../contexts/ToastContext';
 
 
 interface Props {
@@ -19,16 +21,23 @@ const TYPE_LABELS: Record<string, string> = {
     'recarga-saldo': '💳 Recarga',
 };
 
+const formatTs = (ts: any): string => {
+    const ms = typeof ts?.seconds === 'number' ? ts.seconds * 1000 : (ts?.toDate ? ts.toDate().getTime() : 0);
+    if (!ms) return '—';
+    return new Date(ms).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
 export function OrderDetailModal({ order, isOpen, onClose }: Props) {
     const { user, role } = useAuth();
     const { markAsPaid, cancelOrder, voidPaidOrder, copyOrderData, reassignOrder, loading: actionsLoading, error } = useOrderActions();
     const { accounts } = useVesAccounts();
     const [files, setFiles] = useState<File[]>([]);
+    const [compressing, setCompressing] = useState(false);
     const [sourceAccountId, setSourceAccountId] = useState('');
     const [showUpload, setShowUpload] = useState(false);
     const [copied, setCopied] = useState(false);
     const [cancelConfirmStep, setCancelConfirmStep] = useState<0 | 1 | 2>(0);
-    const [toast, setToast] = useState('');
+    const toast = useToast();
     const [resendingEmail, setResendingEmail] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -61,9 +70,9 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
         if (!targetSellerEmail) return;
         try {
             await reassignOrder(order.id, targetSellerEmail);
-            setToast('✅ Pedido reasignado correctamente');
+            toast.success('✅ Pedido reasignado correctamente');
             setIsEditingSeller(false);
-            setTimeout(() => { setToast(''); onClose(); }, 1200);
+            setTimeout(() => onClose(), 1200);
         } catch {
             // Error handled in hook
         }
@@ -76,20 +85,18 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
         }
 
         if (order.destinationCurrency === 'VES' && !sourceAccountId) {
-            setToast('⚠️ Seleccione una cuenta origen');
-            setTimeout(() => setToast(''), 2000);
+            toast.warning('⚠️ Seleccione una cuenta origen');
             return;
         }
 
         if (files.length === 0) {
-            setToast('⚠️ Debe subir al menos un comprobante');
-            setTimeout(() => setToast(''), 2000);
+            toast.warning('⚠️ Debe subir al menos un comprobante');
             return;
         }
         try {
             await markAsPaid(order.id, files, sourceAccountId);
-            setToast('✅ Pedido marcado como pagado');
-            setTimeout(() => { setToast(''); onClose(); }, 1200);
+            toast.success('✅ Pedido marcado como pagado');
+            setTimeout(() => onClose(), 1200);
             setFiles([]);
             setShowUpload(false);
         } catch {
@@ -101,16 +108,15 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
         try {
             if (order.status === 'Pagado') {
                 if (requiresLegacySourceAccount && !sourceAccountId) {
-                    setToast('⚠️ Selecciona la cuenta pagadora historica');
-                    setTimeout(() => setToast(''), 2500);
+                    toast.warning('⚠️ Selecciona la cuenta pagadora historica');
                     return;
                 }
                 await voidPaidOrder(order.id, requiresLegacySourceAccount ? sourceAccountId : undefined);
             } else {
                 await cancelOrder(order.id);
             }
-            setToast(order.status === 'Pagado' ? '♻️ Pedido anulado y movimientos revertidos' : '🗑️ Pedido cancelado');
-            setTimeout(() => { setToast(''); onClose(); }, 1000);
+            toast.success(order.status === 'Pagado' ? '♻️ Pedido anulado y movimientos revertidos' : '🗑️ Pedido cancelado');
+            setTimeout(() => onClose(), 1000);
         } catch {
             // Error shown by hook
         }
@@ -129,19 +135,24 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
             const functions = getFunctions();
             const resendEmail = httpsCallable(functions, 'resendOrderEmail');
             await resendEmail({ orderId: order.id });
-            setToast('📧 Correo reenviado con éxito');
-            setTimeout(() => setToast(''), 3000);
+            toast.success('📧 Correo reenviado con éxito');
         } catch (err: any) {
-            setToast(`❌ Error: ${err.message || 'No se pudo enviar'}`);
-            setTimeout(() => setToast(''), 4000);
+            toast.error(`❌ Error: ${err.message || 'No se pudo enviar'}`);
         } finally {
             setResendingEmail(false);
         }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            setFiles(prev => [...prev, ...Array.from(e.target.files!)]);
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const selected = e.target.files ? Array.from(e.target.files) : [];
+        e.target.value = ''; // permite re-seleccionar el mismo archivo tras quitarlo
+        if (selected.length === 0) return;
+        setCompressing(true);
+        try {
+            const compressed = await Promise.all(selected.map(f => compressImage(f)));
+            setFiles(prev => [...prev, ...compressed]);
+        } finally {
+            setCompressing(false);
         }
     };
 
@@ -155,7 +166,6 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
         setSourceAccountId('');
         setCopied(false);
         setCancelConfirmStep(0);
-        setToast('');
         onClose();
     };
 
@@ -173,6 +183,17 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                         }`}>
                         {order.status}
                     </span>
+                </div>
+
+                {/* Metadatos de auditoria */}
+                <div className="flex flex-wrap justify-between gap-1 text-[11px] text-gray-400 px-0.5">
+                    <span>Creado: {formatTs((order as any).createdAt)}</span>
+                    {order.status === 'Pagado' && (
+                        <span>
+                            Pagado: {formatTs((order as any).paidAt)}
+                            {(order as any).paidByTag ? ` · ${resolveUserTag((order as any).paidByTag) || (order as any).paidByTag}` : ''}
+                        </span>
+                    )}
                 </div>
 
                 {/* Client info */}
@@ -351,20 +372,24 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                             fullWidth
                             onClick={() => fileInputRef.current?.click()}
                             className="!text-xs"
+                            disabled={compressing}
                         >
-                            📎 Seleccionar Imagen(es)
+                            {compressing ? '⏳ Comprimiendo...' : '📎 Seleccionar Imagen(es)'}
                         </Button>
                         {files.length > 0 && (
                             <div className="space-y-1">
                                 {files.map((f, i) => (
                                     <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-1.5 text-xs">
                                         <span className="truncate text-gray-600">{f.name}</span>
-                                        <button
-                                            onClick={() => removeFile(i)}
-                                            className="text-red-400 hover:text-red-600 ml-2 font-bold"
-                                        >
-                                            ×
-                                        </button>
+                                        <span className="flex items-center gap-2 ml-2 shrink-0">
+                                            <span className="text-[10px] text-gray-400">{formatFileSize(f.size)}</span>
+                                            <button
+                                                onClick={() => removeFile(i)}
+                                                className="text-red-400 hover:text-red-600 font-bold"
+                                            >
+                                                ×
+                                            </button>
+                                        </span>
                                     </div>
                                 ))}
                             </div>
@@ -424,13 +449,6 @@ export function OrderDetailModal({ order, isOpen, onClose }: Props) {
                 {error && (
                     <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-red-600 text-xs">
                         {error}
-                    </div>
-                )}
-
-                {/* Toast */}
-                {toast && (
-                    <div className="bg-gray-800 text-white text-center text-xs py-2 rounded-lg animate-pulse">
-                        {toast}
                     </div>
                 )}
 
