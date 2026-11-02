@@ -4,6 +4,7 @@ import { useCreateOrder, VENEZUELAN_BANKS } from '../hooks/useCreateOrder';
 import { findClientSilently } from '../hooks/useClients';
 import type { OrderType, OrderFormData } from '../hooks/useCreateOrder';
 import { useAuth } from '../hooks/useAuth';
+import { useOrderActions } from '../hooks/useOrderActions';
 import { Button, Modal } from '../components/ui';
 import { useToast } from '../contexts/ToastContext';
 import { Building2, Smartphone, CreditCard } from 'lucide-react';
@@ -53,7 +54,10 @@ export function OrderForm({
     const { rates } = useExchangeRates();
     const { role, user } = useAuth();
     const { createOrder, loading, error, reset } = useCreateOrder();
+    const { copyOrderData } = useOrderActions();
     const toast = useToast();
+
+    const [created, setCreated] = useState<{ id: string; data: OrderFormData; destinationAmount: number } | null>(null);
 
     const [type, setType] = useState<OrderType>('transferencia');
     const [clientName, setClientName] = useState('');
@@ -224,8 +228,25 @@ export function OrderForm({
         setAccountNumber('');
         setPhone('');
         setSubmitted(false);
+        setCreated(null);
         reset();
         try { localStorage.removeItem(DRAFT_KEY); } catch { /* noop */ }
+    };
+
+    const handleCopyCreated = () => {
+        if (!created) return;
+        copyOrderData({
+            clientName: created.data.clientName,
+            cedula: created.data.cedula,
+            type: created.data.type,
+            bank: created.data.bank,
+            accountNumber: created.data.accountNumber,
+            phone: created.data.phone,
+            clpAmount: created.data.clpAmount,
+            destinationAmount: created.destinationAmount,
+            destinationCurrency: 'VES',
+        });
+        toast.success('📋 Datos copiados para pegar en el banco');
     };
 
     const handleClose = () => {
@@ -260,9 +281,10 @@ export function OrderForm({
                 shouldEnforceVesBalance ? safeAvailableVesBalance : undefined
             );
             if (orderId && onSuccess) onSuccess(orderId);
-            toast.success(`Pedido creado: #${orderId?.slice(-5) || ''}`);
-            resetForm();
-            onClose();
+            // Panel de éxito dentro del modal: el usuario decide copiar los
+            // datos para el banco, crear otro pedido o salir.
+            setCreated({ id: orderId || '', data, destinationAmount });
+            setSubmitted(false);
         } catch (err: any) {
             const message = err?.message || 'Error al crear el pedido';
             if (message.toLowerCase().includes('saldo ves insuficiente')) {
@@ -283,6 +305,32 @@ export function OrderForm({
 
     return (
         <Modal isOpen={isOpen} onClose={handleClose} title="Crear Nuevo Pedido">
+            {created ? (
+                <div className="space-y-4">
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 text-center space-y-2">
+                        <p className="text-4xl">✅</p>
+                        <p className="text-lg font-black text-emerald-800">Pedido creado</p>
+                        <p className="text-sm text-emerald-700">
+                            {created.data.clientName} ·{' '}
+                            <b>{created.destinationAmount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} VES</b>
+                        </p>
+                        <p className="text-[11px] text-gray-400">#{created.id.slice(-6)}</p>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                        <Button variant="primary" fullWidth onClick={handleCopyCreated} type="button">
+                            📋 Copiar Datos para el Banco
+                        </Button>
+                        <div className="flex gap-3">
+                            <Button variant="outline" fullWidth onClick={() => setCreated(null)} type="button">
+                                ＋ Crear Otro
+                            </Button>
+                            <Button variant="danger" fullWidth onClick={() => { resetForm(); onClose(); }} type="button">
+                                Listo
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
             <form onSubmit={handleSubmit} noValidate>
                 <div className="space-y-4">
                     <div className="flex bg-gray-100 rounded-lg p-1 gap-1 relative">
@@ -547,6 +595,7 @@ export function OrderForm({
                     </div>
                 </div>
             </form>
+            )}
         </Modal>
     );
 }
