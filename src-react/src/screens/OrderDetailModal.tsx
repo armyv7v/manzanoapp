@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { SUPER_ADMIN_EMAIL, computeOrderBankFee, computeOrderTotalRequired, isSuperAdminEmail, resolveUserTag } from '../lib/constants';
 import { httpsCallable, getFunctions } from 'firebase/functions';
 import { useAuth, useOrderActions, useVesAccounts } from '../hooks';
-import { useStaffUsers } from '../hooks/useStaffUsers';
+import { useStaffUsers } from '../contexts/StaffUsersContext';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
 import type { Order } from '../hooks/useOrders';
 import { compressImage, formatFileSize } from '../lib/compressImage';

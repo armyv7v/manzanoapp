@@ -1,5 +1,7 @@
+import { lookupTagOverride } from './userTagOverrides';
+
 /**
- * Mapa de tags de usuario
+ * Mapa de tags de usuario (legacy, fallback)
  */
 export const USER_TAGS: Record<string, string> = {
     'enderjpinar@gmail.com': 'A1',
@@ -20,6 +22,12 @@ export const isSuperAdminEmail = (raw: string | null | undefined): boolean =>
 export const resolveUserTag = (raw: string): string => {
     const normalized = (raw || '').trim();
     if (!normalized) return '';
+
+    // 1) Campo `tag` del doc users (dinámico, via userTagOverrides).
+    // 2) Mapa hardcodeado USER_TAGS (legacy, fallback).
+    // 3) Tag con formato A#/V# directo.
+    const override = lookupTagOverride(normalized);
+    if (override) return override;
 
     const mapped = USER_TAGS[normalized.toLowerCase()];
     if (mapped) return mapped;
