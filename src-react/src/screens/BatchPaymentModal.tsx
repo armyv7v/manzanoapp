@@ -4,6 +4,7 @@ import { runTransaction, doc, serverTimestamp, collection, increment } from 'fir
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { useAuth, useVesAccounts } from '../hooks';
 import { computeOrderTotalRequired, computePaidOrderFinancials, MAX_BATCH_ORDERS, type PaidOrderFinancials } from '../lib/constants';
+import { compressImage, formatFileSize } from '../lib/compressImage';
 import { isPayoutAccount } from '../hooks/useVesAccounts';
 import { Modal, Button } from '../components/ui';
 import { useToast } from '../contexts/ToastContext';
@@ -25,6 +26,7 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
     const [confirmStep, setConfirmStep] = useState<0 | 1>(0);
     const [sourceAccountId, setSourceAccountId] = useState('');
     const [proofFiles, setProofFiles] = useState<Record<string, File>>({});
+    const [compressingId, setCompressingId] = useState<string | null>(null);
 
     // El modal queda montado: cada apertura arranca en el paso de formulario.
     useEffect(() => {
@@ -44,13 +46,21 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
     );
     const totalFeesYComisiones = totalDebitVesReal - totalVes;
 
-    const handleFileChange = (orderId: string, file: File | null) => {
-        if (file) {
-            setProofFiles(prev => ({ ...prev, [orderId]: file }));
-        } else {
-            const newFiles = { ...proofFiles };
-            delete newFiles[orderId];
-            setProofFiles(newFiles);
+    const handleFileChange = async (orderId: string, file: File | null) => {
+        if (!file) {
+            setProofFiles(prev => {
+                const next = { ...prev };
+                delete next[orderId];
+                return next;
+            });
+            return;
+        }
+        setCompressingId(orderId);
+        try {
+            const compressed = await compressImage(file);
+            setProofFiles(prev => ({ ...prev, [orderId]: compressed }));
+        } finally {
+            setCompressingId(null);
         }
     };
 
@@ -421,9 +431,22 @@ export function BatchPaymentModal({ isOpen, onClose, selectedOrders, onSuccess }
                                     type="file"
                                     accept="image/*"
                                     className="w-full text-sm outline-none bg-gray-50 border border-gray-200 rounded focus:ring-2 focus:ring-blue-500"
-                                    onChange={(e) => handleFileChange(order.id, e.target.files?.[0] || null)}
+                                    onChange={(e) => {
+                                        const f = e.target.files?.[0] || null;
+                                        e.target.value = '';
+                                        handleFileChange(order.id, f);
+                                    }}
+                                    disabled={compressingId === order.id}
                                     required
                                 />
+                                {compressingId === order.id && (
+                                    <p className="text-[11px] text-blue-500 mt-1 animate-pulse">⏳ Comprimiendo imagen...</p>
+                                )}
+                                {proofFiles[order.id] && (
+                                    <p className="text-[10px] text-gray-400 mt-1">
+                                        Listo: {proofFiles[order.id].name} ({formatFileSize(proofFiles[order.id].size)})
+                                    </p>
+                                )}
                             </div>
                         </div>
                     ))}
