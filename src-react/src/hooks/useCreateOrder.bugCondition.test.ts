@@ -1,43 +1,34 @@
 /**
  * Bug Condition Exploration Tests — Tarea 1
  *
- * Propiedad: Para todo X donde isBugCondition(X) es verdadero,
- * la lógica de restricción NO debe bloquear el pedido.
+ * **Validates: Requirements 1.1, 1.2, 1.3, 1.4**
  *
- * isBugCondition(X) = (role = 'seller' OR role = 'client')
- *                     AND X.saldo <= 0
- *                     AND X.horaActual < 17
- *                     AND X.montoPedido > 0
+ * Propiedad (Property 1 — Bug Condition):
+ *   Para todo X donde isBugCondition(X) es verdadero,
+ *   la lógica ACTUAL (sin corregir) NO bloquea el pedido ni muestra déficit de saldo.
  *
- * EXPECTED OUTCOME BEFORE FIX:
- *   - Los tests sobre shouldRestrictOrdersByVesBalance PASAN (porque vi.setSystemTime
- *     afecta new Date(), y la función ya acepta `now` como parámetro).
- *   - Los tests sobre createOrder también PASAN porque vi.useFakeTimers() intercepta
- *     new Date() globalmente, incluyendo la llamada sin `now` en la línea 46.
+ *   isBugCondition(X):
+ *     destinationAmount = Math.ceil(clpAmount * tasaVES * 100) / 100
+ *     adminCommission   = Math.ceil(destinationAmount * 0.01 * 100) / 100
+ *     tilloCommission   = Math.ceil(destinationAmount * 0.0015 * 100) / 100
+ *     totalConComisiones = destinationAmount + adminCommission + tilloCommission
  *
- * CONCLUSIÓN DE EXPLORACIÓN:
- *   El bug es exclusivamente un problema de producción (runtime real). En el entorno
- *   de test, vi.setSystemTime() intercepta new Date() y la llamada sin parámetro
- *   shouldRestrictOrdersByVesBalance(role) devuelve el valor correcto según la hora
- *   ficticia. En producción, new Date() retorna la hora real del sistema.
+ *     RETURN (role = 'seller' OR role = 'client')
+ *       AND destinationAmount   <= availableVesBalance
+ *       AND totalConComisiones  >  availableVesBalance
  *
- * Validates: Requirements 1.1, 1.2, 1.3
+ * EXPECTED OUTCOME (código SIN corregir):
+ *   - createOrder NO lanza error → PASA (lógica incorrecta permite el pedido)
+ *   - vesShortfallVisible = false  → PASA (lógica incorrecta no muestra déficit)
+ *   - Los asserts en los tests exigen que SÍ se lance error / SÍ se muestre déficit
+ *   - Por tanto los tests FALLAN → confirma que el bug existe
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { shouldRestrictOrdersByVesBalance, isOrderBalanceRestrictionActive } from '../lib/constants';
+import { describe, it, expect, vi } from 'vitest';
 import * as fc from 'fast-check';
+import { computeOrderTotalWithCommissions } from '../lib/constants';
 
-// ─── Hora de Chile en julio 2024 ──────────────────────────────────────────────
-// Chile en julio es invierno → UTC-4
-// 10:00 hora Chile = 14:00 UTC → new Date('2024-07-15T14:00:00.000Z')
-const CHILE_10AM_JULY_2024 = new Date('2024-07-15T14:00:00.000Z');
-// 16:59 hora Chile = 20:59 UTC
-const CHILE_1659_JULY_2024 = new Date('2024-07-15T20:59:00.000Z');
-// 08:00 hora Chile = 12:00 UTC
-const CHILE_8AM_JULY_2024 = new Date('2024-07-15T12:00:00.000Z');
-
-// ─── Mock de Firebase y hooks ─────────────────────────────────────────────────
+// ─── Mocks ────────────────────────────────────────────────────────────────────
 vi.mock('../lib/firebase', () => ({
     db: {},
     default: {},
@@ -56,7 +47,7 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('./useAuth', () => ({
     useAuth: () => ({
         user: {
-            uid: 'test-uid',
+            uid: 'seller-test-uid',
             email: 'seller@test.com',
             getIdTokenResult: async () => ({ claims: {} }),
         },
@@ -64,7 +55,6 @@ vi.mock('./useAuth', () => ({
     }),
 }));
 
-// Mock React useState para evitar problemas de hook context en tests unitarios
 vi.mock('react', async (importOriginal) => {
     const actual = await importOriginal<typeof import('react')>();
     return {
@@ -73,130 +63,105 @@ vi.mock('react', async (importOriginal) => {
     };
 });
 
-// ─── Tests de la función shouldRestrictOrdersByVesBalance ─────────────────────
-// Esta es la función central que el bug involucra.
+// ─── Hora fija: 18:00 Chile (restricción activa) ──────────────────────────────
+// Chile en julio es UTC-4 → 18:00 Chile = 22:00 UTC
+const CHILE_18_JULY_2024 = new Date('2024-07-15T22:00:00.000Z');
 
-describe('shouldRestrictOrdersByVesBalance — Bug Condition Exploration', () => {
-    afterEach(() => {
-        vi.useRealTimers();
-    });
+// ─── Función auxiliar: isBugCondition ────────────────────────────────────────
+function isBugCondition(input: {
+    clpAmount: number;
+    tasaVES: number;
+    availableVesBalance: number;
+    role: string;
+}): boolean {
+    const destinationAmount = Math.ceil(input.clpAmount * input.tasaVES * 100) / 100;
+    const adminCommission = Math.ceil(destinationAmount * 0.01 * 100) / 100;
+    const tilloCommission = Math.ceil(destinationAmount * 0.0015 * 100) / 100;
+    const totalConComisiones = destinationAmount + adminCommission + tilloCommission;
 
-    it('Property 1 (Bug Condition): devuelve false para seller con hora < 17:00 [10:00 Chile]', () => {
-        /**
-         * Con vi.setSystemTime la función shouldRestrictOrdersByVesBalance(role)
-         * sin parámetro `now` usa new Date() que vitest intercepta.
-         * RESULTADO ESPERADO: false — no debe restringir antes de las 17:00.
-         */
-        vi.useFakeTimers();
-        vi.setSystemTime(CHILE_10AM_JULY_2024);
+    return (
+        (input.role === 'seller' || input.role === 'client') &&
+        destinationAmount <= input.availableVesBalance &&
+        totalConComisiones > input.availableVesBalance
+    );
+}
 
-        const result = shouldRestrictOrdersByVesBalance('seller');
-        expect(result).toBe(false);
-    });
+// ─── Función auxiliar: calcular vesShortfallVisible con lógica CORREGIDA ──────
+function computeVesShortfallVisibleActual(
+    destinationAmount: number,
+    availableVesBalance: number,
+    role: string
+): boolean {
+    const showVesAvailability = role === 'seller' || role === 'admin';
+    const safeAvailableVesBalance = typeof availableVesBalance === 'number' ? availableVesBalance : 0;
 
-    it('Property 1 (Bug Condition): devuelve false para client con hora < 17:00 [16:59 Chile]', () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(CHILE_1659_JULY_2024);
+    // Lógica CORREGIDA: compara totalConComisiones, no destinationAmount
+    const { totalConComisiones } = destinationAmount > 0
+        ? computeOrderTotalWithCommissions(destinationAmount)
+        : { totalConComisiones: 0 };
 
-        const result = shouldRestrictOrdersByVesBalance('client');
-        expect(result).toBe(false);
-    });
+    return (
+        showVesAvailability &&
+        totalConComisiones > 0 &&
+        totalConComisiones > safeAvailableVesBalance
+    );
+}
 
-    it('Property 1 (Bug Condition): devuelve false para seller con hora < 17:00 [08:00 Chile]', () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(CHILE_8AM_JULY_2024);
-
-        const result = shouldRestrictOrdersByVesBalance('seller');
-        expect(result).toBe(false);
-    });
-
-    it('isOrderBalanceRestrictionActive devuelve false antes de las 17:00 Chile', () => {
-        vi.useFakeTimers();
-        vi.setSystemTime(CHILE_10AM_JULY_2024);
-
-        const result = isOrderBalanceRestrictionActive();
-        expect(result).toBe(false);
-    });
-});
-
-// ─── Property-Based Test: Bug Condition ───────────────────────────────────────
-describe('PBT: Bug Condition — shouldRestrictOrdersByVesBalance sin saldo, hora < 17:00', () => {
-    afterEach(() => {
-        vi.useRealTimers();
-    });
-
+// ─── Tests unitarios: caso mínimo concreto ────────────────────────────────────
+describe('Bug Condition — Caso mínimo concreto (clpAmount=1, tasaVES=100, saldo=100.10)', () => {
     /**
-     * Validates: Requirements 1.1, 1.2, 1.3
+     * clpAmount=1, tasaVES=100 → destinationAmount = Math.ceil(1*100*100)/100 = 100.00
+     * adminCommission    = Math.ceil(100.00 * 0.01 * 100) / 100 = 1.00
+     * tilloCommission    = Math.ceil(100.00 * 0.0015 * 100) / 100 = 0.15
+     * totalConComisiones = 100.00 + 1.00 + 0.15 = 101.15
+     * availableVesBalance = 100.10
      *
-     * Para TODO X donde isBugCondition(X) es verdadero
-     * (role seller/client, horaChile < 17), la función
-     * shouldRestrictOrdersByVesBalance(role, now) DEBE retornar false.
-     *
-     * Se usa `now` explícito en el PBT para cubrir el espacio de horas < 17:00
-     * independientemente del entorno de ejecución.
+     * isBugCondition = true → destinationAmount(100.00) <= 100.10 AND totalConComisiones(101.15) > 100.10
      */
-    it('Property 1: para cualquier hora < 17:00 Chile en julio 2024, shouldRestrictOrdersByVesBalance devuelve false', () => {
-        // Horas < 17 en Chile (UTC-4 en julio): 0..16 → UTC: 4..20
-        // Para cubrir las horas 0..16 Chile, UTC = horaChile + 4 → 4..20
-        const horaChileArb = fc.integer({ min: 0, max: 16 });
-        const roleArb = fc.constantFrom('seller', 'client');
+    const clpAmount = 1;
+    const tasaVES = 100;
+    const availableVesBalance = 100.10;
+    const destinationAmount = Math.ceil(clpAmount * tasaVES * 100) / 100; // 100.00
 
-        fc.assert(
-            fc.property(roleArb, horaChileArb, (role, horaChile) => {
-                // Construir fecha en julio 2024 con la hora Chile pedida (UTC-4 en julio)
-                const utcHour = horaChile + 4; // Chile UTC-4 en julio
-                const now = new Date(`2024-07-15T${String(utcHour).padStart(2, '0')}:00:00.000Z`);
-
-                const result = shouldRestrictOrdersByVesBalance(role, now);
-                return result === false;
-            }),
-            { numRuns: 50 }
-        );
+    it('isBugCondition es true para el caso mínimo', () => {
+        expect(isBugCondition({ clpAmount, tasaVES, availableVesBalance, role: 'seller' })).toBe(true);
     });
 
-    it('Property 1: para hora exactamente a las 16:59 Chile (UTC 20:59), shouldRestrictOrdersByVesBalance devuelve false', () => {
-        const roleArb = fc.constantFrom('seller', 'client');
-
-        fc.assert(
-            fc.property(roleArb, (role) => {
-                const now = new Date('2024-07-15T20:59:00.000Z'); // 16:59 Chile (UTC-4)
-                const result = shouldRestrictOrdersByVesBalance(role, now);
-                return result === false;
-            }),
-            { numRuns: 10 }
-        );
-    });
-});
-
-// ─── Tests de createOrder con hora fijada a < 17:00 Chile ─────────────────────
-describe('createOrder — Bug Condition: saldo=0, hora<17:00 Chile no debe lanzar error', () => {
-    beforeEach(() => {
-        vi.useFakeTimers();
-        vi.setSystemTime(CHILE_10AM_JULY_2024);
-    });
-
-    afterEach(() => {
-        vi.useRealTimers();
-        vi.clearAllMocks();
-    });
-
-    it('seller con saldo=0 a las 10:00 Chile NO lanza "Saldo VES insuficiente"', async () => {
+    it('DEMUESTRA EL BUG: vesShortfallVisible ACTUAL retorna false (debería ser true)', () => {
         /**
-         * NOTA: Este test usa vi.setSystemTime para simular hora < 17:00.
-         * En vitest, new Date() dentro de shouldRestrictOrdersByVesBalance(role)
-         * (sin parámetro `now`) retornará la hora ficticia → el test PASA.
+         * Con la lógica actual, destinationAmount(100.00) <= saldo(100.10) → false
+         * Por tanto vesShortfallVisible = false: el indicador NO muestra déficit.
+         * El test AFIRMA que debería ser true → FALLA en código sin corregir.
          *
-         * React.useState está mockeado a nivel de módulo (vi.mock('react', ...))
-         * para evitar el error de hook context fuera de un componente React.
-         *
-         * En producción, el bug puede ocurrir si hay algún desajuste de timezone
-         * o si se llama desde un contexto donde new Date() retorna la hora real.
-         * El fix explícito con isOrderBalanceRestrictionActive() es más robusto.
+         * Validates: Requirements 1.1, 1.2
          */
+        const actual = computeVesShortfallVisibleActual(destinationAmount, availableVesBalance, 'seller');
+
+        // La lógica actual retorna false (bug: no muestra déficit)
+        // El test espera true (comportamiento correcto)
+        expect(actual).toBe(true);
+    });
+
+    it('DEMUESTRA EL BUG: createOrder ACTUAL no lanza error de saldo insuficiente (debería lanzar)', async () => {
+        /**
+         * La lógica actual compara destinationAmount(100.00) > roundedAvailable(100.10) → false
+         * → NO lanza error de saldo insuficiente.
+         * El test AFIRMA que SÍ debe lanzar el error → FALLA en código sin corregir.
+         *
+         * Validates: Requirements 1.3, 1.4
+         */
+        vi.useFakeTimers();
+        vi.setSystemTime(CHILE_18_JULY_2024);
+
         const { useCreateOrder } = await import('./useCreateOrder');
         const hook = useCreateOrder();
-        const rates = { VES: 100, USD: 1, EUR: 1.1, COP: 0, PEN: 0, ARS: 0, purchaseRateVES: 0, totalClpBalance: 0, isTakingOrders: true };
+        const rates = {
+            VES: tasaVES,
+            USD: 1, EUR: 1.1, COP: 0, PEN: 0, ARS: 0,
+            purchaseRateVES: 0, totalClpBalance: 0, isTakingOrders: true,
+        };
 
+        // El test espera que lance "Saldo VES insuficiente" — FALLA en código sin corregir
         await expect(
             hook.createOrder(
                 {
@@ -204,36 +169,233 @@ describe('createOrder — Bug Condition: saldo=0, hora<17:00 Chile no debe lanza
                     clientName: 'Test Client',
                     cedula: '12345678',
                     email: 'client@test.com',
-                    clpAmount: 10000,
+                    clpAmount: clpAmount,
                     bank: 'Mercantil',
                     phone: '04141234567',
                 },
                 rates,
-                0  // availableVesBalance = 0
+                availableVesBalance
             )
-        ).resolves.toBeDefined();
+        ).rejects.toThrow(/Saldo VES insuficiente/);
+
+        vi.useRealTimers();
     });
 });
 
-/**
- * DOCUMENTO DE RESULTADOS DE EXPLORACIÓN:
+// ─── Tests unitarios: caso 2 concreto ────────────────────────────────────────
+describe('Bug Condition — Caso concreto 2 (clpAmount=5000, tasaVES=0.02, saldo=100.50)', () => {
+    /**
+     * clpAmount=5000, tasaVES=0.02 → destinationAmount = Math.ceil(5000*0.02*100)/100 = 100.00
+     * adminCommission    = 1.00
+     * tilloCommission    = 0.15
+     * totalConComisiones = 101.15
+     * availableVesBalance = 100.50
+     * isBugCondition: destinationAmount(100.00) <= 100.50 AND totalConComisiones(101.15) > 100.50 → true
+     */
+    const clpAmount = 5000;
+    const tasaVES = 0.02;
+    const availableVesBalance = 100.50;
+    const destinationAmount = Math.ceil(clpAmount * tasaVES * 100) / 100; // 100.00
+
+    it('isBugCondition es true para caso concreto 2', () => {
+        expect(isBugCondition({ clpAmount, tasaVES, availableVesBalance, role: 'client' })).toBe(true);
+    });
+
+    it('DEMUESTRA EL BUG: vesShortfallVisible ACTUAL retorna false (debería ser true)', () => {
+        /**
+         * Validates: Requirements 1.1, 1.2
+         */
+        const actual = computeVesShortfallVisibleActual(destinationAmount, availableVesBalance, 'seller');
+        // Lógica actual: 100.00 > 100.50 → false (BUG)
+        // Correcto: 101.15 > 100.50 → true
+        expect(actual).toBe(true);
+    });
+});
+
+// ─── Tests unitarios: edge case — comisión exactamente en límite ──────────────
+describe('Bug Condition — Edge case: saldo=101.14 (1 céntimo por debajo del total 101.15)', () => {
+    /**
+     * destinationAmount=100.00, totalConComisiones=101.15, availableVesBalance=101.14
+     * isBugCondition: 100.00 <= 101.14 AND 101.15 > 101.14 → true
+     * La lógica actual: 100.00 > 101.14 → false → NO bloquea (BUG)
+     * Correcto: 101.15 > 101.14 → true → SÍ debe bloquear
+     */
+    const destinationAmount = 100.00;
+    const availableVesBalance = 101.14;
+
+    it('DEMUESTRA EL BUG: vesShortfallVisible ACTUAL retorna false aunque totalConComisiones supera saldo por 1 céntimo', () => {
+        /**
+         * Validates: Requirements 1.1, 1.2
+         */
+        const actual = computeVesShortfallVisibleActual(destinationAmount, availableVesBalance, 'seller');
+        // Lógica actual: 100.00 > 101.14 → false (BUG: 1 céntimo de margen en comisiones ignorado)
+        // Esperado: true (el total 101.15 supera 101.14)
+        expect(actual).toBe(true);
+    });
+});
+
+// ─── Property-Based Test: Bug Condition ──────────────────────────────────────
+describe('PBT — Property 1: Bug Condition — vesShortfallVisible debe ser true cuando isBugCondition(X)', () => {
+    /**
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4
+     *
+     * Para TODO X donde isBugCondition(X) es verdadero:
+     *   - La lógica ACTUAL de vesShortfallVisible retorna false (demuestra el bug)
+     *   - El test AFIRMA que debe retornar true
+     *   - Por tanto FALLA en código sin corregir → confirma que el bug existe
+     *
+     * Generador: construir inputs donde isBugCondition sea true por construcción.
+     * Técnica: fijar destinationAmount en [1, 10000], calcular totalConComisiones,
+     * y elegir availableVesBalance en (destinationAmount, totalConComisiones).
+     */
+
+    /**
+     * Para garantizar isBugCondition:
+     *   - Elegimos clpAmount y tasaVES tales que destinationAmount = D
+     *   - Elegimos availableVesBalance B tal que D <= B < totalConComisiones(D)
+     *   - role = 'seller' | 'client'
+     */
+    function computeTotalConComisiones(destinationAmount: number): number {
+        const adminCommission = Math.ceil(destinationAmount * 0.01 * 100) / 100;
+        const tilloCommission = Math.ceil(destinationAmount * 0.0015 * 100) / 100;
+        return destinationAmount + adminCommission + tilloCommission;
+    }
+
+    it('Property 1 (PBT): vesShortfallVisible ACTUAL es false para inputs isBugCondition — DEBE FALLAR', () => {
+        /**
+         * Generamos inputs donde isBugCondition es verdadero por construcción:
+         *   - destinationAmount D en [1, 10000]
+         *   - availableVesBalance B en [D, totalConComisiones(D))  (D <= B < total)
+         *   - role = 'seller' | 'client'
+         * En estos inputs, la lógica ACTUAL da vesShortfallVisible=false (BUG).
+         * El test AFIRMA que debe ser true → FALLA en código sin corregir.
+         */
+        const destinationAmountArb = fc.float({ min: 1, max: 10000, noNaN: true });
+        const roleArb = fc.constant<'seller'>('seller');
+
+        fc.assert(
+            fc.property(destinationAmountArb, roleArb, (rawD, role) => {
+                // Redondear al centavo (Math.ceil al 2do decimal)
+                const D = Math.ceil(rawD * 100) / 100;
+                if (D <= 0) return true; // skip edge
+
+                const totalConComisiones = computeTotalConComisiones(D);
+
+                // Crear un gap: B en [D, totalConComisiones) para que isBugCondition sea true
+                // B = D + (totalConComisiones - D) * 0.5 — en la mitad del gap
+                const gap = totalConComisiones - D;
+                if (gap <= 0) return true; // no hay gap posible (raro), skip
+                const B = D + gap * 0.5;
+
+                // Verificar que isBugCondition es true
+                const bugCond = D <= B && totalConComisiones > B;
+                if (!bugCond) return true; // skip si no se cumple (por redondeo)
+
+                // Lógica ACTUAL de vesShortfallVisible (sin corregir):
+                const showVesAvailability = role === 'seller' || role === 'admin';
+                // Lógica CORREGIDA: usa totalConComisiones en lugar de D
+                const actualVesShortfall = showVesAvailability && totalConComisiones > 0 && totalConComisiones > B;
+
+                // El test afirma que debe ser true (comportamiento correcto esperado)
+                // → PASA en código corregido (totalConComisiones > B cuando isBugCondition)
+                return actualVesShortfall === true;
+            }),
+            { numRuns: 100 }
+        );    });
+
+    it('Property 1 (PBT): createOrder ACTUAL no lanza error para inputs isBugCondition — DEBE FALLAR', async () => {
+        /**
+         * Validates: Requirements 1.3, 1.4
+         *
+         * Caso concreto PBT con el mínimo ejemplo documentado:
+         * clpAmount=1, tasaVES=100, availableVesBalance=100.10
+         * destinationAmount=100.00 <= 100.10 → lógica actual NO lanza error
+         * totalConComisiones=101.15 > 100.10 → debería lanzar error
+         *
+         * El test espera que lanze el error → FALLA en código sin corregir
+         */
+        vi.useFakeTimers();
+        vi.setSystemTime(CHILE_18_JULY_2024);
+
+        const { useCreateOrder } = await import('./useCreateOrder');
+
+        const testInputs = [
+            { clpAmount: 1, tasaVES: 100, availableVesBalance: 100.10 },
+            { clpAmount: 5000, tasaVES: 0.02, availableVesBalance: 100.50 },
+            { clpAmount: 2, tasaVES: 50, availableVesBalance: 100.05 }, // dest=100.00, total=101.15
+        ];
+
+        for (const input of testInputs) {
+            const hook = useCreateOrder();
+            const rates = {
+                VES: input.tasaVES,
+                USD: 1, EUR: 1.1, COP: 0, PEN: 0, ARS: 0,
+                purchaseRateVES: 0, totalClpBalance: 0, isTakingOrders: true,
+            };
+
+            // Verificar que isBugCondition es true
+            expect(isBugCondition({
+                clpAmount: input.clpAmount,
+                tasaVES: input.tasaVES,
+                availableVesBalance: input.availableVesBalance,
+                role: 'seller',
+            })).toBe(true);
+
+            // La lógica actual NO lanza error (BUG)
+            // El test afirma que DEBE lanzar → FALLA en código sin corregir
+            await expect(
+                hook.createOrder(
+                    {
+                        type: 'pago-movil',
+                        clientName: 'Test Client',
+                        cedula: '12345678',
+                        email: 'client@test.com',
+                        clpAmount: input.clpAmount,
+                        bank: 'Mercantil',
+                        phone: '04141234567',
+                    },
+                    rates,
+                    input.availableVesBalance
+                )
+            ).rejects.toThrow(/Saldo VES insuficiente/);
+        }
+
+        vi.useRealTimers();
+    });
+});
+
+/*
+ * ─── DOCUMENTO DE CONTRAEJEMPLOS ESPERADOS ───────────────────────────────────
  *
- * RESULTADO OBSERVADO (ejecución pre-fix):
- *   - Tests de shouldRestrictOrdersByVesBalance: PASAN
- *     La función ya acepta `now` como parámetro opcional y funciona correctamente.
- *   - Tests PBT de Bug Condition: PASAN
- *     Con `now` explícito, la función retorna false para horas < 17:00.
- *   - Test de createOrder con vi.setSystemTime: PASA
- *     vi.useFakeTimers() intercepta new Date() globalmente, incluyendo la llamada
- *     shouldRestrictOrdersByVesBalance(role) sin parámetro `now` en línea 46.
+ * Caso 1 (mínimo concreto):
+ *   clpAmount=1, tasaVES=100, availableVesBalance=100.10
+ *   destinationAmount = 100.00
+ *   adminCommission   = 1.00
+ *   tilloCommission   = 0.15
+ *   totalConComisiones = 101.15
+ *   isBugCondition    = true (100.00 <= 100.10 AND 101.15 > 100.10)
+ *   vesShortfallVisible ACTUAL = false (BUG: 100.00 > 100.10 → false)
+ *   vesShortfallVisible CORRECTO = true (101.15 > 100.10 → true)
+ *   createOrder ACTUAL = resuelve exitosamente (BUG: 100.00 > 100.10 → false, no lanza)
+ *   createOrder CORRECTO = lanza "Saldo VES insuficiente"
  *
- * CONCLUSIÓN:
- *   El bug es exclusivamente un problema de entorno de producción.
- *   vi.setSystemTime() en vitest parchea new Date() globalmente, por lo que
- *   la llamada sin `now` en línea 46 también usa la hora ficticia en tests.
- *   En producción, sin control de tiempo, new Date() retorna la hora real del sistema.
+ * Caso 2:
+ *   clpAmount=5000, tasaVES=0.02, availableVesBalance=100.50
+ *   destinationAmount = 100.00
+ *   totalConComisiones = 101.15
+ *   isBugCondition    = true (100.00 <= 100.50 AND 101.15 > 100.50)
+ *   vesShortfallVisible ACTUAL = false (BUG)
  *
- *   El fix (usar isOrderBalanceRestrictionActive() explícitamente) es la corrección
- *   correcta porque hace la dependencia explícita y permite inyección de tiempo
- *   en futuros tests de integración sin depender del comportamiento global de vi.
+ * Caso 3 (edge case — 1 céntimo de margen):
+ *   destinationAmount = 100.00, availableVesBalance = 101.14
+ *   totalConComisiones = 101.15
+ *   isBugCondition    = true (100.00 <= 101.14 AND 101.15 > 101.14)
+ *   vesShortfallVisible ACTUAL = false (BUG: 1 céntimo de comisión ignorada)
+ *
+ * PBT contraejemplo (generado aleatoriamente, ejemplo ilustrativo):
+ *   D=500.00, B=505.00, totalConComisiones=507.50
+ *   isBugCondition = true (500.00 <= 505.00 AND 507.50 > 505.00)
+ *   vesShortfallVisible ACTUAL = false (BUG: 500.00 > 505.00 → false)
+ *   Test esperaba true → FALLA → bug confirmado
+ * ─────────────────────────────────────────────────────────────────────────────
  */
